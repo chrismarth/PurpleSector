@@ -1,0 +1,73 @@
+// Prisma schema for Purple Sector telemetry database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Event {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  location        String?
+  startDate       DateTime?
+  endDate         DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  sessions        Session[]
+  
+  @@index([createdAt])
+}
+
+model Session {
+  id              String   @id @default(cuid())
+  eventId         String
+  name            String
+  source          String   // "live" | "demo"
+  status          String   @default("active") // "active" | "paused" | "archived"
+  tags            String?  // JSON array of session tags
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  event           Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  laps            Lap[]
+  
+  @@index([eventId])
+  @@index([createdAt])
+}
+
+model Lap {
+  id              String   @id @default(cuid())
+  sessionId       String
+  lapNumber       Int
+  lapTime         Float?   // in seconds
+  telemetryData   String   // JSON string of telemetry frames
+  analyzed        Boolean  @default(false)
+  suggestions     String?  // JSON array of AI suggestions
+  driverComments  String?  // Driver's notes about the lap
+  tags            String?  // JSON array of tags
+  createdAt       DateTime @default(now())
+  
+  session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  chatMessages    ChatMessage[]
+  
+  @@unique([sessionId, lapNumber])
+  @@index([sessionId, lapNumber])
+}
+
+model ChatMessage {
+  id              String   @id @default(cuid())
+  lapId           String
+  role            String   // "user" | "assistant"
+  content         String
+  createdAt       DateTime @default(now())
+  
+  lap             Lap      @relation(fields: [lapId], references: [id], onDelete: Cascade)
+  
+  @@index([lapId, createdAt])
+}
