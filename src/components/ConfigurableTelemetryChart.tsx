@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { Pencil, ZoomOut } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -11,6 +11,7 @@ import {
   Tooltip as ChartTooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceArea,
 } from 'recharts';
 import { TelemetryFrame } from '@/types/telemetry';
 import { PlotConfig, CHANNEL_METADATA, TelemetryChannel } from '@/types/plotConfig';
@@ -34,6 +35,14 @@ export function ConfigurableTelemetryChart({
   height = 250,
 }: ConfigurableTelemetryChartProps) {
   const [showConfigDialog, setShowConfigDialog] = useState(false);
+  
+  // Zoom state
+  const [refAreaLeft, setRefAreaLeft] = useState<string | number>('');
+  const [refAreaRight, setRefAreaRight] = useState<string | number>('');
+  const [zoomDomain, setZoomDomain] = useState<{ x?: [number, number]; yLeft?: [number, number]; yRight?: [number, number] } | null>(null);
+  
+  // Hover state for legend
+  const [hoveredData, setHoveredData] = useState<any>(null);
 
   // Transform telemetry data based on configuration
   const chartData = useMemo(() => {
@@ -125,25 +134,154 @@ export function ConfigurableTelemetryChart({
   // Check if any channel uses secondary axis
   const hasSecondaryAxis = config.channels.some(ch => ch.useSecondaryAxis);
 
+  // Zoom handlers
+  const handleMouseDown = (e: any) => {
+    if (e && e.activeLabel !== undefined) {
+      setRefAreaLeft(e.activeLabel);
+    }
+  };
+
+  const handleMouseMove = (e: any) => {
+    // Update hover data for legend
+    if (e && e.activePayload) {
+      setHoveredData(e.activePayload[0]?.payload);
+    }
+    
+    // Handle zoom selection
+    if (refAreaLeft && e && e.activeLabel !== undefined) {
+      setRefAreaRight(e.activeLabel);
+    }
+  };
+  
+  const handleMouseLeave = () => {
+    setHoveredData(null);
+  };
+
+  const handleMouseUp = () => {
+    if (refAreaLeft && refAreaRight && refAreaLeft !== refAreaRight) {
+      // Zoom in
+      const left = Math.min(Number(refAreaLeft), Number(refAreaRight));
+      const right = Math.max(Number(refAreaLeft), Number(refAreaRight));
+      
+      // Get Y-axis ranges for the zoomed region
+      const zoomedData = chartData.filter(
+        (item) => item.xAxis >= left && item.xAxis <= right
+      );
+      
+      let yLeftMin = Infinity;
+      let yLeftMax = -Infinity;
+      let yRightMin = Infinity;
+      let yRightMax = -Infinity;
+      
+      zoomedData.forEach((item) => {
+        config.channels.forEach((ch) => {
+          const value = item[ch.id];
+          if (value !== undefined && value !== null) {
+            if (ch.useSecondaryAxis) {
+              yRightMin = Math.min(yRightMin, value);
+              yRightMax = Math.max(yRightMax, value);
+            } else {
+              yLeftMin = Math.min(yLeftMin, value);
+              yLeftMax = Math.max(yLeftMax, value);
+            }
+          }
+        });
+      });
+      
+      // Add 5% padding to Y-axis ranges
+      const yLeftPadding = (yLeftMax - yLeftMin) * 0.05;
+      const yRightPadding = (yRightMax - yRightMin) * 0.05;
+      
+      setZoomDomain({
+        x: [left, right],
+        yLeft: yLeftMin !== Infinity ? [yLeftMin - yLeftPadding, yLeftMax + yLeftPadding] : undefined,
+        yRight: yRightMin !== Infinity ? [yRightMin - yRightPadding, yRightMax + yRightPadding] : undefined,
+      });
+    }
+    
+    setRefAreaLeft('');
+    setRefAreaRight('');
+  };
+
+  const handleZoomOut = () => {
+    setZoomDomain(null);
+    setRefAreaLeft('');
+    setRefAreaRight('');
+  };
+
+  // Custom legend component that shows current values on hover
+  const renderCustomLegend = () => {
+    return (
+      <div className="flex flex-wrap gap-4 justify-center mt-4 px-2">
+        {config.channels.map((channelConfig) => {
+          const channelLabel = CHANNEL_METADATA[channelConfig.channel].label;
+          const channelUnit = CHANNEL_METADATA[channelConfig.channel].unit;
+          const value = hoveredData?.[channelConfig.id];
+          const compareValue = compareData && hoveredData?.[`compare_${channelConfig.id}`];
+          
+          return (
+            <div key={channelConfig.id} className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-sm"
+                style={{ backgroundColor: channelConfig.color || '#000000' }}
+              />
+              <span className="text-sm">
+                {channelLabel}:{' '}
+                <span className="font-semibold">
+                  {value !== undefined && value !== null
+                    ? `${value.toFixed(1)}${channelUnit ? ` ${channelUnit}` : ''}`
+                    : '—'}
+                </span>
+                {compareValue !== undefined && compareValue !== null && (
+                  <span className="text-muted-foreground ml-1">
+                    (vs {compareValue.toFixed(1)}{channelUnit ? ` ${channelUnit}` : ''})
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <TooltipProvider>
       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">{config.title}</h3>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowConfigDialog(true)}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Edit Plot</p>
-            </TooltipContent>
-          </Tooltip>
+          <div className="flex gap-2">
+            {zoomDomain && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleZoomOut}
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Reset Zoom</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowConfigDialog(true)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Edit Plot</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
       {config.channels.length === 0 ? (
@@ -161,17 +299,25 @@ export function ConfigurableTelemetryChart({
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={height}>
-          <LineChart data={chartData}>
+          <LineChart 
+            data={chartData}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+          >
             <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
             <XAxis
               dataKey="xAxis"
+              type="number"
               label={{
                 value: config.xAxisLabel,
                 position: 'insideBottom',
                 offset: -5,
               }}
               tick={{ fontSize: 11 }}
-              interval="preserveStartEnd"
+              domain={zoomDomain?.x || ['auto', 'auto']}
+              allowDataOverflow
             />
             
             {/* Primary Y-Axis (Left) */}
@@ -184,7 +330,8 @@ export function ConfigurableTelemetryChart({
                 offset: 0,
                 style: { textAnchor: 'middle' },
               }}
-              domain={getPrimaryYAxisDomain()}
+              domain={zoomDomain?.yLeft || getPrimaryYAxisDomain()}
+              allowDataOverflow
             />
             
             {/* Secondary Y-Axis (Right) - only if needed */}
@@ -199,18 +346,10 @@ export function ConfigurableTelemetryChart({
                   offset: 0,
                   style: { textAnchor: 'middle' },
                 }}
-                domain={getSecondaryYAxisDomain()}
+                domain={zoomDomain?.yRight || getSecondaryYAxisDomain()}
+                allowDataOverflow
               />
             )}
-            
-            <ChartTooltip
-              contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-              }}
-            />
-            <Legend wrapperStyle={{ paddingTop: '20px' }} />
 
             {/* Render lines for each configured channel */}
             {config.channels.map((channelConfig) => {
@@ -248,9 +387,24 @@ export function ConfigurableTelemetryChart({
                   />
                 );
               })}
+            
+            {/* Zoom selection area */}
+            {refAreaLeft && refAreaRight && (
+              <ReferenceArea
+                yAxisId="left"
+                x1={refAreaLeft}
+                x2={refAreaRight}
+                strokeOpacity={0.3}
+                fill="#8884d8"
+                fillOpacity={0.3}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       )}
+      
+      {/* Custom legend with values */}
+      {config.channels.length > 0 && renderCustomLegend()}
 
       <PlotConfigDialog
         open={showConfigDialog}
