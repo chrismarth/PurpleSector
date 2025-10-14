@@ -1,6 +1,16 @@
-MIT License
+DUAL LICENSE
 
+Purple Sector - Racing Telemetry Analysis
 Copyright (c) 2025 Christopher Marth
+
+This software is dual-licensed under the following terms:
+
+================================================================================
+1. OPEN SOURCE LICENSE (MIT License)
+================================================================================
+
+For non-commercial, personal, educational, or open-source projects, this 
+software is licensed under the MIT License:
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +29,39 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+================================================================================
+2. COMMERCIAL LICENSE
+================================================================================
+
+For commercial use, including but not limited to:
+- Use by for-profit organizations or businesses
+- Integration into commercial products or services
+- Use in professional racing teams or motorsport organizations
+- Any use that generates revenue or commercial advantage
+
+A separate commercial license is required. Commercial use without a valid 
+license agreement is strictly prohibited.
+
+To obtain a commercial license, please contact:
+Christopher Marth
+Email: [Contact information to be provided]
+
+Commercial licenses include:
+- Full rights to use the software in commercial settings
+- Priority support and updates
+- Custom feature development options
+- Removal of attribution requirements (optional)
+
+================================================================================
+CHOOSING YOUR LICENSE
+================================================================================
+
+You may choose which license applies to your use case:
+- If you are using this software for personal, educational, or open-source 
+  projects, you may use it under the MIT License terms above.
+- If you are using this software in any commercial capacity, you must obtain 
+  a commercial license.
+
+If you are unsure which license applies to your use case, please contact us
+for clarification before using this software.

@@ -9,9 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { TelemetryChart } from '@/components/TelemetryChart';
+import { ConfigurableTelemetryChart } from '@/components/ConfigurableTelemetryChart';
 import { ChatInterface } from '@/components/ChatInterface';
 import { formatLapTime } from '@/lib/utils';
 import { TelemetryFrame, LapSuggestion } from '@/types/telemetry';
+import { PlotConfig, DEFAULT_PLOT_CONFIGS } from '@/types/plotConfig';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 interface Lap {
@@ -84,6 +86,7 @@ export default function LapPage() {
   const [showReferenceSelector, setShowReferenceSelector] = useState(false);
   const [eventLaps, setEventLaps] = useState<EventLap[]>([]);
   const [analysisReferenceLap, setAnalysisReferenceLap] = useState<EventLap | null>(null);
+  const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(DEFAULT_PLOT_CONFIGS);
 
   // Handle back button - close tab if opened in new tab
   function handleBack() {
@@ -404,17 +407,27 @@ export default function LapPage() {
               <CardHeader>
                 <CardTitle>Telemetry Data</CardTitle>
                 <CardDescription>
-                  Throttle, brake, and steering inputs throughout the lap
-                  {compareLapId && <span className="text-purple-600"> • Comparison lap shown in purple</span>}
+                  Customize plots to analyze different telemetry channels
+                  {compareLapId && <span className="text-purple-600"> • Comparison lap shown in dashed lines</span>}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <TelemetryChart 
-                  data={telemetryFrames} 
-                  compareData={compareTelemetry.length > 0 ? compareTelemetry : undefined}
-                  height={250}
-                  disableWindowing={true}
-                />
+                <div className="space-y-6">
+                  {plotConfigs.map((config, index) => (
+                    <ConfigurableTelemetryChart
+                      key={config.id}
+                      data={telemetryFrames}
+                      compareData={compareTelemetry.length > 0 ? compareTelemetry : undefined}
+                      config={config}
+                      onConfigChange={(newConfig) => {
+                        const newConfigs = [...plotConfigs];
+                        newConfigs[index] = newConfig;
+                        setPlotConfigs(newConfigs);
+                      }}
+                      height={250}
+                    />
+                  ))}
+                </div>
               </CardContent>
             </Card>
 

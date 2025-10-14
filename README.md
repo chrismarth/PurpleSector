@@ -243,7 +243,21 @@ This is a personal project, but suggestions and improvements are welcome!
 
 ## License
 
-MIT License - Feel free to use and modify for your own racing analysis needs.
+Purple Sector is dual-licensed:
+
+### Open Source License (MIT)
+For **non-commercial use** (personal projects, education, open-source development), this software is available under the MIT License. Feel free to use and modify for your own racing analysis needs.
+
+### Commercial License
+For **commercial use** (businesses, professional racing teams, commercial products), a separate commercial license is required. This includes:
+- Use by for-profit organizations
+- Integration into commercial products or services
+- Use in professional racing teams or motorsport organizations
+- Any use that generates revenue or commercial advantage
+
+**To obtain a commercial license**, please contact Christopher Marth.
+
+See the [LICENSE](LICENSE) file for full details.
 
 ---
 
