@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "telemetry": "node services/telemetry-collector.js",
+    "telemetry": "node services/ac-telemetry-collector.js",
     "ws-server": "node services/websocket-server.js",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
