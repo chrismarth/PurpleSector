@@ -67,37 +67,33 @@ export function ConfigurableTelemetryChart({
     return data.map((frame, index) => {
       const point: any = { index };
 
+      // Set primary X-axis value
+      point.xAxis = getChannelValue(frame, config.xAxis);
+
       // Add configured channels
       config.channels.forEach((channelConfig) => {
-        const xValue = getChannelValue(frame, channelConfig.xChannel);
-        const yValue = getChannelValue(frame, channelConfig.yChannel);
-
-        // Use X channel as the primary axis
-        point[`x_${channelConfig.id}`] = xValue;
+        const yValue = getChannelValue(frame, channelConfig.channel);
         point[channelConfig.id] = yValue;
 
         // Add compare data if available
         if (compareData && compareData[index]) {
-          const compareYValue = getChannelValue(compareData[index], channelConfig.yChannel);
+          const compareYValue = getChannelValue(compareData[index], channelConfig.channel);
           point[`compare_${channelConfig.id}`] = compareYValue;
         }
       });
-
-      // Use first channel's X value as the primary X axis
-      if (config.channels.length > 0) {
-        const firstChannel = config.channels[0];
-        point.xAxis = getChannelValue(frame, firstChannel.xChannel);
-      }
 
       return point;
     });
   }, [data, compareData, config]);
 
-  // Get domain for Y axis based on channel types
-  const getYAxisDomain = (): [number, number] | ['auto', 'auto'] => {
-    // Check if all channels are percentage-based
-    const allPercentage = config.channels.every((ch) => {
-      const metadata = CHANNEL_METADATA[ch.yChannel];
+  // Get domain for primary Y axis based on channel types
+  const getPrimaryYAxisDomain = (): [number, number] | ['auto', 'auto'] => {
+    const primaryChannels = config.channels.filter(ch => !ch.useSecondaryAxis);
+    if (primaryChannels.length === 0) return ['auto', 'auto'];
+    
+    // Check if all primary channels are percentage-based
+    const allPercentage = primaryChannels.every((ch) => {
+      const metadata = CHANNEL_METADATA[ch.channel];
       return metadata.unit === '%';
     });
 
@@ -107,6 +103,27 @@ export function ConfigurableTelemetryChart({
 
     return ['auto', 'auto'];
   };
+
+  // Get domain for secondary Y axis
+  const getSecondaryYAxisDomain = (): [number, number] | ['auto', 'auto'] => {
+    const secondaryChannels = config.channels.filter(ch => ch.useSecondaryAxis);
+    if (secondaryChannels.length === 0) return ['auto', 'auto'];
+    
+    // Check if all secondary channels are percentage-based
+    const allPercentage = secondaryChannels.every((ch) => {
+      const metadata = CHANNEL_METADATA[ch.channel];
+      return metadata.unit === '%';
+    });
+
+    if (allPercentage) {
+      return [0, 100];
+    }
+
+    return ['auto', 'auto'];
+  };
+
+  // Check if any channel uses secondary axis
+  const hasSecondaryAxis = config.channels.some(ch => ch.useSecondaryAxis);
 
   return (
     <TooltipProvider>
@@ -156,14 +173,36 @@ export function ConfigurableTelemetryChart({
               tick={{ fontSize: 11 }}
               interval="preserveStartEnd"
             />
+            
+            {/* Primary Y-Axis (Left) */}
             <YAxis
+              yAxisId="left"
               label={{
                 value: config.yAxisLabel,
                 angle: -90,
                 position: 'insideLeft',
+                offset: 0,
+                style: { textAnchor: 'middle' },
               }}
-              domain={getYAxisDomain()}
+              domain={getPrimaryYAxisDomain()}
             />
+            
+            {/* Secondary Y-Axis (Right) - only if needed */}
+            {hasSecondaryAxis && (
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                label={{
+                  value: config.yAxisLabelSecondary || 'Secondary',
+                  angle: 90,
+                  position: 'insideRight',
+                  offset: 0,
+                  style: { textAnchor: 'middle' },
+                }}
+                domain={getSecondaryYAxisDomain()}
+              />
+            )}
+            
             <ChartTooltip
               contentStyle={{
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -174,33 +213,41 @@ export function ConfigurableTelemetryChart({
             <Legend wrapperStyle={{ paddingTop: '20px' }} />
 
             {/* Render lines for each configured channel */}
-            {config.channels.map((channelConfig) => (
-              <Line
-                key={channelConfig.id}
-                type="monotone"
-                dataKey={channelConfig.id}
-                stroke={channelConfig.color || '#000000'}
-                strokeWidth={2}
-                dot={false}
-                name={channelConfig.label || channelConfig.yChannel}
-              />
-            ))}
+            {config.channels.map((channelConfig) => {
+              const channelLabel = CHANNEL_METADATA[channelConfig.channel].label;
+              return (
+                <Line
+                  key={channelConfig.id}
+                  yAxisId={channelConfig.useSecondaryAxis ? 'right' : 'left'}
+                  type="monotone"
+                  dataKey={channelConfig.id}
+                  stroke={channelConfig.color || '#000000'}
+                  strokeWidth={2}
+                  dot={false}
+                  name={channelLabel}
+                />
+              );
+            })}
 
             {/* Render compare lines if available */}
             {compareData &&
-              config.channels.map((channelConfig) => (
-                <Line
-                  key={`compare_${channelConfig.id}`}
-                  type="monotone"
-                  dataKey={`compare_${channelConfig.id}`}
-                  stroke={channelConfig.color || '#000000'}
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={false}
-                  name={`Compare ${channelConfig.label || channelConfig.yChannel}`}
-                  opacity={0.6}
-                />
-              ))}
+              config.channels.map((channelConfig) => {
+                const channelLabel = CHANNEL_METADATA[channelConfig.channel].label;
+                return (
+                  <Line
+                    key={`compare_${channelConfig.id}`}
+                    yAxisId={channelConfig.useSecondaryAxis ? 'right' : 'left'}
+                    type="monotone"
+                    dataKey={`compare_${channelConfig.id}`}
+                    stroke={channelConfig.color || '#000000'}
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    dot={false}
+                    name={`Compare ${channelLabel}`}
+                    opacity={0.6}
+                  />
+                );
+              })}
           </LineChart>
         </ResponsiveContainer>
       )}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Sparkles } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   PlotConfig,
   ChannelConfig,
@@ -41,16 +47,21 @@ export function PlotConfigDialog({
 }: PlotConfigDialogProps) {
   const [editedConfig, setEditedConfig] = useState<PlotConfig>(config);
 
-  // Get all available channels for both axes
+  // Get all available channels
   const allChannels = Object.values(CHANNEL_METADATA);
+  
+  // Get channels that can be used as X-axis (time-based)
+  const xAxisChannels = allChannels.filter(ch => ch.isTimeAxis);
+  
+  // Get channels that can be plotted (non-time-based)
+  const dataChannels = allChannels.filter(ch => !ch.isTimeAxis);
 
   const handleAddChannel = () => {
     const newChannel: ChannelConfig = {
       id: `channel-${Date.now()}`,
-      xChannel: 'time',
-      yChannel: 'throttle',
+      channel: 'throttle',
       color: CHANNEL_METADATA.throttle.defaultColor,
-      label: CHANNEL_METADATA.throttle.label,
+      useSecondaryAxis: false,
     };
 
     setEditedConfig({
@@ -69,7 +80,7 @@ export function PlotConfigDialog({
   const handleChannelChange = (
     channelId: string,
     field: keyof ChannelConfig,
-    value: string
+    value: string | boolean
   ) => {
     setEditedConfig({
       ...editedConfig,
@@ -77,10 +88,9 @@ export function PlotConfigDialog({
         if (ch.id === channelId) {
           const updated = { ...ch, [field]: value };
           
-          // Auto-update label and color when Y channel changes
-          if (field === 'yChannel') {
+          // Auto-update color when channel changes
+          if (field === 'channel') {
             const metadata = CHANNEL_METADATA[value as TelemetryChannel];
-            updated.label = metadata.label;
             updated.color = metadata.defaultColor;
           }
           
@@ -91,24 +101,71 @@ export function PlotConfigDialog({
     });
   };
 
-  const handleSave = () => {
-    // Auto-update axis labels based on channels if they match defaults
-    const firstChannel = editedConfig.channels[0];
-    if (firstChannel) {
-      const xMeta = CHANNEL_METADATA[firstChannel.xChannel];
-      const yMeta = CHANNEL_METADATA[firstChannel.yChannel];
-      
-      // Smart default for X axis
-      if (!editedConfig.xAxisLabel || editedConfig.xAxisLabel === config.xAxisLabel) {
-        editedConfig.xAxisLabel = `${xMeta.label}${xMeta.unit ? ` (${xMeta.unit})` : ''}`;
-      }
-      
-      // Smart default for Y axis - use first channel's unit
-      if (!editedConfig.yAxisLabel || editedConfig.yAxisLabel === config.yAxisLabel) {
-        editedConfig.yAxisLabel = `${yMeta.label}${yMeta.unit ? ` (${yMeta.unit})` : ''}`;
+  const handleAutoGenerate = () => {
+    const xMeta = CHANNEL_METADATA[editedConfig.xAxis];
+    const primaryChannels = editedConfig.channels.filter(ch => !ch.useSecondaryAxis);
+    const secondaryChannels = editedConfig.channels.filter(ch => ch.useSecondaryAxis);
+    
+    // Generate plot title from channel names
+    let title = '';
+    if (editedConfig.channels.length > 0) {
+      const channelNames = editedConfig.channels.map(ch => CHANNEL_METADATA[ch.channel].label);
+      if (channelNames.length === 1) {
+        title = channelNames[0];
+      } else if (channelNames.length === 2) {
+        title = `${channelNames[0]} & ${channelNames[1]}`;
+      } else {
+        title = `${channelNames[0]}, ${channelNames[1]} & More`;
       }
     }
     
+    // Generate X-axis label
+    const xAxisLabel = `${xMeta.label}${xMeta.unit ? ` (${xMeta.unit})` : ''}`;
+    
+    // Generate primary Y-axis label
+    let yAxisLabel = '';
+    if (primaryChannels.length > 0) {
+      const channelLabels = primaryChannels.map(ch => CHANNEL_METADATA[ch.channel].label);
+      const units = [...new Set(primaryChannels.map(ch => CHANNEL_METADATA[ch.channel].unit))];
+      
+      if (channelLabels.length === 1) {
+        yAxisLabel = `${channelLabels[0]}${units[0] ? ` (${units[0]})` : ''}`;
+      } else if (units.length === 1 && units[0]) {
+        // Multiple channels with same unit
+        yAxisLabel = `${channelLabels[0]}, ${channelLabels[1]}${channelLabels.length > 2 ? ', ...' : ''} (${units[0]})`;
+      } else {
+        // Multiple channels with different units
+        yAxisLabel = `${channelLabels[0]}, ${channelLabels[1]}${channelLabels.length > 2 ? ', ...' : ''}`;
+      }
+    }
+    
+    // Generate secondary Y-axis label
+    let yAxisLabelSecondary = '';
+    if (secondaryChannels.length > 0) {
+      const channelLabels = secondaryChannels.map(ch => CHANNEL_METADATA[ch.channel].label);
+      const units = [...new Set(secondaryChannels.map(ch => CHANNEL_METADATA[ch.channel].unit))];
+      
+      if (channelLabels.length === 1) {
+        yAxisLabelSecondary = `${channelLabels[0]}${units[0] ? ` (${units[0]})` : ''}`;
+      } else if (units.length === 1 && units[0]) {
+        // Multiple channels with same unit
+        yAxisLabelSecondary = `${channelLabels[0]}, ${channelLabels[1]}${channelLabels.length > 2 ? ', ...' : ''} (${units[0]})`;
+      } else {
+        // Multiple channels with different units
+        yAxisLabelSecondary = `${channelLabels[0]}, ${channelLabels[1]}${channelLabels.length > 2 ? ', ...' : ''}`;
+      }
+    }
+    
+    setEditedConfig({
+      ...editedConfig,
+      title,
+      xAxisLabel,
+      yAxisLabel,
+      yAxisLabelSecondary,
+    });
+  };
+
+  const handleSave = () => {
     onSave(editedConfig);
     onOpenChange(false);
   };
@@ -126,7 +183,28 @@ export function PlotConfigDialog({
         <div className="space-y-6 py-4">
           {/* Plot Title */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Plot Title</label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Plot Title</label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={handleAutoGenerate}
+                      disabled={editedConfig.channels.length === 0}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" sideOffset={5}>
+                    <p>Auto-Generate Labels</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <Input
               value={editedConfig.title}
               onChange={(e) =>
@@ -136,8 +214,31 @@ export function PlotConfigDialog({
             />
           </div>
 
-          {/* Axis Labels */}
+          {/* Primary X-Axis and Label */}
           <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">X-Axis</label>
+              <Select
+                value={editedConfig.xAxis}
+                onValueChange={(value) =>
+                  setEditedConfig({
+                    ...editedConfig,
+                    xAxis: value as TelemetryChannel,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {xAxisChannels.map((ch) => (
+                    <SelectItem key={ch.key} value={ch.key}>
+                      {ch.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">X-Axis Label</label>
               <Input
@@ -151,8 +252,12 @@ export function PlotConfigDialog({
                 placeholder="e.g., Time (s)"
               />
             </div>
+          </div>
+
+          {/* Y-Axis Labels */}
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Y-Axis Label</label>
+              <label className="text-sm font-medium">Y-Axis Label (Primary)</label>
               <Input
                 value={editedConfig.yAxisLabel}
                 onChange={(e) =>
@@ -163,6 +268,25 @@ export function PlotConfigDialog({
                 }
                 placeholder="e.g., Input (%)"
               />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Y-Axis Label (Secondary)</label>
+              <Input
+                value={editedConfig.yAxisLabelSecondary || ''}
+                onChange={(e) =>
+                  setEditedConfig({
+                    ...editedConfig,
+                    yAxisLabelSecondary: e.target.value,
+                  })
+                }
+                placeholder="e.g., Speed (km/h)"
+                disabled={!editedConfig.channels.some(ch => ch.useSecondaryAxis)}
+              />
+              {!editedConfig.channels.some(ch => ch.useSecondaryAxis) && (
+                <p className="text-xs text-muted-foreground">
+                  Enable "2nd Axis" on a channel to use
+                </p>
+              )}
             </div>
           </div>
 
@@ -187,16 +311,78 @@ export function PlotConfigDialog({
                 No channels configured. Click "Add Channel" to get started.
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {editedConfig.channels.map((channel, index) => (
                   <div
                     key={channel.id}
-                    className="p-4 border rounded-lg space-y-3 bg-muted/30"
+                    className="p-3 border rounded-lg bg-muted/30"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">
-                        Channel {index + 1}
-                      </span>
+                    <div className="flex items-center gap-3">
+                      {/* Channel Select */}
+                      <div className="flex-1">
+                        <Select
+                          value={channel.channel}
+                          onValueChange={(value) =>
+                            handleChannelChange(
+                              channel.id,
+                              'channel',
+                              value
+                            )
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select channel" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {dataChannels.map((ch) => (
+                              <SelectItem key={ch.key} value={ch.key}>
+                                {ch.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Color Picker */}
+                      <div className="w-20">
+                        <Input
+                          type="color"
+                          value={channel.color || '#000000'}
+                          onChange={(e) =>
+                            handleChannelChange(
+                              channel.id,
+                              'color',
+                              e.target.value
+                            )
+                          }
+                          className="h-10 p-1 cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Secondary Axis Checkbox */}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`secondary-${channel.id}`}
+                          checked={channel.useSecondaryAxis || false}
+                          onChange={(e) =>
+                            handleChannelChange(
+                              channel.id,
+                              'useSecondaryAxis',
+                              e.target.checked
+                            )
+                          }
+                          className="rounded"
+                        />
+                        <label
+                          htmlFor={`secondary-${channel.id}`}
+                          className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer"
+                        >
+                          2nd Axis
+                        </label>
+                      </div>
+
+                      {/* Remove Button */}
                       <Button
                         type="button"
                         variant="ghost"
@@ -206,113 +392,6 @@ export function PlotConfigDialog({
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <label className="text-xs text-muted-foreground">
-                          X-Axis (Primary)
-                        </label>
-                        <Select
-                          value={channel.xChannel}
-                          onValueChange={(value) =>
-                            handleChannelChange(
-                              channel.id,
-                              'xChannel',
-                              value
-                            )
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {allChannels.map((ch) => (
-                              <SelectItem key={ch.key} value={ch.key}>
-                                {ch.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-xs text-muted-foreground">
-                          Y-Axis (Secondary)
-                        </label>
-                        <Select
-                          value={channel.yChannel}
-                          onValueChange={(value) =>
-                            handleChannelChange(
-                              channel.id,
-                              'yChannel',
-                              value
-                            )
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {allChannels.map((ch) => (
-                              <SelectItem key={ch.key} value={ch.key}>
-                                {ch.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <label className="text-xs text-muted-foreground">
-                          Label
-                        </label>
-                        <Input
-                          value={channel.label || ''}
-                          onChange={(e) =>
-                            handleChannelChange(
-                              channel.id,
-                              'label',
-                              e.target.value
-                            )
-                          }
-                          placeholder="Channel label"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-xs text-muted-foreground">
-                          Color
-                        </label>
-                        <div className="flex gap-2">
-                          <Input
-                            type="color"
-                            value={channel.color || '#000000'}
-                            onChange={(e) =>
-                              handleChannelChange(
-                                channel.id,
-                                'color',
-                                e.target.value
-                              )
-                            }
-                            className="w-16 h-10 p-1 cursor-pointer"
-                          />
-                          <Input
-                            value={channel.color || '#000000'}
-                            onChange={(e) =>
-                              handleChannelChange(
-                                channel.id,
-                                'color',
-                                e.target.value
-                              )
-                            }
-                            placeholder="#000000"
-                            className="flex-1"
-                          />
-                        </div>
-                      </div>
                     </div>
                   </div>
                 ))}

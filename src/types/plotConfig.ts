@@ -12,17 +12,18 @@ export type TelemetryChannel =
 
 export interface ChannelConfig {
   id: string;
-  xChannel: TelemetryChannel;
-  yChannel: TelemetryChannel;
+  channel: TelemetryChannel;
   color?: string;
-  label?: string;
+  useSecondaryAxis?: boolean; // If true, plot on right Y-axis
 }
 
 export interface PlotConfig {
   id: string;
   title: string;
+  xAxis: TelemetryChannel; // Primary X-axis for entire plot
   xAxisLabel: string;
   yAxisLabel: string;
+  yAxisLabelSecondary?: string; // Label for secondary Y-axis (right side)
   channels: ChannelConfig[];
 }
 
@@ -99,52 +100,47 @@ export const DEFAULT_PLOT_CONFIGS: PlotConfig[] = [
   {
     id: 'throttle-brake',
     title: 'Throttle & Brake',
+    xAxis: 'time',
     xAxisLabel: 'Time (s)',
     yAxisLabel: 'Input (%)',
     channels: [
       {
         id: 'throttle-1',
-        xChannel: 'time',
-        yChannel: 'throttle',
+        channel: 'throttle',
         color: '#10b981',
-        label: 'Throttle',
       },
       {
         id: 'brake-1',
-        xChannel: 'time',
-        yChannel: 'brake',
+        channel: 'brake',
         color: '#ef4444',
-        label: 'Brake',
       },
     ],
   },
   {
     id: 'steering',
     title: 'Steering Input',
+    xAxis: 'time',
     xAxisLabel: 'Time (s)',
     yAxisLabel: 'Steering (%)',
     channels: [
       {
         id: 'steering-1',
-        xChannel: 'time',
-        yChannel: 'steering',
+        channel: 'steering',
         color: '#8b5cf6',
-        label: 'Steering',
       },
     ],
   },
   {
     id: 'speed',
     title: 'Speed',
+    xAxis: 'time',
     xAxisLabel: 'Time (s)',
     yAxisLabel: 'Speed (km/h)',
     channels: [
       {
         id: 'speed-1',
-        xChannel: 'time',
-        yChannel: 'speed',
+        channel: 'speed',
         color: '#3b82f6',
-        label: 'Speed',
       },
     ],
   },
