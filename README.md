@@ -2,6 +2,10 @@
 
 An AI-powered telemetry analysis tool for Assetto Corsa that helps drivers improve their lap times through real-time data visualization and intelligent coaching suggestions.
 
+<div align="center">
+  <img width="75%" alt="PurpleSector_LapAnalysisView" src="https://github.com/user-attachments/assets/60735f3e-00f9-41e8-9cf0-57b0830e107e" />
+</div>
+
 ## Features
 
 - 🏎️ **Real-time Telemetry**: Live streaming of throttle, brake, and steering inputs
