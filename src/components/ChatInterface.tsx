@@ -24,9 +24,18 @@ export function ChatInterface({ lapId, initialMessages = [] }: ChatInterfaceProp
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Skip scroll on initial mount to prevent auto-scroll on page load
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    // Use setTimeout to ensure scroll happens after render
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 0);
   }, [messages]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -117,7 +126,7 @@ export function ChatInterface({ lapId, initialMessages = [] }: ChatInterfaceProp
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
+        {!isInitialMount.current && <div ref={messagesEndRef} />}
       </div>
 
       {/* Input */}

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Brain, Clock, TrendingUp, AlertCircle, Info, MessageSquare, GitCompare, X, Tag, Plus } from 'lucide-react';
+import { ArrowLeft, Brain, Clock, TrendingUp, AlertCircle, Info, MessageSquare, GitCompare, X, Tag, Plus, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +87,7 @@ export default function LapPage() {
   const [eventLaps, setEventLaps] = useState<EventLap[]>([]);
   const [analysisReferenceLap, setAnalysisReferenceLap] = useState<EventLap | null>(null);
   const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(DEFAULT_PLOT_CONFIGS);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Handle back button - close tab if opened in new tab
   function handleBack() {
@@ -403,15 +404,31 @@ export default function LapPage() {
           {/* Left Column - Telemetry & Lap Comparison */}
           <div className="lg:col-span-2 space-y-6">
             {/* Telemetry Charts */}
-            <Card>
+            <Card className={isFullscreen ? 'fixed inset-0 z-50 rounded-none' : ''}>
               <CardHeader>
-                <CardTitle>Telemetry Data</CardTitle>
-                <CardDescription>
-                  Customize plots to analyze different telemetry channels
-                  {compareLapId && <span className="text-purple-600"> • Comparison lap shown in dashed lines</span>}
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Telemetry Data</CardTitle>
+                    <CardDescription>
+                      Customize plots to analyze different telemetry channels
+                      {compareLapId && <span className="text-purple-600"> • Comparison lap shown in dashed lines</span>}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsFullscreen(!isFullscreen)}
+                    title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                  >
+                    {isFullscreen ? (
+                      <Minimize2 className="h-4 w-4" />
+                    ) : (
+                      <Maximize2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className={isFullscreen ? 'h-[calc(100vh-8rem)] overflow-y-auto' : ''}>
                 <div className="space-y-6">
                   {plotConfigs.map((config, index) => (
                     <ConfigurableTelemetryChart
@@ -424,7 +441,7 @@ export default function LapPage() {
                         newConfigs[index] = newConfig;
                         setPlotConfigs(newConfigs);
                       }}
-                      height={250}
+                      height={isFullscreen ? 350 : 250}
                     />
                   ))}
                 </div>

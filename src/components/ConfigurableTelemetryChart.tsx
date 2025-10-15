@@ -12,6 +12,7 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceArea,
+  ReferenceLine,
 } from 'recharts';
 import { TelemetryFrame } from '@/types/telemetry';
 import { PlotConfig, CHANNEL_METADATA, TelemetryChannel } from '@/types/plotConfig';
@@ -211,8 +212,24 @@ export function ConfigurableTelemetryChart({
 
   // Custom legend component that shows current values on hover
   const renderCustomLegend = () => {
+    // Get X-axis metadata
+    const xAxisMeta = CHANNEL_METADATA[config.xAxis];
+    const xAxisValue = hoveredData?.xAxis;
+    
     return (
       <div className="flex flex-wrap gap-4 justify-center mt-4 px-2">
+        {/* X-Axis value - only show when hovering */}
+        {hoveredData && xAxisValue !== undefined && (
+          <div className="flex items-center gap-2 pr-4 border-r border-gray-300">
+            <span className="text-sm">
+              {xAxisMeta.label}:{' '}
+              <span className="font-semibold">
+                {xAxisValue.toFixed(1)}{xAxisMeta.unit ? ` ${xAxisMeta.unit}` : ''}
+              </span>
+            </span>
+          </div>
+        )}
+        
         {config.channels.map((channelConfig) => {
           const channelLabel = CHANNEL_METADATA[channelConfig.channel].label;
           const channelUnit = CHANNEL_METADATA[channelConfig.channel].unit;
@@ -305,6 +322,7 @@ export function ConfigurableTelemetryChart({
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseLeave}
+            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
             <XAxis
@@ -351,6 +369,17 @@ export function ConfigurableTelemetryChart({
               />
             )}
 
+            {/* Vertical reference line at hover position */}
+            {hoveredData && (
+              <ReferenceLine
+                x={hoveredData.xAxis}
+                yAxisId="left"
+                stroke="#888"
+                strokeDasharray="3 3"
+                strokeWidth={1}
+              />
+            )}
+
             {/* Render lines for each configured channel */}
             {config.channels.map((channelConfig) => {
               const channelLabel = CHANNEL_METADATA[channelConfig.channel].label;
@@ -362,8 +391,23 @@ export function ConfigurableTelemetryChart({
                   dataKey={channelConfig.id}
                   stroke={channelConfig.color || '#000000'}
                   strokeWidth={2}
-                  dot={false}
+                  dot={(props: any) => {
+                    if (hoveredData && props.payload.xAxis === hoveredData.xAxis) {
+                      return (
+                        <circle
+                          cx={props.cx}
+                          cy={props.cy}
+                          r={4}
+                          fill={channelConfig.color || '#000000'}
+                          stroke="#fff"
+                          strokeWidth={2}
+                        />
+                      );
+                    }
+                    return <></>;
+                  }}
                   name={channelLabel}
+                  isAnimationActive={false}
                 />
               );
             })}
@@ -381,9 +425,25 @@ export function ConfigurableTelemetryChart({
                     stroke={channelConfig.color || '#000000'}
                     strokeWidth={2}
                     strokeDasharray="5 5"
-                    dot={false}
+                    dot={(props: any) => {
+                      if (hoveredData && props.payload.xAxis === hoveredData.xAxis) {
+                        return (
+                          <circle
+                            cx={props.cx}
+                            cy={props.cy}
+                            r={3.5}
+                            fill={channelConfig.color || '#000000'}
+                            stroke="#fff"
+                            strokeWidth={2}
+                            opacity={0.8}
+                          />
+                        );
+                      }
+                      return <></>;
+                    }}
                     name={`Compare ${channelLabel}`}
                     opacity={0.6}
+                    isAnimationActive={false}
                   />
                 );
               })}
