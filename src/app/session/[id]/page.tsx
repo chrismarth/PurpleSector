@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { TelemetryChart } from '@/components/TelemetryChart';
+import { TelemetryPlotPanel } from '@/components/TelemetryPlotPanel';
 import { TelemetryFrame } from '@/types/telemetry';
+import { PlotConfig, DEFAULT_PLOT_CONFIGS } from '@/types/plotConfig';
 import { formatLapTime } from '@/lib/utils';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 
@@ -62,6 +63,7 @@ export default function SessionPage() {
   const [customSessionTag, setCustomSessionTag] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
   const [sessionAlreadyOpen, setSessionAlreadyOpen] = useState(false);
+  const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(DEFAULT_PLOT_CONFIGS);
 
   const wsRef = useRef<WebSocket | null>(null);
   const lastLapNumberRef = useRef(0);
@@ -142,12 +144,35 @@ export default function SessionPage() {
       if (data.tags) {
         setSessionTags(JSON.parse(data.tags));
       }
+
+      // Load plot configurations (only if different from current)
+      if (data.plotConfigs) {
+        const newConfigs = JSON.parse(data.plotConfigs);
+        setPlotConfigs(prev => {
+          // Only update if actually different
+          if (JSON.stringify(prev) !== JSON.stringify(newConfigs)) {
+            return newConfigs;
+          }
+          return prev;
+        });
+      }
     } catch (error) {
       console.error('Error fetching session:', error);
     } finally {
       setLoading(false);
     }
   }
+
+  // Memoized callback for plot config changes
+  const handlePlotConfigsChange = useCallback((configs: PlotConfig[]) => {
+    setPlotConfigs(configs);
+    // Auto-save to session
+    fetch(`/api/sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plotConfigs: JSON.stringify(configs) }),
+    }).catch(error => console.error('Error saving plot configs:', error));
+  }, [sessionId]);
 
   function connectWebSocket() {
     // Clear any existing connection
@@ -224,19 +249,25 @@ export default function SessionPage() {
       setWsConnected(false);
       wsRef.current = null;
 
-      // Attempt to reconnect with exponential backoff
-      reconnectAttemptsRef.current++;
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 30000); // Max 30 seconds
-      
-      console.log(`Reconnecting in ${delay / 1000} seconds... (attempt ${reconnectAttemptsRef.current})`);
-      setReconnecting(true);
-      
-      reconnectTimeoutRef.current = setTimeout(() => {
-        if (session) {
-          console.log('Attempting to reconnect WebSocket...');
-          connectWebSocket();
-        }
-      }, delay);
+      // Only attempt to reconnect if session is still active and not paused
+      if (session?.status === 'active' && !isPausedRef.current) {
+        // Attempt to reconnect with exponential backoff
+        reconnectAttemptsRef.current++;
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 30000); // Max 30 seconds
+        
+        console.log(`Reconnecting in ${delay / 1000} seconds... (attempt ${reconnectAttemptsRef.current})`);
+        setReconnecting(true);
+        
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (session?.status === 'active') {
+            console.log('Attempting to reconnect WebSocket...');
+            connectWebSocket();
+          }
+        }, delay);
+      } else {
+        console.log('Session not active, skipping reconnection');
+        setReconnecting(false);
+      }
     };
   }
 
@@ -546,38 +577,14 @@ export default function SessionPage() {
           {/* Live Telemetry - Only show for active sessions */}
           {session.status === 'active' && (
             <div className="lg:col-span-2 space-y-6">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <Flag className="h-5 w-5" />
-                      Current Lap: #{currentLapNumber}
-                    </CardTitle>
-                    {currentLapFrames.length > 0 && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        <span className="font-mono">
-                          {formatLapTime(currentLapFrames[currentLapFrames.length - 1].lapTime / 1000)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {currentLapFrames.length > 0 ? (
-                    <TelemetryChart data={currentLapFrames} height={250} />
-                  ) : (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <p>Waiting for telemetry data...</p>
-                      {!wsConnected && (
-                        <p className="text-sm mt-2">
-                          Make sure the WebSocket server is running
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <TelemetryPlotPanel
+                data={currentLapFrames}
+                initialPlotConfigs={plotConfigs}
+                onPlotConfigsChange={handlePlotConfigsChange}
+                showFullscreenToggle={true}
+                currentLapNumber={currentLapNumber}
+                showLapHeader={true}
+              />
             </div>
           )}
 

@@ -41,12 +41,13 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    const { name, status, tags } = body;
+    const { name, status, tags, plotConfigs } = body;
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
     if (status !== undefined) updateData.status = status;
     if (tags !== undefined) updateData.tags = tags;
+    if (plotConfigs !== undefined) updateData.plotConfigs = plotConfigs;
 
     const session = await prisma.session.update({
       where: { id: params.id },

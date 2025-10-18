@@ -37,11 +37,12 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    const { driverComments, tags } = body;
+    const { driverComments, tags, plotConfigs } = body;
 
     const updateData: any = {};
     if (driverComments !== undefined) updateData.driverComments = driverComments;
     if (tags !== undefined) updateData.tags = tags;
+    if (plotConfigs !== undefined) updateData.plotConfigs = plotConfigs;
 
     const lap = await prisma.lap.update({
       where: { id: params.id },

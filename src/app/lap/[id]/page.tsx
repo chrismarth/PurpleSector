@@ -3,13 +3,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Brain, Clock, TrendingUp, AlertCircle, Info, MessageSquare, GitCompare, X, Tag, Plus, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowLeft, Brain, Clock, TrendingUp, AlertCircle, Info, MessageSquare, GitCompare, X, Tag, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { TelemetryChart } from '@/components/TelemetryChart';
-import { ConfigurableTelemetryChart } from '@/components/ConfigurableTelemetryChart';
+import { TelemetryPlotPanel } from '@/components/TelemetryPlotPanel';
 import { ChatInterface } from '@/components/ChatInterface';
 import { formatLapTime } from '@/lib/utils';
 import { TelemetryFrame, LapSuggestion } from '@/types/telemetry';
@@ -87,7 +87,6 @@ export default function LapPage() {
   const [eventLaps, setEventLaps] = useState<EventLap[]>([]);
   const [analysisReferenceLap, setAnalysisReferenceLap] = useState<EventLap | null>(null);
   const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(DEFAULT_PLOT_CONFIGS);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Handle back button - close tab if opened in new tab
   function handleBack() {
@@ -158,6 +157,28 @@ export default function LapPage() {
       // Load tags
       if (data.tags) {
         setTags(JSON.parse(data.tags));
+      }
+
+      // Load plot configurations (lap-specific or inherit from session)
+      if (data.plotConfigs) {
+        const newConfigs = JSON.parse(data.plotConfigs);
+        setPlotConfigs(prev => {
+          // Only update if actually different
+          if (JSON.stringify(prev) !== JSON.stringify(newConfigs)) {
+            return newConfigs;
+          }
+          return prev;
+        });
+      } else if (data.session?.plotConfigs) {
+        // Inherit from session if lap doesn't have its own
+        const newConfigs = JSON.parse(data.session.plotConfigs);
+        setPlotConfigs(prev => {
+          // Only update if actually different
+          if (JSON.stringify(prev) !== JSON.stringify(newConfigs)) {
+            return newConfigs;
+          }
+          return prev;
+        });
       }
     } catch (error) {
       console.error('Error fetching lap:', error);
@@ -266,6 +287,19 @@ export default function LapPage() {
     }
   }, [lapId]);
 
+  // Auto-save plot configurations
+  const autoSavePlotConfigs = useCallback(async (configs: PlotConfig[]) => {
+    try {
+      await fetch(`/api/laps/${lapId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plotConfigs: JSON.stringify(configs) }),
+      });
+    } catch (error) {
+      console.error('Error saving plot configs:', error);
+    }
+  }, [lapId]);
+
   // Debounced auto-save for comments
   useEffect(() => {
     if (!lap) return; // Don't save until lap is loaded
@@ -282,6 +316,12 @@ export default function LapPage() {
       autoSaveTags(tags);
     }
   }, [tags, lap, autoSaveTags]);
+
+  // Save plot configurations immediately when changed
+  useEffect(() => {
+    if (!lap) return; // Don't save until lap is loaded
+    autoSavePlotConfigs(plotConfigs);
+  }, [plotConfigs, lap, autoSavePlotConfigs]);
 
   function addTag(tag: string) {
     if (!tags.includes(tag)) {
@@ -404,49 +444,14 @@ export default function LapPage() {
           {/* Left Column - Telemetry & Lap Comparison */}
           <div className="lg:col-span-2 space-y-6">
             {/* Telemetry Charts */}
-            <Card className={isFullscreen ? 'fixed inset-0 z-50 rounded-none' : ''}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Telemetry Data</CardTitle>
-                    <CardDescription>
-                      Customize plots to analyze different telemetry channels
-                      {compareLapId && <span className="text-purple-600"> • Comparison lap shown in dashed lines</span>}
-                    </CardDescription>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsFullscreen(!isFullscreen)}
-                    title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                  >
-                    {isFullscreen ? (
-                      <Minimize2 className="h-4 w-4" />
-                    ) : (
-                      <Maximize2 className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className={isFullscreen ? 'h-[calc(100vh-8rem)] overflow-y-auto' : ''}>
-                <div className="space-y-6">
-                  {plotConfigs.map((config, index) => (
-                    <ConfigurableTelemetryChart
-                      key={config.id}
-                      data={telemetryFrames}
-                      compareData={compareTelemetry.length > 0 ? compareTelemetry : undefined}
-                      config={config}
-                      onConfigChange={(newConfig) => {
-                        const newConfigs = [...plotConfigs];
-                        newConfigs[index] = newConfig;
-                        setPlotConfigs(newConfigs);
-                      }}
-                      height={isFullscreen ? 350 : 250}
-                    />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <TelemetryPlotPanel
+              data={telemetryFrames}
+              compareData={compareTelemetry.length > 0 ? compareTelemetry : undefined}
+              compareLapId={compareLapId}
+              initialPlotConfigs={plotConfigs}
+              onPlotConfigsChange={setPlotConfigs}
+              showFullscreenToggle={true}
+            />
 
             {/* Lap Comparison */}
             <Card>

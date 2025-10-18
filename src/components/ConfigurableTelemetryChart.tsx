@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Pencil, ZoomOut } from 'lucide-react';
+import { Pencil, ZoomOut, Trash2 } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -25,7 +25,10 @@ interface ConfigurableTelemetryChartProps {
   compareData?: TelemetryFrame[];
   config: PlotConfig;
   onConfigChange: (config: PlotConfig) => void;
+  onDelete?: () => void;
   height?: number;
+  syncedHoverValue?: number | null;
+  onHoverChange?: (value: number | null) => void;
 }
 
 export function ConfigurableTelemetryChart({
@@ -33,7 +36,10 @@ export function ConfigurableTelemetryChart({
   compareData,
   config,
   onConfigChange,
+  onDelete,
   height = 250,
+  syncedHoverValue,
+  onHoverChange,
 }: ConfigurableTelemetryChartProps) {
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   
@@ -44,6 +50,9 @@ export function ConfigurableTelemetryChart({
   
   // Hover state for legend
   const [hoveredData, setHoveredData] = useState<any>(null);
+
+  // Use synced hover value if provided, otherwise use local hover
+  const effectiveHoverValue = syncedHoverValue !== undefined ? syncedHoverValue : null;
 
   // Transform telemetry data based on configuration
   const chartData = useMemo(() => {
@@ -96,9 +105,28 @@ export function ConfigurableTelemetryChart({
     });
   }, [data, compareData, config]);
 
+  // Find the data point closest to the synced hover value
+  const syncedHoveredData = useMemo(() => {
+    if (effectiveHoverValue === null || chartData.length === 0) return null;
+    
+    // Find the closest data point based on x-axis value
+    let closest = null;
+    let minDiff = Infinity;
+    
+    for (const point of chartData) {
+      const diff = Math.abs(point.xAxis - effectiveHoverValue);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = point;
+      }
+    }
+    
+    return closest;
+  }, [effectiveHoverValue, chartData]);
+
   // Get domain for primary Y axis based on channel types
   const getPrimaryYAxisDomain = (): [number, number] | ['auto', 'auto'] => {
-    const primaryChannels = config.channels.filter(ch => !ch.useSecondaryAxis);
+    const primaryChannels = config.channels.filter(ch => ch.useSecondaryAxis !== true);
     if (primaryChannels.length === 0) return ['auto', 'auto'];
     
     // Check if all primary channels are percentage-based
@@ -116,7 +144,7 @@ export function ConfigurableTelemetryChart({
 
   // Get domain for secondary Y axis
   const getSecondaryYAxisDomain = (): [number, number] | ['auto', 'auto'] => {
-    const secondaryChannels = config.channels.filter(ch => ch.useSecondaryAxis);
+    const secondaryChannels = config.channels.filter(ch => ch.useSecondaryAxis === true);
     if (secondaryChannels.length === 0) return ['auto', 'auto'];
     
     // Check if all secondary channels are percentage-based
@@ -133,16 +161,25 @@ export function ConfigurableTelemetryChart({
   };
 
   // Check if any channel uses secondary axis
-  const hasSecondaryAxis = config.channels.some(ch => ch.useSecondaryAxis);
+  const hasSecondaryAxis = config.channels.some(ch => ch.useSecondaryAxis === true);
 
   // Zoom handlers
   const handleMouseDown = (e: any) => {
+    // Prevent text selection during drag
+    if (e?.nativeEvent) {
+      e.nativeEvent.preventDefault();
+    }
     if (e && e.activeLabel !== undefined) {
       setRefAreaLeft(e.activeLabel);
     }
   };
 
   const handleMouseMove = (e: any) => {
+    // Notify parent of hover position for syncing across charts
+    if (e && e.activeLabel !== undefined && onHoverChange) {
+      onHoverChange(e.activeLabel);
+    }
+    
     // Update hover data for legend
     if (e && e.activePayload) {
       setHoveredData(e.activePayload[0]?.payload);
@@ -151,11 +188,18 @@ export function ConfigurableTelemetryChart({
     // Handle zoom selection
     if (refAreaLeft && e && e.activeLabel !== undefined) {
       setRefAreaRight(e.activeLabel);
+      // Prevent text selection during drag
+      if (e?.nativeEvent) {
+        e.nativeEvent.preventDefault();
+      }
     }
   };
   
   const handleMouseLeave = () => {
     setHoveredData(null);
+    if (onHoverChange) {
+      onHoverChange(null);
+    }
   };
 
   const handleMouseUp = () => {
@@ -178,7 +222,7 @@ export function ConfigurableTelemetryChart({
         config.channels.forEach((ch) => {
           const value = item[ch.id];
           if (value !== undefined && value !== null) {
-            if (ch.useSecondaryAxis) {
+            if (ch.useSecondaryAxis === true) {
               yRightMin = Math.min(yRightMin, value);
               yRightMax = Math.max(yRightMax, value);
             } else {
@@ -212,14 +256,17 @@ export function ConfigurableTelemetryChart({
 
   // Custom legend component that shows current values on hover
   const renderCustomLegend = () => {
+    // Use synced data if available, otherwise use local hover data
+    const displayData = syncedHoveredData || hoveredData;
+    
     // Get X-axis metadata
     const xAxisMeta = CHANNEL_METADATA[config.xAxis];
-    const xAxisValue = hoveredData?.xAxis;
+    const xAxisValue = displayData?.xAxis;
     
     return (
       <div className="flex flex-wrap gap-4 justify-center mt-4 px-2">
         {/* X-Axis value - only show when hovering */}
-        {hoveredData && xAxisValue !== undefined && (
+        {displayData && xAxisValue !== undefined && (
           <div className="flex items-center gap-2 pr-4 border-r border-gray-300">
             <span className="text-sm">
               {xAxisMeta.label}:{' '}
@@ -233,8 +280,9 @@ export function ConfigurableTelemetryChart({
         {config.channels.map((channelConfig) => {
           const channelLabel = CHANNEL_METADATA[channelConfig.channel].label;
           const channelUnit = CHANNEL_METADATA[channelConfig.channel].unit;
-          const value = hoveredData?.[channelConfig.id];
-          const compareValue = compareData && hoveredData?.[`compare_${channelConfig.id}`];
+          const value = displayData?.[channelConfig.id];
+          const compareValue = displayData?.[`compare_${channelConfig.id}`];
+          const hasCompareData = compareData && compareData.length > 0;
           
           return (
             <div key={channelConfig.id} className="flex items-center gap-2">
@@ -249,7 +297,7 @@ export function ConfigurableTelemetryChart({
                     ? `${value.toFixed(1)}${channelUnit ? ` ${channelUnit}` : ''}`
                     : '—'}
                 </span>
-                {compareValue !== undefined && compareValue !== null && (
+                {hasCompareData && compareValue !== undefined && compareValue !== null && (
                   <span className="text-muted-foreground ml-1">
                     (vs {compareValue.toFixed(1)}{channelUnit ? ` ${channelUnit}` : ''})
                   </span>
@@ -264,7 +312,7 @@ export function ConfigurableTelemetryChart({
 
   return (
     <TooltipProvider>
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow select-none">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">{config.title}</h3>
           <div className="flex gap-2">
@@ -298,6 +346,22 @@ export function ConfigurableTelemetryChart({
                 <p>Edit Plot</p>
               </TooltipContent>
             </Tooltip>
+            {onDelete && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onDelete}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Delete Plot</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </div>
 
@@ -315,7 +379,7 @@ export function ConfigurableTelemetryChart({
           </div>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={height}>
+        <ResponsiveContainer width="100%" height={height} style={{ userSelect: 'none' }}>
           <LineChart 
             data={chartData}
             onMouseDown={handleMouseDown}
@@ -323,8 +387,10 @@ export function ConfigurableTelemetryChart({
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseLeave}
             margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+            style={{ userSelect: 'none' } as any}
           >
             <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+            
             <XAxis
               dataKey="xAxis"
               type="number"
@@ -350,6 +416,7 @@ export function ConfigurableTelemetryChart({
               }}
               domain={zoomDomain?.yLeft || getPrimaryYAxisDomain()}
               allowDataOverflow
+              type="number"
             />
             
             {/* Secondary Y-Axis (Right) - only if needed */}
@@ -366,35 +433,28 @@ export function ConfigurableTelemetryChart({
                 }}
                 domain={zoomDomain?.yRight || getSecondaryYAxisDomain()}
                 allowDataOverflow
-              />
-            )}
-
-            {/* Vertical reference line at hover position */}
-            {hoveredData && (
-              <ReferenceLine
-                x={hoveredData.xAxis}
-                yAxisId="left"
-                stroke="#888"
-                strokeDasharray="3 3"
-                strokeWidth={1}
+                type="number"
               />
             )}
 
             {/* Render lines for each configured channel */}
             {config.channels.map((channelConfig) => {
               const channelLabel = CHANNEL_METADATA[channelConfig.channel].label;
+              const yAxis = channelConfig.useSecondaryAxis === true ? 'right' : 'left';
               return (
                 <Line
                   key={channelConfig.id}
-                  yAxisId={channelConfig.useSecondaryAxis ? 'right' : 'left'}
+                  yAxisId={yAxis}
                   type="monotone"
                   dataKey={channelConfig.id}
                   stroke={channelConfig.color || '#000000'}
                   strokeWidth={2}
                   dot={(props: any) => {
-                    if (hoveredData && props.payload.xAxis === hoveredData.xAxis) {
+                    const displayData = syncedHoveredData || hoveredData;
+                    if (displayData && props.payload.xAxis === displayData.xAxis) {
                       return (
                         <circle
+                          key={`dot-${channelConfig.id}-${props.index}`}
                           cx={props.cx}
                           cy={props.cy}
                           r={4}
@@ -404,7 +464,7 @@ export function ConfigurableTelemetryChart({
                         />
                       );
                     }
-                    return <></>;
+                    return <g key={`dot-${channelConfig.id}-${props.index}`} />;
                   }}
                   name={channelLabel}
                   isAnimationActive={false}
@@ -416,19 +476,22 @@ export function ConfigurableTelemetryChart({
             {compareData &&
               config.channels.map((channelConfig) => {
                 const channelLabel = CHANNEL_METADATA[channelConfig.channel].label;
+                const yAxis = channelConfig.useSecondaryAxis === true ? 'right' : 'left';
                 return (
                   <Line
                     key={`compare_${channelConfig.id}`}
-                    yAxisId={channelConfig.useSecondaryAxis ? 'right' : 'left'}
+                    yAxisId={yAxis}
                     type="monotone"
                     dataKey={`compare_${channelConfig.id}`}
                     stroke={channelConfig.color || '#000000'}
                     strokeWidth={2}
                     strokeDasharray="5 5"
                     dot={(props: any) => {
-                      if (hoveredData && props.payload.xAxis === hoveredData.xAxis) {
+                      const displayData = syncedHoveredData || hoveredData;
+                      if (displayData && props.payload.xAxis === displayData.xAxis) {
                         return (
                           <circle
+                            key={`compare-dot-${channelConfig.id}-${props.index}`}
                             cx={props.cx}
                             cy={props.cy}
                             r={3.5}
@@ -439,7 +502,7 @@ export function ConfigurableTelemetryChart({
                           />
                         );
                       }
-                      return <></>;
+                      return <g key={`compare-dot-${channelConfig.id}-${props.index}`} />;
                     }}
                     name={`Compare ${channelLabel}`}
                     opacity={0.6}
@@ -461,6 +524,54 @@ export function ConfigurableTelemetryChart({
             )}
           </LineChart>
         </ResponsiveContainer>
+      )}
+      
+      {/* Custom hover line overlay - rendered outside Recharts to avoid state issues */}
+      {config.channels.length > 0 && effectiveHoverValue !== null && (
+        <div 
+          style={{
+            position: 'relative',
+            marginTop: `-${height}px`,
+            height: `${height}px`,
+            pointerEvents: 'none',
+            overflow: 'hidden'
+          }}
+        >
+          <svg width="100%" height={height} style={{ position: 'absolute', top: 0, left: 0 }}>
+            {/* Calculate the x position based on the data range */}
+            {(() => {
+              if (chartData.length === 0) return null;
+              const xValues = chartData.map(d => d.xAxis).filter(x => typeof x === 'number' && !isNaN(x));
+              if (xValues.length === 0) return null;
+              
+              const xMin = Math.min(...xValues);
+              const xMax = Math.max(...xValues);
+              const xRange = xMax - xMin;
+              if (xRange === 0 || !isFinite(xRange)) return null;
+              
+              // Calculate position as percentage (accounting for margins)
+              const margin = 5; // matches chart margin
+              const chartWidth = 100; // percentage
+              const xPercent = ((effectiveHoverValue - xMin) / xRange) * (chartWidth - 2 * margin) + margin;
+              
+              // Validate the calculated percentage
+              if (!isFinite(xPercent) || xPercent < 0 || xPercent > 100) return null;
+              
+              return (
+                <line
+                  x1={`${xPercent}%`}
+                  y1="0"
+                  x2={`${xPercent}%`}
+                  y2={height}
+                  stroke="#888"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                  opacity="0.7"
+                />
+              );
+            })()}
+          </svg>
+        </div>
       )}
       
       {/* Custom legend with values */}
