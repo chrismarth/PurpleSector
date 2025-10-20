@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Pencil, ZoomOut, Trash2 } from 'lucide-react';
+import { Settings, Trash2, ZoomOut, MoreVertical, SplitSquareHorizontal, SplitSquareVertical, Pencil, Plus } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -18,6 +18,12 @@ import { TelemetryFrame } from '@/types/telemetry';
 import { PlotConfig, CHANNEL_METADATA, TelemetryChannel } from '@/types/plotConfig';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { PlotConfigDialog } from '@/components/PlotConfigDialog';
 
 interface ConfigurableTelemetryChartProps {
@@ -26,6 +32,9 @@ interface ConfigurableTelemetryChartProps {
   config: PlotConfig;
   onConfigChange: (config: PlotConfig) => void;
   onDelete?: () => void;
+  onSplitHorizontal?: () => void;
+  onSplitVertical?: () => void;
+  onAddRowBelow?: () => void;
   height?: number;
   syncedHoverValue?: number | null;
   onHoverChange?: (value: number | null) => void;
@@ -37,6 +46,9 @@ export function ConfigurableTelemetryChart({
   config,
   onConfigChange,
   onDelete,
+  onSplitHorizontal,
+  onSplitVertical,
+  onAddRowBelow,
   height = 250,
   syncedHoverValue,
   onHoverChange,
@@ -310,10 +322,18 @@ export function ConfigurableTelemetryChart({
     );
   };
 
+  // Calculate total container height: padding (16px top + 16px bottom) + header (~44px with mb-4) + chart height
+  const PADDING_VERTICAL = 32; // p-4 = 16px top + 16px bottom
+  const HEADER_HEIGHT = 44; // Approximate height of title + buttons + mb-4
+  const totalHeight = PADDING_VERTICAL + HEADER_HEIGHT + height;
+
   return (
     <TooltipProvider>
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow select-none">
-        <div className="flex items-center justify-between mb-4">
+      <div 
+        className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow select-none flex flex-col"
+        style={{ height: `${totalHeight}px` }}
+      >
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
           <h3 className="text-lg font-semibold">{config.title}</h3>
           <div className="flex gap-2">
             {zoomDomain && (
@@ -362,11 +382,40 @@ export function ConfigurableTelemetryChart({
                 </TooltipContent>
               </Tooltip>
             )}
+            {(onSplitHorizontal || onSplitVertical || onAddRowBelow) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {onSplitHorizontal && (
+                    <DropdownMenuItem onClick={onSplitHorizontal}>
+                      <SplitSquareHorizontal className="h-4 w-4 mr-2" />
+                      Split Horizontally
+                    </DropdownMenuItem>
+                  )}
+                  {onSplitVertical && (
+                    <DropdownMenuItem onClick={onSplitVertical}>
+                      <SplitSquareVertical className="h-4 w-4 mr-2" />
+                      Split Vertically
+                    </DropdownMenuItem>
+                  )}
+                  {onAddRowBelow && (
+                    <DropdownMenuItem onClick={onAddRowBelow}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Row Below
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
 
       {config.channels.length === 0 ? (
-        <div className="flex items-center justify-center h-64 text-muted-foreground">
+        <div className="flex items-center justify-center text-muted-foreground" style={{ height: `${height}px` }}>
           <div className="text-center">
             <p className="mb-2">No channels configured</p>
             <Button

@@ -1,6 +1,6 @@
 # Purple Sector - Racing Telemetry Analysis
 
-An AI-powered telemetry analysis tool for Assetto Corsa that helps drivers improve their lap times through real-time data visualization and intelligent coaching suggestions.
+An AI-powered telemetry analysis tool for Assetto Corsa and Assetto Corsa Competizione that helps drivers improve their lap times through real-time data visualization and intelligent coaching suggestions.
 
 <div align="center">
   <img width="75%" alt="PurpleSector_LapAnalysisView" src="https://github.com/user-attachments/assets/60735f3e-00f9-41e8-9cf0-57b0830e107e" />
@@ -18,7 +18,7 @@ An AI-powered telemetry analysis tool for Assetto Corsa that helps drivers impro
 ## Architecture
 
 ```
-[Assetto Corsa UDP Telemetry]
+[Assetto Corsa / ACC UDP Telemetry]
           ↓
 [Telemetry Collector Service]
           ↓
@@ -34,7 +34,7 @@ An AI-powered telemetry analysis tool for Assetto Corsa that helps drivers impro
 ### Prerequisites
 
 - Node.js 18+ installed
-- Assetto Corsa installed (for live telemetry)
+- Assetto Corsa or Assetto Corsa Competizione installed (for live telemetry)
 - OpenAI API key (for AI analysis)
 
 ### 1. Install Dependencies
@@ -67,7 +67,9 @@ TELEMETRY_UDP_PORT=9996
 npm run db:push
 ```
 
-### 4. Configure Assetto Corsa
+### 4. Configure Your Sim
+
+#### For Assetto Corsa
 
 Enable UDP telemetry output:
 
@@ -82,6 +84,23 @@ UDP_ADDRESS=127.0.0.1
 ```
 
 3. Save and restart Assetto Corsa
+
+#### For Assetto Corsa Competizione
+
+Enable broadcasting:
+
+1. Navigate to `Documents/Assetto Corsa Competizione/Config/`
+2. Edit or create `broadcasting.json`:
+
+```json
+{
+  "updListenerPort": 9000,
+  "connectionPassword": "",
+  "commandPassword": ""
+}
+```
+
+3. Save and restart ACC
 
 ### 5. Start the Application
 
@@ -98,11 +117,25 @@ npm run ws-server
 ```
 
 **Terminal 3 - Telemetry Collector (when racing):**
+
+For Assetto Corsa:
 ```bash
 npm run telemetry
 ```
 
+For Assetto Corsa Competizione (Broadcasting only - limited telemetry):
+```bash
+npm run telemetry:acc
+```
+
+For Assetto Corsa Competizione (Hybrid - full telemetry, Windows only):
+```bash
+npm run telemetry:acc-hybrid
+```
+
 The app will be available at `http://localhost:3000`
+
+**Note:** The hybrid collector provides complete telemetry (throttle, brake, steering, RPM) by combining ACC's Broadcasting Protocol with Shared Memory. It requires Windows and ACC running on the same machine.
 
 ## Usage
 
@@ -111,7 +144,7 @@ The app will be available at `http://localhost:3000`
 1. Click "New Session" on the home page
 2. Enter a session name (e.g., "Monza Practice - June 15")
 3. Select telemetry source:
-   - **Live**: Connect to running Assetto Corsa instance
+   - **Live**: Connect to running Assetto Corsa or ACC instance
    - **Demo**: Use pre-recorded telemetry data
 
 ### During a Session
@@ -152,8 +185,9 @@ PurpleSector/
 │   │   └── ai/               # AI analysis
 │   └── types/                 # TypeScript definitions
 ├── services/
-│   ├── telemetry-collector.js # UDP listener
-│   └── websocket-server.js    # WebSocket relay
+│   ├── ac-telemetry-collector.js  # AC UDP listener
+│   ├── acc-telemetry-collector.js # ACC UDP listener
+│   └── websocket-server.js        # WebSocket relay
 ├── prisma/
 │   └── schema.prisma          # Database schema
 └── public/
@@ -220,10 +254,18 @@ The AI analysis uses GPT-4 with a specialized racing coach prompt. It analyzes:
 
 ### No telemetry data received
 
+**For Assetto Corsa:**
 1. Verify Assetto Corsa is running
 2. Check `telemetry.ini` configuration
 3. Ensure UDP port 9996 is not blocked by firewall
-4. Verify telemetry collector service is running
+4. Verify telemetry collector service is running (`npm run telemetry`)
+
+**For ACC:**
+1. Verify ACC is running and you're in a session (not main menu)
+2. Check `broadcasting.json` configuration
+3. Ensure UDP port 9000 is not blocked by firewall
+4. Verify ACC telemetry collector service is running (`npm run telemetry:acc`)
+5. Check that the collector successfully registered with ACC (look for "Successfully registered" message)
 
 ### WebSocket connection failed
 

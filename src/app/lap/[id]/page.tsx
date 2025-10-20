@@ -13,7 +13,7 @@ import { TelemetryPlotPanel } from '@/components/TelemetryPlotPanel';
 import { ChatInterface } from '@/components/ChatInterface';
 import { formatLapTime } from '@/lib/utils';
 import { TelemetryFrame, LapSuggestion } from '@/types/telemetry';
-import { PlotConfig, DEFAULT_PLOT_CONFIGS } from '@/types/plotConfig';
+import { PlotConfig, DEFAULT_PLOT_CONFIGS, PlotLayout, generateDefaultLayout } from '@/types/plotConfig';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 interface Lap {
@@ -87,6 +87,7 @@ export default function LapPage() {
   const [eventLaps, setEventLaps] = useState<EventLap[]>([]);
   const [analysisReferenceLap, setAnalysisReferenceLap] = useState<EventLap | null>(null);
   const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(DEFAULT_PLOT_CONFIGS);
+  const [plotLayout, setPlotLayout] = useState<PlotLayout>(generateDefaultLayout(DEFAULT_PLOT_CONFIGS));
 
   // Handle back button - close tab if opened in new tab
   function handleBack() {
@@ -161,24 +162,58 @@ export default function LapPage() {
 
       // Load plot configurations (lap-specific or inherit from session)
       if (data.plotConfigs) {
-        const newConfigs = JSON.parse(data.plotConfigs);
-        setPlotConfigs(prev => {
-          // Only update if actually different
-          if (JSON.stringify(prev) !== JSON.stringify(newConfigs)) {
-            return newConfigs;
-          }
-          return prev;
-        });
+        const parsed = JSON.parse(data.plotConfigs);
+        // Check if it's the new format with layout
+        if (parsed.configs && parsed.layout) {
+          setPlotConfigs(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(parsed.configs)) {
+              return parsed.configs;
+            }
+            return prev;
+          });
+          setPlotLayout(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(parsed.layout)) {
+              return parsed.layout;
+            }
+            return prev;
+          });
+        } else {
+          // Old format - just configs
+          const newConfigs = parsed;
+          setPlotConfigs(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(newConfigs)) {
+              return newConfigs;
+            }
+            return prev;
+          });
+          setPlotLayout(generateDefaultLayout(newConfigs));
+        }
       } else if (data.session?.plotConfigs) {
         // Inherit from session if lap doesn't have its own
-        const newConfigs = JSON.parse(data.session.plotConfigs);
-        setPlotConfigs(prev => {
-          // Only update if actually different
-          if (JSON.stringify(prev) !== JSON.stringify(newConfigs)) {
-            return newConfigs;
-          }
-          return prev;
-        });
+        const parsed = JSON.parse(data.session.plotConfigs);
+        if (parsed.configs && parsed.layout) {
+          setPlotConfigs(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(parsed.configs)) {
+              return parsed.configs;
+            }
+            return prev;
+          });
+          setPlotLayout(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(parsed.layout)) {
+              return parsed.layout;
+            }
+            return prev;
+          });
+        } else {
+          const newConfigs = parsed;
+          setPlotConfigs(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(newConfigs)) {
+              return newConfigs;
+            }
+            return prev;
+          });
+          setPlotLayout(generateDefaultLayout(newConfigs));
+        }
       }
     } catch (error) {
       console.error('Error fetching lap:', error);
@@ -288,17 +323,23 @@ export default function LapPage() {
   }, [lapId]);
 
   // Auto-save plot configurations
-  const autoSavePlotConfigs = useCallback(async (configs: PlotConfig[]) => {
+  const autoSavePlotConfigs = useCallback(async (configs: PlotConfig[], layout: PlotLayout) => {
+    if (!lap) return;
+    
     try {
+      const plotData = {
+        configs,
+        layout,
+      };
       await fetch(`/api/laps/${lapId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plotConfigs: JSON.stringify(configs) }),
+        body: JSON.stringify({ plotConfigs: JSON.stringify(plotData) }),
       });
     } catch (error) {
       console.error('Error saving plot configs:', error);
     }
-  }, [lapId]);
+  }, [lap, lapId]);
 
   // Debounced auto-save for comments
   useEffect(() => {
@@ -317,11 +358,11 @@ export default function LapPage() {
     }
   }, [tags, lap, autoSaveTags]);
 
-  // Save plot configurations immediately when changed
+  // Save plot configurations and layout immediately when changed
   useEffect(() => {
     if (!lap) return; // Don't save until lap is loaded
-    autoSavePlotConfigs(plotConfigs);
-  }, [plotConfigs, lap, autoSavePlotConfigs]);
+    autoSavePlotConfigs(plotConfigs, plotLayout);
+  }, [plotConfigs, plotLayout, lap, autoSavePlotConfigs]);
 
   function addTag(tag: string) {
     if (!tags.includes(tag)) {
@@ -449,7 +490,9 @@ export default function LapPage() {
               compareData={compareTelemetry.length > 0 ? compareTelemetry : undefined}
               compareLapId={compareLapId}
               initialPlotConfigs={plotConfigs}
+              initialLayout={plotLayout}
               onPlotConfigsChange={setPlotConfigs}
+              onLayoutChange={setPlotLayout}
               showFullscreenToggle={true}
             />
 

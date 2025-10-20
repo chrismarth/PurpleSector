@@ -27,6 +27,22 @@ export interface PlotConfig {
   channels: ChannelConfig[];
 }
 
+// Layout item for a single plot in the grid
+export interface PlotLayoutItem {
+  plotId: string; // References PlotConfig.id
+  x: number; // Column position (0-based)
+  y: number; // Row position (0-based)
+  w: number; // Width in grid units (1-12)
+  h: number; // Height in pixels
+  subRow?: number; // Sub-row position for vertical stacking within same column (0-based)
+}
+
+// Complete layout configuration
+export interface PlotLayout {
+  items: PlotLayoutItem[];
+  cols: number; // Total columns in grid (default: 12)
+}
+
 // Channel metadata for UI
 export interface ChannelMetadata {
   key: TelemetryChannel;
@@ -94,6 +110,22 @@ export const CHANNEL_METADATA: Record<TelemetryChannel, ChannelMetadata> = {
     isTimeAxis: false,
   },
 };
+
+// Helper function to generate default layout from plot configs
+export function generateDefaultLayout(plotConfigs: PlotConfig[]): PlotLayout {
+  const items: PlotLayoutItem[] = plotConfigs.map((config, index) => ({
+    plotId: config.id,
+    x: 0,
+    y: index,
+    w: 12, // Full width
+    h: 300, // Default height
+  }));
+
+  return {
+    items,
+    cols: 12,
+  };
+}
 
 // Default plot configurations
 export const DEFAULT_PLOT_CONFIGS: PlotConfig[] = [
