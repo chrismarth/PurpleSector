@@ -25,34 +25,20 @@ async function checkDatabaseHealth() {
     console.log(`   Laps:     ${lapCount}\n`);
 
     // Check 2: Find orphaned sessions (sessions without events)
-    const orphanedSessions = await prisma.session.findMany({
-      where: {
-        event: null,
-      },
-    });
-
-    if (orphanedSessions.length > 0) {
-      console.log('⚠️  Orphaned Sessions (no parent event):');
-      orphanedSessions.forEach(s => {
-        console.log(`   - ${s.id} (${s.name})`);
-      });
-      console.log('');
-    }
+    // Note: eventId is required in schema, so no orphaned sessions possible
+    // const orphanedSessions = await prisma.session.findMany({
+    //   where: {
+    //     eventId: null,
+    //   },
+    // });
 
     // Check 3: Find orphaned laps (laps without sessions)
-    const orphanedLaps = await prisma.lap.findMany({
-      where: {
-        session: null,
-      },
-    });
-
-    if (orphanedLaps.length > 0) {
-      console.log('⚠️  Orphaned Laps (no parent session):');
-      orphanedLaps.forEach(l => {
-        console.log(`   - ${l.id} (Lap ${l.lapNumber})`);
-      });
-      console.log('');
-    }
+    // Note: sessionId is required in schema, so no orphaned laps possible
+    // const orphanedLaps = await prisma.lap.findMany({
+    //   where: {
+    //     sessionId: null,
+    //   },
+    // });
 
     // Check 4: Find sessions with invalid event IDs
     const allSessions = await prisma.session.findMany({
@@ -88,8 +74,6 @@ async function checkDatabaseHealth() {
 
     // Summary
     const totalIssues = 
-      orphanedSessions.length + 
-      orphanedLaps.length + 
       sessionsWithMissingEvents.length + 
       lapsWithMissingSessions.length;
 

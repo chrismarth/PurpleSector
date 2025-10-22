@@ -368,7 +368,7 @@ export function TelemetryPlotPanel({
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Clock className="h-4 w-4" />
                     <span className="font-mono">
-                      {formatLapTime(data[data.length - 1].lapTime / 1000)}
+                      {formatLapTime(data[data.length - 1]?.lapTime ? data[data.length - 1].lapTime / 1000 : undefined)}
                     </span>
                   </div>
                 )}

@@ -29,6 +29,7 @@
 
 const dgram = require('dgram');
 const WebSocket = require('ws');
+const proto = require('../src/proto/telemetry-proto');
 
 // Configuration
 const UDP_PORT = process.env.ACC_UDP_PORT || 9000;
@@ -72,6 +73,16 @@ let focusedCarIndex = -1;
 // WebSocket connection to relay server
 let wsClient = null;
 let reconnectInterval = null;
+
+// Initialize protobuf
+let protobufReady = false;
+proto.init().then(() => {
+  protobufReady = true;
+  console.log('✓ Protocol Buffers initialized');
+}).catch(err => {
+  console.error('Failed to initialize Protocol Buffers:', err);
+  console.log('Falling back to JSON mode');
+});
 
 /**
  * Write string to buffer with length prefix (ACC protocol)
@@ -403,10 +414,21 @@ function connectWebSocket() {
  */
 function sendTelemetry(data) {
   if (wsClient && wsClient.readyState === WebSocket.OPEN) {
-    wsClient.send(JSON.stringify({
-      type: 'telemetry',
-      data: data,
-    }));
+    try {
+      if (protobufReady) {
+        // Send as protobuf
+        const buffer = proto.createTelemetryMessage(data);
+        wsClient.send(buffer);
+      } else {
+        // Fallback to JSON
+        wsClient.send(JSON.stringify({
+          type: 'telemetry',
+          data: data,
+        }));
+      }
+    } catch (error) {
+      console.error('Error sending telemetry:', error);
+    }
   }
 }
 

@@ -1,19 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Settings, Trash2, ZoomOut, MoreVertical, SplitSquareHorizontal, SplitSquareVertical, Pencil, Plus } from 'lucide-react';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as ChartTooltip,
-  Legend,
-  ResponsiveContainer,
-  ReferenceArea,
-  ReferenceLine,
-} from 'recharts';
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import { Trash2, ZoomOut, MoreVertical, SplitSquareHorizontal, SplitSquareVertical, Pencil, Plus } from 'lucide-react';
+import uPlot from 'uplot';
+import { UPlotChart, UPlotSeries, UPlotAxis } from '@/components/UPlotChart';
 import { TelemetryFrame } from '@/types/telemetry';
 import { PlotConfig, CHANNEL_METADATA, TelemetryChannel } from '@/types/plotConfig';
 import { Button } from '@/components/ui/button';
@@ -54,236 +44,279 @@ export function ConfigurableTelemetryChart({
   onHoverChange,
 }: ConfigurableTelemetryChartProps) {
   const [showConfigDialog, setShowConfigDialog] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(800);
   
   // Zoom state
-  const [refAreaLeft, setRefAreaLeft] = useState<string | number>('');
-  const [refAreaRight, setRefAreaRight] = useState<string | number>('');
-  const [zoomDomain, setZoomDomain] = useState<{ x?: [number, number]; yLeft?: [number, number]; yRight?: [number, number] } | null>(null);
+  const [zoomDomain, setZoomDomain] = useState<{ x?: [number, number]; y?: [number, number]; y2?: [number, number] } | null>(null);
   
-  // Hover state for legend
-  const [hoveredData, setHoveredData] = useState<any>(null);
+  // Hover state
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [syncedHoverIndex, setSyncedHoverIndex] = useState<number | null>(null);
 
-  // Use synced hover value if provided, otherwise use local hover
-  const effectiveHoverValue = syncedHoverValue !== undefined ? syncedHoverValue : null;
-
-  // Transform telemetry data based on configuration
-  const chartData = useMemo(() => {
-    if (!data || data.length === 0) return [];
-
-    // Helper to get channel value from frame
-    const getChannelValue = (frame: TelemetryFrame, channel: TelemetryChannel): number => {
-      switch (channel) {
-        case 'time':
-          return frame.lapTime / 1000; // Convert to seconds
-        case 'normalizedPosition':
-          return frame.normalizedPosition * 100; // Convert to percentage
-        case 'throttle':
-          return frame.throttle * 100;
-        case 'brake':
-          return frame.brake * 100;
-        case 'steering':
-          return Math.abs(frame.steering) * 100; // Convert to 0-100 range
-        case 'speed':
-          return frame.speed;
-        case 'gear':
-          return frame.gear;
-        case 'rpm':
-          return frame.rpm;
-        default:
-          return 0;
+  // Measure container width
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
       }
-    };
+    });
+    
+    resizeObserver.observe(containerRef.current);
+    return () => resizeObserver.disconnect();
+  }, []);
 
-    // Build chart data points
-    return data.map((frame, index) => {
-      const point: any = { index };
+  // Helper to get channel value from frame
+  const getChannelValue = useCallback((frame: TelemetryFrame, channel: TelemetryChannel): number => {
+    switch (channel) {
+      case 'time':
+        return frame.lapTime / 1000; // Convert to seconds
+      case 'normalizedPosition':
+        return frame.normalizedPosition * 100; // Convert to percentage
+      case 'throttle':
+        return frame.throttle * 100;
+      case 'brake':
+        return frame.brake * 100;
+      case 'steering':
+        return Math.abs(frame.steering) * 100; // Convert to 0-100 range
+      case 'speed':
+        return frame.speed;
+      case 'gear':
+        return frame.gear;
+      case 'rpm':
+        return frame.rpm;
+      default:
+        return 0;
+    }
+  }, []);
 
-      // Set primary X-axis value
-      point.xAxis = getChannelValue(frame, config.xAxis);
+  // Transform telemetry data to uPlot format: [xValues, y1Values, y2Values, ...]
+  const { uplotData, seriesConfig } = useMemo(() => {
+    if (!data || data.length === 0 || config.channels.length === 0) {
+      return { uplotData: [[0], [0]] as uPlot.AlignedData, seriesConfig: [] };
+    }
 
-      // Add configured channels
-      config.channels.forEach((channelConfig) => {
-        const yValue = getChannelValue(frame, channelConfig.channel);
-        point[channelConfig.id] = yValue;
-
-        // Add compare data if available
-        if (compareData && compareData[index]) {
-          const compareYValue = getChannelValue(compareData[index], channelConfig.channel);
-          point[`compare_${channelConfig.id}`] = compareYValue;
-        }
+    // Build x-axis data
+    let filteredData = data;
+    
+    // Apply zoom domain if set
+    if (zoomDomain?.x) {
+      const [minX, maxX] = zoomDomain.x;
+      filteredData = data.filter((frame) => {
+        const xVal = getChannelValue(frame, config.xAxis);
+        return xVal >= minX && xVal <= maxX;
       });
-
-      return point;
-    });
-  }, [data, compareData, config]);
-
-  // Find the data point closest to the synced hover value
-  const syncedHoveredData = useMemo(() => {
-    if (effectiveHoverValue === null || chartData.length === 0) return null;
-    
-    // Find the closest data point based on x-axis value
-    let closest = null;
-    let minDiff = Infinity;
-    
-    for (const point of chartData) {
-      const diff = Math.abs(point.xAxis - effectiveHoverValue);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closest = point;
+      
+      // If no data in zoom range, use all data
+      if (filteredData.length === 0) {
+        filteredData = data;
       }
     }
     
-    return closest;
-  }, [effectiveHoverValue, chartData]);
-
-  // Get domain for primary Y axis based on channel types
-  const getPrimaryYAxisDomain = (): [number, number] | ['auto', 'auto'] => {
-    const primaryChannels = config.channels.filter(ch => ch.useSecondaryAxis !== true);
-    if (primaryChannels.length === 0) return ['auto', 'auto'];
+    const xValues = filteredData.map((frame) => getChannelValue(frame, config.xAxis));
     
-    // Check if all primary channels are percentage-based
-    const allPercentage = primaryChannels.every((ch) => {
-      const metadata = CHANNEL_METADATA[ch.channel];
-      return metadata.unit === '%';
+    // Pre-calculate compare data x-values and create index mapping if compare data exists
+    let compareXValues: number[] = [];
+    let compareIndexMap: number[] = [];
+    
+    if (compareData && compareData.length > 0) {
+      compareXValues = compareData.map((frame) => getChannelValue(frame, config.xAxis));
+      
+      // For each x-value in main data, find the closest index in compare data
+      compareIndexMap = xValues.map((xVal) => {
+        let closestIdx = 0;
+        let minDiff = Math.abs(compareXValues[0] - xVal);
+        
+        for (let i = 1; i < compareXValues.length; i++) {
+          const diff = Math.abs(compareXValues[i] - xVal);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestIdx = i;
+          }
+          // Early exit if we've passed the target (data is sorted)
+          if (compareXValues[i] > xVal) break;
+        }
+        
+        return closestIdx;
+      });
+    }
+    
+    // Build series data for each channel
+    // Strategy: Add all main series first, then all compare series
+    // This makes indexing more predictable
+    const seriesData: number[][] = [xValues];
+    const series: UPlotSeries[] = [];
+    
+    // First pass: Add all main channel data
+    config.channels.forEach((channelConfig, channelIndex) => {
+      const yValues = filteredData.map((frame) => getChannelValue(frame, channelConfig.channel));
+      seriesData.push(yValues);
+      
+      const channelMeta = CHANNEL_METADATA[channelConfig.channel];
+      const dataIndex = seriesData.length - 1;
+      const seriesIndex = series.length;
+      
+      series.push({
+        label: channelMeta.label,
+        color: channelConfig.color || '#000000',
+        scale: channelConfig.useSecondaryAxis ? 'y2' : 'y',
+        width: 2,
+      });
+      
+      console.log(`[Chart] DATA[${dataIndex}] → SERIES[${seriesIndex}]: ${channelMeta.label} (${channelConfig.channel}) - Sample values: [${yValues.slice(0, 3).map(v => v.toFixed(1)).join(', ')}...]`);
     });
-
-    if (allPercentage) {
-      return [0, 100];
-    }
-
-    return ['auto', 'auto'];
-  };
-
-  // Get domain for secondary Y axis
-  const getSecondaryYAxisDomain = (): [number, number] | ['auto', 'auto'] => {
-    const secondaryChannels = config.channels.filter(ch => ch.useSecondaryAxis === true);
-    if (secondaryChannels.length === 0) return ['auto', 'auto'];
     
-    // Check if all secondary channels are percentage-based
-    const allPercentage = secondaryChannels.every((ch) => {
-      const metadata = CHANNEL_METADATA[ch.channel];
-      return metadata.unit === '%';
-    });
-
-    if (allPercentage) {
-      return [0, 100];
-    }
-
-    return ['auto', 'auto'];
-  };
-
-  // Check if any channel uses secondary axis
-  const hasSecondaryAxis = config.channels.some(ch => ch.useSecondaryAxis === true);
-
-  // Zoom handlers
-  const handleMouseDown = (e: any) => {
-    // Prevent text selection during drag
-    if (e?.nativeEvent) {
-      e.nativeEvent.preventDefault();
-    }
-    if (e && e.activeLabel !== undefined) {
-      setRefAreaLeft(e.activeLabel);
-    }
-  };
-
-  const handleMouseMove = (e: any) => {
-    // Notify parent of hover position for syncing across charts
-    if (e && e.activeLabel !== undefined && onHoverChange) {
-      onHoverChange(e.activeLabel);
+    // Second pass: Add all compare channel data (if available)
+    if (compareData && compareData.length > 0) {
+      config.channels.forEach((channelConfig, channelIndex) => {
+        // Use pre-calculated index mapping to get compare y-values for this channel
+        const compareYValues = compareIndexMap.map((compareIdx) => 
+          getChannelValue(compareData[compareIdx], channelConfig.channel)
+        );
+        
+        seriesData.push(compareYValues);
+        const channelMeta = CHANNEL_METADATA[channelConfig.channel];
+        const dataIndex = seriesData.length - 1;
+        const seriesIndex = series.length;
+        
+        series.push({
+          label: `Compare ${channelMeta.label}`,
+          color: channelConfig.color || '#000000',
+          scale: channelConfig.useSecondaryAxis ? 'y2' : 'y',
+          width: 2,
+          dash: [5, 5],
+        });
+        
+        console.log(`[Chart] DATA[${dataIndex}] → SERIES[${seriesIndex}]: Compare ${channelMeta.label} (${channelConfig.channel}) - Sample values: [${compareYValues.slice(0, 3).map(v => v.toFixed(1)).join(', ')}...], DASHED`);
+      });
     }
     
-    // Update hover data for legend
-    if (e && e.activePayload) {
-      setHoveredData(e.activePayload[0]?.payload);
+    return { uplotData: seriesData as uPlot.AlignedData, seriesConfig: series };
+  }, [data, compareData, config, getChannelValue, zoomDomain]);
+
+  // Build axes configuration
+  const axesConfig = useMemo((): UPlotAxis[] => {
+    const hasSecondaryAxis = config.channels.some(ch => ch.useSecondaryAxis === true);
+    
+    const axes: UPlotAxis[] = [
+      // X-axis
+      {
+        scale: 'x',
+        space: 50,
+        grid: { show: true },
+      },
+      // Primary Y-axis (left)
+      {
+        label: config.yAxisLabel,
+        scale: 'y',
+        space: 50,
+        side: 3,
+        grid: { show: true },
+      },
+    ];
+    
+    // Add secondary Y-axis if needed
+    if (hasSecondaryAxis) {
+      axes.push({
+        label: config.yAxisLabelSecondary || 'Secondary',
+        scale: 'y2',
+        space: 50,
+        side: 1,
+        grid: { show: false },
+      });
     }
     
-    // Handle zoom selection
-    if (refAreaLeft && e && e.activeLabel !== undefined) {
-      setRefAreaRight(e.activeLabel);
-      // Prevent text selection during drag
-      if (e?.nativeEvent) {
-        e.nativeEvent.preventDefault();
-      }
-    }
-  };
-  
-  const handleMouseLeave = () => {
-    setHoveredData(null);
-    if (onHoverChange) {
+    return axes;
+  }, [config]);
+
+  // Handle hover from chart
+  const handleHover = useCallback((index: number | null) => {
+    setHoveredIndex(index);
+    
+    // Notify parent with x-axis value for syncing
+    if (onHoverChange && index !== null && uplotData[0][index] !== undefined) {
+      onHoverChange(uplotData[0][index]);
+    } else if (onHoverChange && index === null) {
       onHoverChange(null);
     }
-  };
+  }, [onHoverChange, uplotData]);
 
-  const handleMouseUp = () => {
-    if (refAreaLeft && refAreaRight && refAreaLeft !== refAreaRight) {
-      // Zoom in
-      const left = Math.min(Number(refAreaLeft), Number(refAreaRight));
-      const right = Math.max(Number(refAreaLeft), Number(refAreaRight));
-      
-      // Get Y-axis ranges for the zoomed region
-      const zoomedData = chartData.filter(
-        (item) => item.xAxis >= left && item.xAxis <= right
-      );
-      
-      let yLeftMin = Infinity;
-      let yLeftMax = -Infinity;
-      let yRightMin = Infinity;
-      let yRightMax = -Infinity;
-      
-      zoomedData.forEach((item) => {
-        config.channels.forEach((ch) => {
-          const value = item[ch.id];
-          if (value !== undefined && value !== null) {
-            if (ch.useSecondaryAxis === true) {
-              yRightMin = Math.min(yRightMin, value);
-              yRightMax = Math.max(yRightMax, value);
-            } else {
-              yLeftMin = Math.min(yLeftMin, value);
-              yLeftMax = Math.max(yLeftMax, value);
-            }
-          }
-        });
-      });
-      
-      // Add 5% padding to Y-axis ranges
-      const yLeftPadding = (yLeftMax - yLeftMin) * 0.05;
-      const yRightPadding = (yRightMax - yRightMin) * 0.05;
-      
-      setZoomDomain({
-        x: [left, right],
-        yLeft: yLeftMin !== Infinity ? [yLeftMin - yLeftPadding, yLeftMax + yLeftPadding] : undefined,
-        yRight: yRightMin !== Infinity ? [yRightMin - yRightPadding, yRightMax + yRightPadding] : undefined,
-      });
+  // Convert synced hover value to index
+  useEffect(() => {
+    if (syncedHoverValue === null || syncedHoverValue === undefined) {
+      setSyncedHoverIndex(null);
+      return;
     }
     
-    setRefAreaLeft('');
-    setRefAreaRight('');
-  };
-
-  const handleZoomOut = () => {
-    setZoomDomain(null);
-    setRefAreaLeft('');
-    setRefAreaRight('');
-  };
-
-  // Custom legend component that shows current values on hover
-  const renderCustomLegend = () => {
-    // Use synced data if available, otherwise use local hover data
-    const displayData = syncedHoveredData || hoveredData;
+    // Find closest index to synced value
+    const xValues = uplotData[0];
+    let closestIdx = null;
+    let minDiff = Infinity;
     
-    // Get X-axis metadata
+    for (let i = 0; i < xValues.length; i++) {
+      const diff = Math.abs(xValues[i] - syncedHoverValue);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIdx = i;
+      }
+    }
+    
+    setSyncedHoverIndex(closestIdx);
+  }, [syncedHoverValue, uplotData]);
+
+  // Handle zoom
+  const handleZoom = useCallback((min: number, max: number) => {
+    setZoomDomain({ x: [min, max] });
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomDomain(null);
+  }, []);
+
+  // Get hovered data for legend
+  const hoveredData = useMemo(() => {
+    const idx = syncedHoverIndex !== null ? syncedHoverIndex : hoveredIndex;
+    if (idx === null || !uplotData || uplotData.length === 0) return null;
+    
+    const xValue = uplotData[0][idx];
+    const values: Record<string, number> = {};
+    
+    config.channels.forEach((channelConfig, i) => {
+      const seriesIdx = i + 1; // +1 because first series is x-axis
+      const val = uplotData[seriesIdx]?.[idx];
+      if (val !== undefined && val !== null) {
+        values[channelConfig.id] = val;
+      }
+      
+      // Add compare value if available
+      if (compareData && compareData.length > 0) {
+        const compareSeriesIdx = seriesIdx + config.channels.length;
+        const compareVal = uplotData[compareSeriesIdx]?.[idx];
+        if (compareVal !== undefined && compareVal !== null) {
+          values[`compare_${channelConfig.id}`] = compareVal;
+        }
+      }
+    });
+    
+    return { xValue, values };
+  }, [syncedHoverIndex, hoveredIndex, uplotData, config.channels, compareData]);
+
+  // Custom legend component
+  const renderCustomLegend = () => {
     const xAxisMeta = CHANNEL_METADATA[config.xAxis];
-    const xAxisValue = displayData?.xAxis;
+    const xValue = hoveredData?.xValue;
     
     return (
       <div className="flex flex-wrap gap-4 justify-center mt-4 px-2">
         {/* X-Axis value - only show when hovering */}
-        {displayData && xAxisValue !== undefined && (
-          <div className="flex items-center gap-2 pr-4 border-r border-gray-300">
+        {hoveredData && xValue !== undefined && (
+          <div className="flex items-center gap-2 pr-4 border-r border-gray-300 dark:border-gray-600">
             <span className="text-sm">
               {xAxisMeta.label}:{' '}
               <span className="font-semibold">
-                {xAxisValue.toFixed(1)}{xAxisMeta.unit ? ` ${xAxisMeta.unit}` : ''}
+                {xValue.toFixed(1)}{xAxisMeta.unit ? ` ${xAxisMeta.unit}` : ''}
               </span>
             </span>
           </div>
@@ -292,8 +325,8 @@ export function ConfigurableTelemetryChart({
         {config.channels.map((channelConfig) => {
           const channelLabel = CHANNEL_METADATA[channelConfig.channel].label;
           const channelUnit = CHANNEL_METADATA[channelConfig.channel].unit;
-          const value = displayData?.[channelConfig.id];
-          const compareValue = displayData?.[`compare_${channelConfig.id}`];
+          const value = hoveredData?.values[channelConfig.id];
+          const compareValue = hoveredData?.values[`compare_${channelConfig.id}`];
           const hasCompareData = compareData && compareData.length > 0;
           
           return (
@@ -303,13 +336,16 @@ export function ConfigurableTelemetryChart({
                 style={{ backgroundColor: channelConfig.color || '#000000' }}
               />
               <span className="text-sm">
-                {channelLabel}:{' '}
-                <span className="font-semibold">
-                  {value !== undefined && value !== null
-                    ? `${value.toFixed(1)}${channelUnit ? ` ${channelUnit}` : ''}`
-                    : '—'}
-                </span>
-                {hasCompareData && compareValue !== undefined && compareValue !== null && (
+                {channelLabel}
+                {hoveredData && value !== undefined && value !== null && (
+                  <>
+                    :{' '}
+                    <span className="font-semibold">
+                      {value.toFixed(1)}{channelUnit ? ` ${channelUnit}` : ''}
+                    </span>
+                  </>
+                )}
+                {hasCompareData && hoveredData && compareValue !== undefined && compareValue !== null && (
                   <span className="text-muted-foreground ml-1">
                     (vs {compareValue.toFixed(1)}{channelUnit ? ` ${channelUnit}` : ''})
                   </span>
@@ -322,16 +358,18 @@ export function ConfigurableTelemetryChart({
     );
   };
 
-  // Calculate total container height: padding (16px top + 16px bottom) + header (~44px with mb-4) + chart height
-  const PADDING_VERTICAL = 32; // p-4 = 16px top + 16px bottom
-  const HEADER_HEIGHT = 44; // Approximate height of title + buttons + mb-4
-  const totalHeight = PADDING_VERTICAL + HEADER_HEIGHT + height;
+  // Calculate total container height (including legend space)
+  const PADDING_VERTICAL = 32;
+  const HEADER_HEIGHT = 44;
+  const LEGEND_HEIGHT = config.channels.length > 0 ? 48 : 0; // Space for legend
+  const totalHeight = PADDING_VERTICAL + HEADER_HEIGHT + height + LEGEND_HEIGHT;
 
   return (
     <TooltipProvider>
       <div 
+        ref={containerRef}
         className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow select-none flex flex-col"
-        style={{ height: `${totalHeight}px` }}
+        style={{ minHeight: `${totalHeight}px` }}
       >
         <div className="flex items-center justify-between mb-4 flex-shrink-0">
           <h3 className="text-lg font-semibold">{config.title}</h3>
@@ -414,224 +452,43 @@ export function ConfigurableTelemetryChart({
           </div>
         </div>
 
-      {config.channels.length === 0 ? (
-        <div className="flex items-center justify-center text-muted-foreground" style={{ height: `${height}px` }}>
-          <div className="text-center">
-            <p className="mb-2">No channels configured</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowConfigDialog(true)}
-            >
-              Configure Plot
-            </Button>
+        {config.channels.length === 0 ? (
+          <div className="flex items-center justify-center text-muted-foreground" style={{ height: `${height}px` }}>
+            <div className="text-center">
+              <p className="mb-2">No channels configured</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowConfigDialog(true)}
+              >
+                Configure Plot
+              </Button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height={height} style={{ userSelect: 'none' }}>
-          <LineChart 
-            data={chartData}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseLeave}
-            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
-            style={{ userSelect: 'none' } as any}
-          >
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            
-            <XAxis
-              dataKey="xAxis"
-              type="number"
-              label={{
-                value: config.xAxisLabel,
-                position: 'insideBottom',
-                offset: -5,
-              }}
-              tick={{ fontSize: 11 }}
-              domain={zoomDomain?.x || ['auto', 'auto']}
-              allowDataOverflow
+        ) : (
+          <div style={{ height: `${height}px` }}>
+            <UPlotChart
+              data={uplotData}
+              series={seriesConfig}
+              axes={axesConfig}
+              width={containerWidth - 32} // Subtract padding
+              height={height}
+              onHover={handleHover}
+              syncedHoverIndex={syncedHoverIndex}
+              onZoom={handleZoom}
             />
-            
-            {/* Primary Y-Axis (Left) */}
-            <YAxis
-              yAxisId="left"
-              label={{
-                value: config.yAxisLabel,
-                angle: -90,
-                position: 'insideLeft',
-                offset: 0,
-                style: { textAnchor: 'middle' },
-              }}
-              domain={zoomDomain?.yLeft || getPrimaryYAxisDomain()}
-              allowDataOverflow
-              type="number"
-            />
-            
-            {/* Secondary Y-Axis (Right) - only if needed */}
-            {hasSecondaryAxis && (
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                label={{
-                  value: config.yAxisLabelSecondary || 'Secondary',
-                  angle: 90,
-                  position: 'insideRight',
-                  offset: 0,
-                  style: { textAnchor: 'middle' },
-                }}
-                domain={zoomDomain?.yRight || getSecondaryYAxisDomain()}
-                allowDataOverflow
-                type="number"
-              />
-            )}
+          </div>
+        )}
+        
+        {/* Custom legend with values */}
+        {config.channels.length > 0 && renderCustomLegend()}
 
-            {/* Render lines for each configured channel */}
-            {config.channels.map((channelConfig) => {
-              const channelLabel = CHANNEL_METADATA[channelConfig.channel].label;
-              const yAxis = channelConfig.useSecondaryAxis === true ? 'right' : 'left';
-              return (
-                <Line
-                  key={channelConfig.id}
-                  yAxisId={yAxis}
-                  type="monotone"
-                  dataKey={channelConfig.id}
-                  stroke={channelConfig.color || '#000000'}
-                  strokeWidth={2}
-                  dot={(props: any) => {
-                    const displayData = syncedHoveredData || hoveredData;
-                    if (displayData && props.payload.xAxis === displayData.xAxis) {
-                      return (
-                        <circle
-                          key={`dot-${channelConfig.id}-${props.index}`}
-                          cx={props.cx}
-                          cy={props.cy}
-                          r={4}
-                          fill={channelConfig.color || '#000000'}
-                          stroke="#fff"
-                          strokeWidth={2}
-                        />
-                      );
-                    }
-                    return <g key={`dot-${channelConfig.id}-${props.index}`} />;
-                  }}
-                  name={channelLabel}
-                  isAnimationActive={false}
-                />
-              );
-            })}
-
-            {/* Render compare lines if available */}
-            {compareData &&
-              config.channels.map((channelConfig) => {
-                const channelLabel = CHANNEL_METADATA[channelConfig.channel].label;
-                const yAxis = channelConfig.useSecondaryAxis === true ? 'right' : 'left';
-                return (
-                  <Line
-                    key={`compare_${channelConfig.id}`}
-                    yAxisId={yAxis}
-                    type="monotone"
-                    dataKey={`compare_${channelConfig.id}`}
-                    stroke={channelConfig.color || '#000000'}
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={(props: any) => {
-                      const displayData = syncedHoveredData || hoveredData;
-                      if (displayData && props.payload.xAxis === displayData.xAxis) {
-                        return (
-                          <circle
-                            key={`compare-dot-${channelConfig.id}-${props.index}`}
-                            cx={props.cx}
-                            cy={props.cy}
-                            r={3.5}
-                            fill={channelConfig.color || '#000000'}
-                            stroke="#fff"
-                            strokeWidth={2}
-                            opacity={0.8}
-                          />
-                        );
-                      }
-                      return <g key={`compare-dot-${channelConfig.id}-${props.index}`} />;
-                    }}
-                    name={`Compare ${channelLabel}`}
-                    opacity={0.6}
-                    isAnimationActive={false}
-                  />
-                );
-              })}
-            
-            {/* Zoom selection area */}
-            {refAreaLeft && refAreaRight && (
-              <ReferenceArea
-                yAxisId="left"
-                x1={refAreaLeft}
-                x2={refAreaRight}
-                strokeOpacity={0.3}
-                fill="#8884d8"
-                fillOpacity={0.3}
-              />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
-      )}
-      
-      {/* Custom hover line overlay - rendered outside Recharts to avoid state issues */}
-      {config.channels.length > 0 && effectiveHoverValue !== null && (
-        <div 
-          style={{
-            position: 'relative',
-            marginTop: `-${height}px`,
-            height: `${height}px`,
-            pointerEvents: 'none',
-            overflow: 'hidden'
-          }}
-        >
-          <svg width="100%" height={height} style={{ position: 'absolute', top: 0, left: 0 }}>
-            {/* Calculate the x position based on the data range */}
-            {(() => {
-              if (chartData.length === 0) return null;
-              const xValues = chartData.map(d => d.xAxis).filter(x => typeof x === 'number' && !isNaN(x));
-              if (xValues.length === 0) return null;
-              
-              const xMin = Math.min(...xValues);
-              const xMax = Math.max(...xValues);
-              const xRange = xMax - xMin;
-              if (xRange === 0 || !isFinite(xRange)) return null;
-              
-              // Calculate position as percentage (accounting for margins)
-              const margin = 5; // matches chart margin
-              const chartWidth = 100; // percentage
-              const xPercent = ((effectiveHoverValue - xMin) / xRange) * (chartWidth - 2 * margin) + margin;
-              
-              // Validate the calculated percentage
-              if (!isFinite(xPercent) || xPercent < 0 || xPercent > 100) return null;
-              
-              return (
-                <line
-                  x1={`${xPercent}%`}
-                  y1="0"
-                  x2={`${xPercent}%`}
-                  y2={height}
-                  stroke="#888"
-                  strokeWidth="1"
-                  strokeDasharray="3 3"
-                  opacity="0.7"
-                />
-              );
-            })()}
-          </svg>
-        </div>
-      )}
-      
-      {/* Custom legend with values */}
-      {config.channels.length > 0 && renderCustomLegend()}
-
-      <PlotConfigDialog
-        open={showConfigDialog}
-        onOpenChange={setShowConfigDialog}
-        config={config}
-        onSave={onConfigChange}
-      />
+        <PlotConfigDialog
+          open={showConfigDialog}
+          onOpenChange={setShowConfigDialog}
+          config={config}
+          onSave={onConfigChange}
+        />
       </div>
     </TooltipProvider>
   );

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { calculateLapTime } from '@/lib/utils';
+import { calculateLapTime, normalizeTelemetryFrames } from '@/lib/utils';
 
 // POST /api/laps - Create a new lap
 export async function POST(request: NextRequest) {
@@ -15,9 +15,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate lap time from telemetry data
+    // Parse and normalize telemetry data
     const frames = JSON.parse(telemetryData);
-    const lapTime = calculateLapTime(frames);
+    const normalizedFrames = normalizeTelemetryFrames(frames);
+    const lapTime = calculateLapTime(normalizedFrames);
+    const normalizedTelemetryData = JSON.stringify(normalizedFrames);
 
     // Check if lap already exists (prevent duplicates)
     const existingLap = await prisma.lap.findFirst({
@@ -50,7 +52,7 @@ export async function POST(request: NextRequest) {
         sessionId,
         lapNumber,
         lapTime,
-        telemetryData,
+        telemetryData: normalizedTelemetryData,
         analyzed: false,
       },
     });

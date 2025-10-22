@@ -10,6 +10,7 @@
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
+const proto = require('../src/proto/telemetry-proto');
 
 // Configuration
 const WS_PORT = process.env.WS_PORT || 8080;
@@ -17,11 +18,20 @@ const WS_PORT = process.env.WS_PORT || 8080;
 // Create WebSocket server
 const wss = new WebSocket.Server({ port: WS_PORT });
 
-// Track connected clients
-const clients = new Set();
+// Initialize protobuf
+let protobufReady = false;
+proto.init().then(() => {
+  protobufReady = true;
+  console.log('✓ Protocol Buffers initialized');
+}).catch(err => {
+  console.error('Failed to initialize Protocol Buffers:', err);
+  console.log('Falling back to JSON mode');
+});
 
-// Demo mode state
-let demoInterval = null;
+// Track connected clients with their demo state and protocol preference
+const clients = new Map(); // Map<WebSocket, { interval, lapIndex, frameIndex, useProtobuf }>
+
+// Demo data (shared, read-only)
 let demoData = null;
 
 /**
@@ -89,73 +99,150 @@ function generateFallbackDemoData() {
 
 /**
  * Broadcast message to all connected clients
+ * Automatically uses protobuf or JSON based on client preference
  */
 function broadcast(message) {
-  const data = typeof message === 'string' ? message : JSON.stringify(message);
-  
-  clients.forEach((client) => {
+  clients.forEach((clientState, client) => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(data);
+      sendToClient(client, message);
     }
   });
 }
 
 /**
- * Start demo mode playback
+ * Send message to a client using protobuf
+ */
+function sendToClient(client, message) {
+  try {
+    if (!protobufReady) {
+      console.error('Protobuf not ready, cannot send message');
+      return;
+    }
+    
+    let buffer;
+    
+    if (message.type === 'telemetry') {
+      buffer = proto.createTelemetryMessage(message.data);
+    } else if (message.type === 'connected') {
+      buffer = proto.createConnectedMessage(message.message);
+    } else if (message.type === 'demo_complete') {
+      buffer = proto.createDemoCompleteMessage(message.message);
+    } else if (message.type === 'pong') {
+      buffer = proto.createPongMessage();
+    } else {
+      console.error('Unknown message type:', message.type);
+      return;
+    }
+    
+    client.send(buffer);
+  } catch (error) {
+    console.error('Error sending message to client:', error);
+  }
+}
+
+/**
+ * Start demo mode playback for a specific client
  */
 function startDemoMode(client) {
   if (!demoData) {
     loadDemoData();
   }
 
+  // Stop any existing demo for this client
+  stopDemoMode(client);
+
   console.log('Starting demo mode playback');
   
   // Handle new multi-lap format
   const laps = demoData.laps || [{ frames: demoData.frames, lapNumber: 1 }];
-  let currentLapIndex = 0;
-  let frameIndex = 0;
-  let currentLap = laps[currentLapIndex];
-  const frameRate = 60; // 60 Hz
-  const interval = 1000 / frameRate;
+  const frameRate = 30; // 30 Hz (reduced from 60 to prevent connection issues)
+  const intervalMs = 1000 / frameRate;
 
-  demoInterval = setInterval(() => {
-    if (frameIndex >= currentLap.frames.length) {
-      // Move to next lap
-      currentLapIndex = (currentLapIndex + 1) % laps.length;
-      currentLap = laps[currentLapIndex];
-      frameIndex = 0;
-      console.log(`Demo lap ${currentLapIndex + 1} started (${currentLap.profile || 'Lap ' + currentLap.lapNumber})`);
+  // Initialize client state - just track position in data stream
+  const clientState = clients.get(client) || {};
+  clientState.frameIndex = 0; // Global frame index across all laps
+  
+  // Flatten all laps into a single continuous stream
+  const allFrames = laps.flatMap(lap => lap.frames);
+  console.log(`Demo mode: ${allFrames.length} total frames across ${laps.length} laps`);
+  
+  clientState.interval = setInterval(() => {
+    // Check if client is still connected
+    if (client.readyState !== WebSocket.OPEN) {
+      stopDemoMode(client);
+      return;
     }
 
-    const frame = currentLap.frames[frameIndex];
+    const state = clients.get(client);
+    if (!state) return;
+
+    // Check if we've reached the end of all frames
+    if (state.frameIndex >= allFrames.length) {
+      console.log('Demo playback completed - all frames sent');
+      
+      // Notify client that demo is complete
+      if (client.readyState === WebSocket.OPEN) {
+        sendToClient(client, {
+          type: 'demo_complete',
+          message: 'All demo data sent',
+        });
+      }
+      
+      stopDemoMode(client);
+      return;
+    }
+
+    // Get the current frame from the continuous stream
+    const frame = allFrames[state.frameIndex];
     
-    // Send to requesting client or broadcast to all
-    const message = JSON.stringify({
+    // Send frame as-is, without modifying lapNumber
+    // Client will detect lap changes based on lapTime resets
+    const message = {
       type: 'telemetry',
-      data: {
-        ...frame,
-        lapNumber: currentLapIndex + 1,
-      },
-    });
+      data: frame,
+    };
 
-    if (client && client.readyState === WebSocket.OPEN) {
-      client.send(message);
+    // Double-check client is still connected before sending
+    if (client.readyState === WebSocket.OPEN) {
+      try {
+        sendToClient(client, message);
+        state.frameIndex++;
+      } catch (error) {
+        console.error('Error sending telemetry frame:', error.message);
+        stopDemoMode(client);
+      }
     } else {
-      broadcast(message);
+      // Client disconnected, stop demo
+      stopDemoMode(client);
     }
-
-    frameIndex++;
-  }, interval);
+  }, intervalMs);
+  
+  clients.set(client, clientState);
 }
 
 /**
- * Stop demo mode playback
+ * Stop demo mode playback for a specific client (or all clients if no client specified)
  */
-function stopDemoMode() {
-  if (demoInterval) {
-    clearInterval(demoInterval);
-    demoInterval = null;
-    console.log('Demo mode stopped');
+function stopDemoMode(client) {
+  if (client) {
+    // Stop demo for specific client
+    const clientState = clients.get(client);
+    if (clientState && clientState.interval) {
+      clearInterval(clientState.interval);
+      clientState.interval = null;
+      clientState.frameIndex = 0;
+      console.log('Demo mode stopped for client');
+    }
+  } else {
+    // Stop demo for all clients
+    clients.forEach((clientState, client) => {
+      if (clientState.interval) {
+        clearInterval(clientState.interval);
+        clientState.interval = null;
+        clientState.frameIndex = 0;
+      }
+    });
+    console.log('Demo mode stopped for all clients');
   }
 }
 
@@ -174,19 +261,60 @@ wss.on('connection', (ws, req) => {
   const clientId = `${req.socket.remoteAddress}:${req.socket.remotePort}`;
   console.log(`✓ Client connected: ${clientId}`);
   
-  clients.add(ws);
+  // Initialize client state - default to JSON until client specifies protocol
+  clients.set(ws, {
+    interval: null,
+    lapIndex: 0,
+    frameIndex: 0,
+    useProtobuf: false,
+  });
 
-  // Send welcome message
-  ws.send(JSON.stringify({
+  // Send welcome message (protobuf)
+  sendToClient(ws, {
     type: 'connected',
     message: 'Connected to Purple Sector telemetry server',
     timestamp: Date.now(),
-  }));
+  });
 
   // Handle incoming messages from clients
   ws.on('message', (message) => {
     try {
-      const data = JSON.parse(message.toString());
+      let data;
+      const clientState = clients.get(ws);
+      
+      // All messages should be protobuf
+      if (!Buffer.isBuffer(message)) {
+        console.error('Received non-buffer message, ignoring');
+        return;
+      }
+      
+      // Mark client as using protobuf
+      if (!clientState.useProtobuf) {
+        console.log(`Client ${clientId} using protobuf`);
+        clientState.useProtobuf = true;
+      }
+      
+      // Decode protobuf message
+      const decoded = proto.decodeMessage(message);
+      
+      // Convert protobuf message to internal format
+      switch (decoded.type) {
+        case proto.MessageType.TELEMETRY:
+          data = { type: 'telemetry', data: decoded.telemetry };
+          break;
+        case proto.MessageType.START_DEMO:
+          data = { type: 'start_demo' };
+          break;
+        case proto.MessageType.STOP_DEMO:
+          data = { type: 'stop_demo' };
+          break;
+        case proto.MessageType.PING:
+          data = { type: 'ping' };
+          break;
+        default:
+          console.warn('Unknown protobuf message type:', decoded.type);
+          return;
+      }
       
       switch (data.type) {
         case 'telemetry':
@@ -203,13 +331,13 @@ wss.on('connection', (ws, req) => {
           break;
 
         case 'stop_demo':
-          // Stop demo mode
-          stopDemoMode();
+          // Stop demo mode for this client
+          stopDemoMode(ws);
           break;
 
         case 'ping':
           // Respond to ping
-          ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+          sendToClient(ws, { type: 'pong', timestamp: Date.now() });
           break;
 
         default:
@@ -222,16 +350,16 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     console.log(`✗ Client disconnected: ${clientId}`);
-    clients.delete(ws);
     
-    // Stop demo if no clients connected
-    if (clients.size === 0) {
-      stopDemoMode();
-    }
+    // Stop demo for this client and clean up
+    stopDemoMode(ws);
+    clients.delete(ws);
   });
 
   ws.on('error', (error) => {
     console.error(`Client error (${clientId}):`, error.message);
+    // Stop demo on error to prevent further issues
+    stopDemoMode(ws);
   });
 });
 
@@ -243,10 +371,11 @@ wss.on('error', (error) => {
 process.on('SIGINT', () => {
   console.log('\nShutting down WebSocket server...');
   
+  // Stop demo for all clients
   stopDemoMode();
   
   // Close all client connections
-  clients.forEach((client) => {
+  clients.forEach((clientState, client) => {
     client.close();
   });
   

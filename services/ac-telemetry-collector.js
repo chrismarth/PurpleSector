@@ -22,6 +22,7 @@
 
 const dgram = require('dgram');
 const WebSocket = require('ws');
+const proto = require('../src/proto/telemetry-proto');
 
 // Configuration
 const UDP_PORT = process.env.TELEMETRY_UDP_PORT || 9996;
@@ -38,6 +39,16 @@ let handshakeCompleted = false;
 // WebSocket connection to relay server
 let wsClient = null;
 let reconnectInterval = null;
+
+// Initialize protobuf
+let protobufReady = false;
+proto.init().then(() => {
+  protobufReady = true;
+  console.log('✓ Protocol Buffers initialized');
+}).catch(err => {
+  console.error('Failed to initialize Protocol Buffers:', err);
+  console.log('Falling back to JSON mode');
+});
 
 /**
  * Parse Assetto Corsa UDP telemetry packet
@@ -128,10 +139,21 @@ function connectWebSocket() {
  */
 function sendTelemetry(data) {
   if (wsClient && wsClient.readyState === WebSocket.OPEN) {
-    wsClient.send(JSON.stringify({
-      type: 'telemetry',
-      data: data,
-    }));
+    try {
+      if (protobufReady) {
+        // Send as protobuf
+        const buffer = proto.createTelemetryMessage(data);
+        wsClient.send(buffer);
+      } else {
+        // Fallback to JSON
+        wsClient.send(JSON.stringify({
+          type: 'telemetry',
+          data: data,
+        }));
+      }
+    } catch (error) {
+      console.error('Error sending telemetry:', error);
+    }
   }
 }
 

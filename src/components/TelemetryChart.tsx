@@ -1,258 +1,239 @@
 'use client';
 
-import { useMemo, memo, useRef } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useMemo, memo, useRef, useEffect, useState } from 'react';
+import uPlot from 'uplot';
+import { UPlotChart, UPlotSeries } from '@/components/UPlotChart';
 import { TelemetryFrame } from '@/types/telemetry';
 
 interface TelemetryChartProps {
   data: TelemetryFrame[];
   compareData?: TelemetryFrame[];
   height?: number;
-  disableWindowing?: boolean; // For lap detail page - show entire lap
+  disableWindowing?: boolean;
 }
 
-interface ChartDataPoint {
-  index: number;
-  time: string;
-  throttle: number;
-  brake: number;
-  steering: number;
-  speed: number;
-  compareThrottle?: number;
-  compareBrake?: number;
-  compareSteering?: number;
-  compareSpeed?: number;
-}
+const TelemetryChartComponent = ({ 
+  data, 
+  compareData, 
+  height = 300, 
+  disableWindowing = false 
+}: TelemetryChartProps) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(800);
 
-const TelemetryChartComponent = ({ data, compareData, height = 300, disableWindowing = false }: TelemetryChartProps) => {
-  // Cache for transformed data - only transform new frames
-  const transformedCacheRef = useRef<ChartDataPoint[]>([]);
-  const lastProcessedIndexRef = useRef(0);
+  // Measure container width
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width - 32); // Subtract padding
+      }
+    });
+    
+    resizeObserver.observe(containerRef.current);
+    return () => resizeObserver.disconnect();
+  }, []);
 
-  const chartData = useMemo(() => {
-    const windowSize = 1000; // Show last 1000 frames (~16 seconds at 60Hz)
-    
-    // Detect lap reset (data array got smaller)
-    if (data.length < lastProcessedIndexRef.current) {
-      transformedCacheRef.current = [];
-      lastProcessedIndexRef.current = 0;
+  // Transform data for throttle & brake chart
+  const throttleBrakeData = useMemo(() => {
+    if (!data || data.length === 0) {
+      return { uplotData: [[0], [0], [0]] as uPlot.AlignedData, series: [] as UPlotSeries[] };
     }
+
+    const timeValues = data.map(frame => frame.lapTime / 1000);
+    const throttleValues = data.map(frame => frame.throttle * 100);
+    const brakeValues = data.map(frame => frame.brake * 100);
     
-    // Only transform frames we haven't processed yet
-    const newFramesStart = lastProcessedIndexRef.current;
-    const newFrames = data.slice(newFramesStart);
-    
-    // If no new frames and no compare data, return cached data
-    if (newFrames.length === 0 && !compareData) {
-      return transformedCacheRef.current;
-    }
-    
-    // Transform only the NEW frames (incremental update!)
-    const newTransformedFrames = newFrames.map((frame, idx) => ({
-      index: newFramesStart + idx,
-      time: (frame.lapTime / 1000).toFixed(2),
-      throttle: frame.throttle * 100,
-      brake: frame.brake * 100,
-      steering: frame.steering * 100, // -100 to 100 (left to right)
-      speed: frame.speed,
-    }));
-    
-    // Append new transformed frames to cache
-    transformedCacheRef.current = [...transformedCacheRef.current, ...newTransformedFrames];
-    lastProcessedIndexRef.current = data.length;
-    
-    // Keep only the sliding window (most recent frames) unless windowing is disabled
-    if (!disableWindowing && transformedCacheRef.current.length > windowSize) {
-      transformedCacheRef.current = transformedCacheRef.current.slice(-windowSize);
-    }
-    
-    // If we have compare data, merge it in by matching lap times
+    const seriesData: number[][] = [timeValues, throttleValues, brakeValues];
+    const series: UPlotSeries[] = [
+      { label: 'Throttle', color: '#10b981', width: 2 },
+      { label: 'Brake', color: '#ef4444', width: 2 },
+    ];
+
+    // Add compare data if available
     if (compareData && compareData.length > 0) {
-      // Create a map of compare data by lap time for efficient lookup
-      const compareMap = new Map<string, TelemetryFrame>();
-      compareData.forEach(frame => {
-        const timeKey = (frame.lapTime / 1000).toFixed(2);
-        compareMap.set(timeKey, frame);
-      });
+      const compareThrottle = compareData.map((frame, idx) => 
+        idx < data.length ? frame.throttle * 100 : 0
+      );
+      const compareBrake = compareData.map((frame, idx) => 
+        idx < data.length ? frame.brake * 100 : 0
+      );
       
-      const mergedData = transformedCacheRef.current.map((point) => {
-        const compareFrame = compareMap.get(point.time);
-        if (compareFrame) {
-          return {
-            ...point,
-            compareThrottle: compareFrame.throttle * 100,
-            compareBrake: compareFrame.brake * 100,
-            compareSteering: compareFrame.steering * 100, // -100 to 100 (left to right)
-            compareSpeed: compareFrame.speed,
-          };
-        }
-        return point;
-      });
-      return mergedData;
+      seriesData.push(compareThrottle, compareBrake);
+      series.push(
+        { label: 'Compare Throttle', color: '#a855f7', width: 2, dash: [5, 5] },
+        { label: 'Compare Brake', color: '#c084fc', width: 2, dash: [5, 5] }
+      );
     }
+
+    return { uplotData: seriesData as uPlot.AlignedData, series };
+  }, [data, compareData]);
+
+  // Transform data for steering chart
+  const steeringData = useMemo(() => {
+    if (!data || data.length === 0) {
+      return { uplotData: [[0], [0]] as uPlot.AlignedData, series: [] as UPlotSeries[] };
+    }
+
+    const timeValues = data.map(frame => frame.lapTime / 1000);
+    const steeringValues = data.map(frame => Math.abs(frame.steering) * 100);
     
-    return transformedCacheRef.current;
-  }, [data, compareData, disableWindowing]);
+    const seriesData: number[][] = [timeValues, steeringValues];
+    const series: UPlotSeries[] = [
+      { label: 'Steering', color: '#8b5cf6', width: 2 },
+    ];
+
+    // Add compare data if available
+    if (compareData && compareData.length > 0) {
+      const compareSteering = compareData.map((frame, idx) => 
+        idx < data.length ? Math.abs(frame.steering) * 100 : 0
+      );
+      
+      seriesData.push(compareSteering);
+      series.push(
+        { label: 'Compare Steering', color: '#a855f7', width: 2, dash: [5, 5] }
+      );
+    }
+
+    return { uplotData: seriesData as uPlot.AlignedData, series };
+  }, [data, compareData]);
+
+  // Transform data for speed chart
+  const speedData = useMemo(() => {
+    if (!data || data.length === 0) {
+      return { uplotData: [[0], [0]] as uPlot.AlignedData, series: [] as UPlotSeries[] };
+    }
+
+    const timeValues = data.map(frame => frame.lapTime / 1000);
+    const speedValues = data.map(frame => frame.speed);
+    
+    const seriesData: number[][] = [timeValues, speedValues];
+    const series: UPlotSeries[] = [
+      { label: 'Speed', color: '#3b82f6', width: 2 },
+    ];
+
+    // Add compare data if available
+    if (compareData && compareData.length > 0) {
+      const compareSpeed = compareData.map((frame, idx) => 
+        idx < data.length ? frame.speed : 0
+      );
+      
+      seriesData.push(compareSpeed);
+      series.push(
+        { label: 'Compare Speed', color: '#a855f7', width: 2, dash: [5, 5] }
+      );
+    }
+
+    return { uplotData: seriesData as uPlot.AlignedData, series };
+  }, [data, compareData]);
+
+  // Common axes configuration
+  const commonAxes = [
+    {
+      scale: 'x',
+      space: 50,
+      grid: { show: true },
+      label: 'Time (s)',
+    },
+    {
+      scale: 'y',
+      space: 50,
+      side: 3 as const,
+      grid: { show: true },
+    },
+  ];
 
   return (
-    <div className="space-y-6">
+    <div ref={containerRef} className="space-y-6">
       {/* Throttle & Brake Chart */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
         <h3 className="text-lg font-semibold mb-4">Throttle & Brake</h3>
-        <ResponsiveContainer width="100%" height={height}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            <XAxis
-              dataKey="time"
-              label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }}
-              tick={{ fontSize: 11 }}
-              interval="preserveStartEnd"
-            />
-            <YAxis
-              label={{ value: 'Input (%)', angle: -90, position: 'insideLeft' }}
-              domain={[0, 100]}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-              }}
-            />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="throttle"
-              stroke="#10b981"
-              strokeWidth={2}
-              dot={false}
-              name="Throttle"
-            />
-            <Line
-              type="monotone"
-              dataKey="brake"
-              stroke="#ef4444"
-              strokeWidth={2}
-              dot={false}
-              name="Brake"
-            />
-            {compareData && (
-              <>
-                <Line
-                  type="monotone"
-                  dataKey="compareThrottle"
-                  stroke="#a855f7"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={false}
-                  name="Compare Throttle"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="compareBrake"
-                  stroke="#c084fc"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={false}
-                  name="Compare Brake"
-                />
-              </>
-            )}
-          </LineChart>
-        </ResponsiveContainer>
+        <UPlotChart
+          data={throttleBrakeData.uplotData}
+          series={throttleBrakeData.series}
+          axes={[
+            commonAxes[0],
+            { ...commonAxes[1], label: 'Input (%)' },
+          ]}
+          width={containerWidth}
+          height={height}
+        />
+        {/* Legend */}
+        <div className="flex flex-wrap gap-4 justify-center mt-4">
+          {throttleBrakeData.series.map((s, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-sm"
+                style={{ 
+                  backgroundColor: s.color,
+                  border: s.dash ? '1px dashed ' + s.color : 'none'
+                }}
+              />
+              <span className="text-sm">{s.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Steering Chart */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
         <h3 className="text-lg font-semibold mb-4">Steering Input</h3>
-        <ResponsiveContainer width="100%" height={height}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            <XAxis
-              dataKey="time"
-              label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }}
-              tick={{ fontSize: 11 }}
-              interval="preserveStartEnd"
-            />
-            <YAxis
-              label={{ value: 'Steering (%)', angle: -90, position: 'insideLeft' }}
-              domain={[0, 100]}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-              }}
-            />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="steering"
-              stroke="#8b5cf6"
-              strokeWidth={2}
-              dot={false}
-              name="Steering"
-            />
-            {compareData && (
-              <Line
-                type="monotone"
-                dataKey="compareSteering"
-                stroke="#a855f7"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                dot={false}
-                name="Compare Steering"
+        <UPlotChart
+          data={steeringData.uplotData}
+          series={steeringData.series}
+          axes={[
+            commonAxes[0],
+            { ...commonAxes[1], label: 'Steering (%)' },
+          ]}
+          width={containerWidth}
+          height={height}
+        />
+        {/* Legend */}
+        <div className="flex flex-wrap gap-4 justify-center mt-4">
+          {steeringData.series.map((s, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-sm"
+                style={{ 
+                  backgroundColor: s.color,
+                  border: s.dash ? '1px dashed ' + s.color : 'none'
+                }}
               />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
+              <span className="text-sm">{s.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Speed Chart */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
         <h3 className="text-lg font-semibold mb-4">Speed</h3>
-        <ResponsiveContainer width="100%" height={height}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            <XAxis
-              dataKey="time"
-              label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }}
-              tick={{ fontSize: 11 }}
-              interval="preserveStartEnd"
-            />
-            <YAxis
-              label={{ value: 'Speed (km/h)', angle: -90, position: 'insideLeft' }}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-              }}
-            />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="speed"
-              stroke="#3b82f6"
-              strokeWidth={2}
-              dot={false}
-              name="Speed"
-            />
-            {compareData && (
-              <Line
-                type="monotone"
-                dataKey="compareSpeed"
-                stroke="#a855f7"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                dot={false}
-                name="Compare Speed"
+        <UPlotChart
+          data={speedData.uplotData}
+          series={speedData.series}
+          axes={[
+            commonAxes[0],
+            { ...commonAxes[1], label: 'Speed (km/h)' },
+          ]}
+          width={containerWidth}
+          height={height}
+        />
+        {/* Legend */}
+        <div className="flex flex-wrap gap-4 justify-center mt-4">
+          {speedData.series.map((s, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-sm"
+                style={{ 
+                  backgroundColor: s.color,
+                  border: s.dash ? '1px dashed ' + s.color : 'none'
+                }}
               />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
+              <span className="text-sm">{s.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

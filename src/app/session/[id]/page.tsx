@@ -13,6 +13,7 @@ import { TelemetryFrame } from '@/types/telemetry';
 import { PlotConfig, DEFAULT_PLOT_CONFIGS } from '@/types/plotConfig';
 import { formatLapTime } from '@/lib/utils';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { decodeMessage, createStartDemoMessage, createStopDemoMessage, createPingMessage } from '@/lib/telemetry-proto-browser';
 
 const SESSION_TAGS = [
   'Testing',
@@ -66,13 +67,17 @@ export default function SessionPage() {
   const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(DEFAULT_PLOT_CONFIGS);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const lastLapNumberRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const currentLapFramesRef = useRef<TelemetryFrame[]>([]);
+  const currentLapNumberRef = useRef(1); // Track current lap number in ref for WebSocket closure
   const lastUpdateTimeRef = useRef(0);
   const savingLapRef = useRef(false); // Prevent duplicate saves
   const isPausedRef = useRef(false); // Track pause state in ref for WebSocket closure
+  const isMountedRef = useRef(true); // Track if component is mounted
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null); // Heartbeat to keep connection alive
+  const lastSavedTagsRef = useRef<string>('[]'); // Track last saved tags to prevent duplicate saves
+  const lastLapTimeRef = useRef(0); // Track last lapTime to detect resets (new lap)
 
   useEffect(() => {
     // Check if this session is already open in another tab
@@ -116,12 +121,32 @@ export default function SessionPage() {
     };
   }, [sessionId]);
 
-  // Connect WebSocket after session is loaded (only if session is active)
+  // Connect WebSocket when session becomes active (only once)
   useEffect(() => {
-    if (session && !wsRef.current && session.status === 'active') {
+    if (session && session.status === 'active' && !wsRef.current) {
+      console.log('Session is active, connecting WebSocket...');
+      // Initialize isPausedRef to match isPaused state
+      isPausedRef.current = isPaused;
       connectWebSocket();
     }
-  }, [session]);
+    
+    // Cleanup on unmount
+    return () => {
+      if (wsRef.current) {
+        console.log('Cleaning up WebSocket connection');
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+    };
+  }, [session?.status]); // Only depend on session status, not entire session object
 
   async function fetchSession() {
     try {
@@ -138,11 +163,22 @@ export default function SessionPage() {
       console.log('Session data loaded:', data);
       console.log('Number of laps:', data.laps?.length || 0);
       setSession(data);
-      setCurrentLapNumber(data.laps.length + 1);
       
-      // Load session tags
+      // Set current lap number based on saved laps
+      const nextLapNumber = (data.laps?.length || 0) + 1;
+      setCurrentLapNumber(nextLapNumber);
+      console.log(`Session has ${data.laps?.length || 0} laps, next lap will be #${nextLapNumber}`);
+      
+      // Load session tags (only if different from current)
       if (data.tags) {
-        setSessionTags(JSON.parse(data.tags));
+        const newTags = JSON.parse(data.tags);
+        setSessionTags(prev => {
+          // Only update if actually different
+          if (JSON.stringify(prev) !== JSON.stringify(newTags)) {
+            return newTags;
+          }
+          return prev;
+        });
       }
 
       // Load plot configurations (only if different from current)
@@ -163,8 +199,35 @@ export default function SessionPage() {
     }
   }
 
+  // Master cleanup effect on component unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    return () => {
+      console.log('Component unmounting - cleaning up all resources');
+      isMountedRef.current = false;
+      
+      // Close WebSocket
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      
+      // Clear timeouts and intervals
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+    };
+  }, []);
+
   // Memoized callback for plot config changes
   const handlePlotConfigsChange = useCallback((configs: PlotConfig[]) => {
+    if (!isMountedRef.current) return;
     setPlotConfigs(configs);
     // Auto-save to session
     fetch(`/api/sessions/${sessionId}`, {
@@ -175,109 +238,215 @@ export default function SessionPage() {
   }, [sessionId]);
 
   function connectWebSocket() {
-    // Clear any existing connection
+    // Clear any existing connection and timers
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
     }
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
 
+    console.log('Connecting to WebSocket...');
     const ws = new WebSocket('ws://localhost:8080');
+    ws.binaryType = 'arraybuffer'; // Receive binary data as ArrayBuffer for protobuf
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('WebSocket connected');
-      setWsConnected(true);
-      setReconnecting(false);
+      console.log('✓ WebSocket connected');
+      if (isMountedRef.current) {
+        setWsConnected(true);
+        setReconnecting(false);
+      }
       reconnectAttemptsRef.current = 0; // Reset reconnect attempts on successful connection
+
+      // Start heartbeat to keep connection alive (ping every 30 seconds)
+      heartbeatIntervalRef.current = setInterval(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          try {
+            wsRef.current.send(createPingMessage());
+          } catch (error) {
+            console.error('Error sending heartbeat:', error);
+          }
+        }
+      }, 30000);
 
       // If demo mode, request demo data
       if (session?.source === 'demo') {
         console.log('Requesting demo mode telemetry...');
-        ws.send(JSON.stringify({ type: 'start_demo' }));
+        try {
+          ws.send(createStartDemoMessage());
+        } catch (error) {
+          console.error('Error requesting demo:', error);
+        }
       } else {
         console.log('Session source:', session?.source, '- waiting for live telemetry');
       }
     };
 
     ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-
-      if (message.type === 'telemetry' && !isPausedRef.current) {
-        const frame: TelemetryFrame = message.data;
-
-        // Detect lap change
-        if (frame.lapNumber !== lastLapNumberRef.current && lastLapNumberRef.current > 0) {
-          console.log(`Lap ${lastLapNumberRef.current} completed! Saving ${currentLapFramesRef.current.length} frames`);
-          
-          // Prevent duplicate saves with a lock
-          if (!savingLapRef.current && currentLapFramesRef.current.length > 0) {
+      // Check if component is still mounted before processing
+      if (!isMountedRef.current) {
+        console.log('Ignoring WebSocket message - component unmounted');
+        return;
+      }
+      
+      try {
+        // All messages should be protobuf (ArrayBuffer)
+        if (!(event.data instanceof ArrayBuffer)) {
+          console.error('Received non-ArrayBuffer message:', typeof event.data);
+          return;
+        }
+        
+        // Decode protobuf message
+        const decoded = decodeMessage(event.data);
+        
+        // Log telemetry messages
+        if (decoded.type === 'telemetry') {
+          console.log('Received telemetry:', decoded.data?.speed, 'km/h, lapTime:', decoded.data?.lapTime);
+        }
+        
+        handleDecodedMessage(decoded);
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
+      }
+    };
+    
+    function handleDecodedMessage(message: any) {
+      if (!isMountedRef.current) return;
+      
+      try {
+        if (message.type === 'demo_complete') {
+          console.log('Demo playback completed');
+          // Save final lap if any frames exist
+          if (currentLapFramesRef.current.length > 0 && !savingLapRef.current) {
             savingLapRef.current = true;
-            // Save completed lap using ref (has current value)
-            saveLap(currentLapFramesRef.current).finally(() => {
+            saveLap(currentLapFramesRef.current, currentLapNumberRef.current).finally(() => {
               savingLapRef.current = false;
             });
           }
-          
-          // Reset for new lap
-          currentLapFramesRef.current = [frame];
-          setCurrentLapFrames([frame]);
-          setCurrentLapNumber(frame.lapNumber);
-          lastUpdateTimeRef.current = Date.now();
-        } else {
-          // Add frame to ref (always)
-          currentLapFramesRef.current = [...currentLapFramesRef.current, frame];
-          
-          // Throttle state updates to 15 FPS (every ~67ms) to reduce re-renders
-          const now = Date.now();
-          if (now - lastUpdateTimeRef.current >= 67) {
-            setCurrentLapFrames([...currentLapFramesRef.current]);
-            lastUpdateTimeRef.current = now;
-          }
+          return;
         }
 
-        lastLapNumberRef.current = frame.lapNumber;
+        if (message.type === 'telemetry') {
+          console.log('Telemetry message, paused:', isPausedRef.current);
+          
+          if (isPausedRef.current) {
+            console.log('Skipping telemetry - session is paused');
+            return;
+          }
+          
+          const frame: TelemetryFrame = message.data;
+
+          // Detect lap change: lapTime resets to a small value (new lap started)
+          const isNewLap = frame.lapTime < lastLapTimeRef.current && lastLapTimeRef.current > 1000;
+          
+          if (isNewLap) {
+            // Lap boundary detected
+            if (currentLapFramesRef.current.length > 0) {
+              // We have frames from a lap, save it
+              console.log(`Lap ${currentLapNumberRef.current} completed! ${currentLapFramesRef.current.length} frames`);
+              
+              if (!savingLapRef.current) {
+                savingLapRef.current = true;
+                const lapToSave = currentLapFramesRef.current;
+                const lapNum = currentLapNumberRef.current;
+                
+                saveLap(lapToSave, lapNum).finally(() => {
+                  savingLapRef.current = false;
+                });
+              }
+            }
+            
+            // Start new lap
+            const nextLapNumber = currentLapNumberRef.current + 1;
+            currentLapNumberRef.current = nextLapNumber; // Update ref
+            currentLapFramesRef.current = [frame];
+            
+            if (isMountedRef.current) {
+              setCurrentLapFrames([frame]);
+              setCurrentLapNumber(nextLapNumber);
+            }
+            
+            lastUpdateTimeRef.current = Date.now();
+          } else {
+            // Same lap, add frame
+            currentLapFramesRef.current = [...currentLapFramesRef.current, frame];
+            
+            // Throttle state updates to 15 FPS (every ~67ms) to reduce re-renders
+            // But always update on first frame to ensure UI shows data immediately
+            const now = Date.now();
+            const isFirstFrame = currentLapFramesRef.current.length === 1;
+            if ((isFirstFrame || now - lastUpdateTimeRef.current >= 67) && isMountedRef.current) {
+              setCurrentLapFrames([...currentLapFramesRef.current]);
+              lastUpdateTimeRef.current = now;
+            }
+          }
+
+          lastLapTimeRef.current = frame.lapTime;
+        }
+      } catch (error) {
+        console.error('Error handling decoded message:', error);
       }
-    };
+    }
 
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
-      setWsConnected(false);
+      if (isMountedRef.current) {
+        setWsConnected(false);
+      }
     };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      setWsConnected(false);
+    ws.onclose = (event) => {
+      console.log(`WebSocket disconnected (code: ${event.code}, reason: ${event.reason || 'none'})`);
+      
+      // Clear heartbeat
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+      
+      if (isMountedRef.current) {
+        setWsConnected(false);
+      }
       wsRef.current = null;
 
-      // Only attempt to reconnect if session is still active and not paused
-      if (session?.status === 'active' && !isPausedRef.current) {
-        // Attempt to reconnect with exponential backoff
+      // Only attempt to reconnect if component is mounted, session is still active and not paused
+      if (isMountedRef.current && session?.status === 'active' && !isPausedRef.current) {
+        // Use faster reconnection with cap at 5 seconds instead of 30
         reconnectAttemptsRef.current++;
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 30000); // Max 30 seconds
         
-        console.log(`Reconnecting in ${delay / 1000} seconds... (attempt ${reconnectAttemptsRef.current})`);
-        setReconnecting(true);
+        // Progressive delays: 1s, 2s, 3s, 4s, 5s (max)
+        const delay = Math.min(reconnectAttemptsRef.current * 1000, 5000);
+        
+        console.log(`⟳ Reconnecting in ${delay / 1000}s... (attempt ${reconnectAttemptsRef.current})`);
+        if (isMountedRef.current) {
+          setReconnecting(true);
+        }
         
         reconnectTimeoutRef.current = setTimeout(() => {
-          if (session?.status === 'active') {
+          if (isMountedRef.current && session?.status === 'active') {
             console.log('Attempting to reconnect WebSocket...');
             connectWebSocket();
           }
         }, delay);
       } else {
-        console.log('Session not active, skipping reconnection');
-        setReconnecting(false);
+        console.log('Session not active or component unmounted, skipping reconnection');
+        if (isMountedRef.current) {
+          setReconnecting(false);
+        }
       }
     };
   }
 
-  async function saveLap(frames: TelemetryFrame[]) {
+  async function saveLap(frames: TelemetryFrame[], lapNumber: number) {
     if (frames.length === 0) {
       console.warn('No frames to save');
       return;
     }
 
-    console.log(`Saving lap ${frames[0].lapNumber} with ${frames.length} frames to database...`);
+    console.log(`Saving lap ${lapNumber} with ${frames.length} frames to database...`);
 
     try {
       const response = await fetch('/api/laps', {
@@ -285,7 +454,7 @@ export default function SessionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId,
-          lapNumber: frames[0].lapNumber,
+          lapNumber: lapNumber,
           telemetryData: JSON.stringify(frames),
         }),
       });
@@ -299,8 +468,25 @@ export default function SessionPage() {
       const savedLap = await response.json();
       console.log('Lap saved successfully:', savedLap);
 
-      // Refresh session data
-      fetchSession();
+      // Update session state directly instead of fetching
+      // This prevents cascading re-renders
+      if (isMountedRef.current && session) {
+        setSession(prev => {
+          if (!prev) return prev;
+          
+          // Check if lap already exists to prevent duplicates
+          const lapExists = prev.laps?.some(lap => lap.lapNumber === savedLap.lapNumber);
+          if (lapExists) {
+            console.log(`Lap ${savedLap.lapNumber} already in session, skipping duplicate`);
+            return prev;
+          }
+          
+          return {
+            ...prev,
+            laps: [...(prev.laps || []), savedLap],
+          };
+        });
+      }
     } catch (error) {
       console.error('Error saving lap:', error);
     }
@@ -310,7 +496,55 @@ export default function SessionPage() {
     const newPausedState = !isPaused;
     setIsPaused(newPausedState);
     isPausedRef.current = newPausedState; // Keep ref in sync
-    console.log(newPausedState ? 'Telemetry paused' : 'Telemetry resumed');
+    
+    if (newPausedState) {
+      // Pausing - send stop_demo and close WebSocket
+      console.log('Pausing telemetry - stopping demo and closing WebSocket');
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(createStopDemoMessage());
+          // Give message time to send before closing
+          setTimeout(() => {
+            if (wsRef.current) {
+              wsRef.current.close();
+              wsRef.current = null;
+            }
+          }, 100);
+        } catch (error) {
+          console.error('Error sending stop_demo:', error);
+          if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+          }
+        }
+      }
+      
+      // Clear timers
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    } else {
+      // Resuming - reconnect WebSocket
+      console.log('Resuming telemetry - reconnecting WebSocket');
+      
+      // Reset current lap frames and lapTime tracking
+      currentLapFramesRef.current = [];
+      setCurrentLapFrames([]);
+      lastLapTimeRef.current = 0;
+      
+      // Sync the ref with current state
+      currentLapNumberRef.current = currentLapNumber;
+      console.log('Resuming from lap:', currentLapNumber);
+      
+      if (session?.status === 'active') {
+        connectWebSocket();
+      }
+    }
   }
 
   // Auto-save session tags
@@ -329,7 +563,12 @@ export default function SessionPage() {
   // Save tags immediately when changed
   useEffect(() => {
     if (!session) return;
-    if (sessionTags.length > 0 || session.tags) {
+    
+    const tagsString = JSON.stringify(sessionTags);
+    
+    // Only save if tags have actually changed from last save
+    if (tagsString !== lastSavedTagsRef.current) {
+      lastSavedTagsRef.current = tagsString;
       autoSaveSessionTags(sessionTags);
     }
   }, [sessionTags, session, autoSaveSessionTags]);
@@ -354,16 +593,31 @@ export default function SessionPage() {
 
   async function endSession() {
     try {
-      // Close WebSocket connection immediately
+      // Send stop_demo message before closing connection
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(createStopDemoMessage());
+          // Give message time to send before closing
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (error) {
+          console.error('Error sending stop_demo:', error);
+        }
+      }
+      
+      // Close WebSocket connection
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
       }
 
-      // Clear reconnection timeout
+      // Clear all timers
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
       }
 
       // Update session status
@@ -375,7 +629,7 @@ export default function SessionPage() {
 
       // Save current lap in background (don't wait for it)
       if (currentLapFrames.length > 0) {
-        saveLap(currentLapFrames).catch(err => {
+        saveLap(currentLapFrames, currentLapNumberRef.current).catch(err => {
           console.error('Error saving final lap:', err);
         });
       }
