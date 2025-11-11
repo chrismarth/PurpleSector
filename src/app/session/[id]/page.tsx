@@ -32,6 +32,7 @@ interface Session {
   name: string;
   source: string;
   status: string;
+  started: boolean;
   tags: string | null;
   laps: Lap[];
   event?: {
@@ -121,10 +122,10 @@ export default function SessionPage() {
     };
   }, [sessionId]);
 
-  // Connect WebSocket when session becomes active (only once)
+  // Connect WebSocket when session becomes active and started
   useEffect(() => {
-    if (session && session.status === 'active' && !wsRef.current) {
-      console.log('Session is active, connecting WebSocket...');
+    if (session && session.status === 'active' && session.started && !wsRef.current) {
+      console.log('Session is active and started, connecting WebSocket...');
       // Initialize isPausedRef to match isPaused state
       isPausedRef.current = isPaused;
       connectWebSocket();
@@ -146,7 +147,7 @@ export default function SessionPage() {
         heartbeatIntervalRef.current = null;
       }
     };
-  }, [session?.status]); // Only depend on session status, not entire session object
+  }, [session?.status, session?.started]); // Depend on both status and started flag
 
   async function fetchSession() {
     try {
@@ -249,7 +250,11 @@ export default function SessionPage() {
     }
 
     console.log('Connecting to WebSocket...');
-    const ws = new WebSocket('ws://localhost:8080');
+    // Include userId in connection (for Kafka user-scoped topics)
+    // In production, this would come from authentication
+    // For now, use 'demo-user' to match the demo collector
+    const userId = 'demo-user';
+    const ws = new WebSocket(`ws://localhost:8080?userId=${userId}`);
     ws.binaryType = 'arraybuffer'; // Receive binary data as ArrayBuffer for protobuf
     wsRef.current = ws;
 
@@ -489,6 +494,22 @@ export default function SessionPage() {
       }
     } catch (error) {
       console.error('Error saving lap:', error);
+    }
+  }
+
+  async function startSession() {
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}/start`, {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        const updatedSession = await response.json();
+        setSession(updatedSession);
+        // WebSocket will connect automatically via useEffect when session.started becomes true
+      }
+    } catch (error) {
+      console.error('Error starting session:', error);
     }
   }
 
@@ -798,23 +819,36 @@ export default function SessionPage() {
 
             {session.status === 'active' && (
               <div className="flex items-center gap-2">
-                <Button
-                  variant={isPaused ? 'default' : 'outline'}
-                  onClick={togglePause}
-                  className="gap-2"
-                >
-                  {isPaused ? (
-                    <>
-                      <Play className="h-4 w-4" />
-                      Resume
-                    </>
-                  ) : (
-                    <>
-                      <Pause className="h-4 w-4" />
-                      Pause
-                    </>
-                  )}
-                </Button>
+                {!session.started && (
+                  <Button
+                    variant="default"
+                    onClick={startSession}
+                    className="gap-2"
+                    title="Start telemetry collection for this session"
+                  >
+                    <Play className="h-4 w-4" />
+                    Start Session
+                  </Button>
+                )}
+                {session.started && (
+                  <Button
+                    variant={isPaused ? 'default' : 'outline'}
+                    onClick={togglePause}
+                    className="gap-2"
+                  >
+                    {isPaused ? (
+                      <>
+                        <Play className="h-4 w-4" />
+                        Resume
+                      </>
+                    ) : (
+                      <>
+                        <Pause className="h-4 w-4" />
+                        Pause
+                      </>
+                    )}
+                  </Button>
+                )}
                 <Button variant="destructive" onClick={endSession} className="gap-2">
                   <Archive className="h-4 w-4" />
                   End Session
@@ -831,14 +865,34 @@ export default function SessionPage() {
           {/* Live Telemetry - Only show for active sessions */}
           {session.status === 'active' && (
             <div className="lg:col-span-2 space-y-6">
-              <TelemetryPlotPanel
-                data={currentLapFrames}
-                initialPlotConfigs={plotConfigs}
-                onPlotConfigsChange={handlePlotConfigsChange}
-                showFullscreenToggle={true}
-                currentLapNumber={currentLapNumber}
-                showLapHeader={true}
-              />
+              {!session.started && (
+                <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                      <div>
+                        <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                          Session Not Started
+                        </h3>
+                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                          This session has been pre-configured but telemetry collection hasn't started yet. 
+                          Click the <strong>"Start Session"</strong> button above to begin collecting telemetry data.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {session.started && (
+                <TelemetryPlotPanel
+                  data={currentLapFrames}
+                  initialPlotConfigs={plotConfigs}
+                  onPlotConfigsChange={handlePlotConfigsChange}
+                  showFullscreenToggle={true}
+                  currentLapNumber={currentLapNumber}
+                  showLapHeader={true}
+                />
+              )}
             </div>
           )}
 

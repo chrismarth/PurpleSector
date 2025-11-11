@@ -3,10 +3,28 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Wifi, Play } from 'lucide-react';
+import { ArrowLeft, Wifi, Play, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+
+interface Vehicle {
+  id: string;
+  name: string;
+}
+
+interface VehicleConfiguration {
+  id: string;
+  name: string;
+}
+
+interface VehicleSetup {
+  id: string;
+  name: string;
+  vehicleConfiguration: { name: string } | null;
+}
 
 export default function NewSessionPage() {
   const router = useRouter();
@@ -16,13 +34,65 @@ export default function NewSessionPage() {
   const [name, setName] = useState('');
   const [source, setSource] = useState<'live' | 'demo' | null>(null);
   const [creating, setCreating] = useState(false);
+  
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [configurations, setConfigurations] = useState<VehicleConfiguration[]>([]);
+  const [setups, setSetups] = useState<VehicleSetup[]>([]);
+  
+  const [selectedVehicleId, setSelectedVehicleId] = useState('');
+  const [selectedConfigurationId, setSelectedConfigurationId] = useState('');
+  const [selectedSetupId, setSelectedSetupId] = useState('');
 
   useEffect(() => {
     // Redirect to home if no eventId provided
     if (!eventId) {
       router.push('/');
+    } else {
+      fetchVehicles();
     }
   }, [eventId, router]);
+
+  useEffect(() => {
+    if (selectedVehicleId) {
+      fetchConfigurations(selectedVehicleId);
+      fetchSetups(selectedVehicleId);
+    } else {
+      setConfigurations([]);
+      setSetups([]);
+      setSelectedConfigurationId('');
+      setSelectedSetupId('');
+    }
+  }, [selectedVehicleId]);
+
+  async function fetchVehicles() {
+    try {
+      const response = await fetch('/api/vehicles');
+      const data = await response.json();
+      setVehicles(data);
+    } catch (error) {
+      console.error('Error fetching vehicles:', error);
+    }
+  }
+
+  async function fetchConfigurations(vehicleId: string) {
+    try {
+      const response = await fetch(`/api/vehicles/${vehicleId}/configurations`);
+      const data = await response.json();
+      setConfigurations(data);
+    } catch (error) {
+      console.error('Error fetching configurations:', error);
+    }
+  }
+
+  async function fetchSetups(vehicleId: string) {
+    try {
+      const response = await fetch(`/api/vehicles/${vehicleId}/setups`);
+      const data = await response.json();
+      setSetups(data);
+    } catch (error) {
+      console.error('Error fetching setups:', error);
+    }
+  }
 
   async function createSession() {
     if (!name || !source || !eventId) return;
@@ -33,7 +103,14 @@ export default function NewSessionPage() {
       const response = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId, name, source }),
+        body: JSON.stringify({ 
+          eventId, 
+          name, 
+          source,
+          vehicleId: selectedVehicleId || null,
+          vehicleConfigurationId: selectedConfigurationId || null,
+          vehicleSetupId: selectedSetupId || null,
+        }),
       });
 
       const session = await response.json();
@@ -145,9 +222,92 @@ export default function NewSessionPage() {
             </CardContent>
           </Card>
 
+          {/* Vehicle Selection */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Car className="h-5 w-5" />
+                Vehicle Setup (Optional)
+              </CardTitle>
+              <CardDescription>
+                Select a vehicle, configuration, and setup for this session
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="vehicle">Vehicle</Label>
+                <Select 
+                  value={selectedVehicleId || 'none'} 
+                  onValueChange={(value) => setSelectedVehicleId(value === 'none' ? '' : value)}
+                >
+                  <SelectTrigger id="vehicle">
+                    <SelectValue placeholder="Select a vehicle (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {vehicles.map((vehicle) => (
+                      <SelectItem key={vehicle.id} value={vehicle.id}>
+                        {vehicle.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedVehicleId && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="configuration">Configuration</Label>
+                    <Select 
+                      value={selectedConfigurationId || 'none'} 
+                      onValueChange={(value) => setSelectedConfigurationId(value === 'none' ? '' : value)}
+                    >
+                      <SelectTrigger id="configuration">
+                        <SelectValue placeholder="Select a configuration (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {configurations.map((config) => (
+                          <SelectItem key={config.id} value={config.id}>
+                            {config.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="setup">Setup</Label>
+                    <Select 
+                      value={selectedSetupId || 'none'} 
+                      onValueChange={(value) => setSelectedSetupId(value === 'none' ? '' : value)}
+                    >
+                      <SelectTrigger id="setup">
+                        <SelectValue placeholder="Select a setup (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {setups.map((setup) => (
+                          <SelectItem key={setup.id} value={setup.id}>
+                            {setup.name}
+                            {setup.vehicleConfiguration && (
+                              <span className="text-muted-foreground ml-2">
+                                ({setup.vehicleConfiguration.name})
+                              </span>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Create Button */}
           <div className="flex justify-end gap-4">
-            <Link href="/">
+            <Link href={`/event/${eventId}`}>
               <Button variant="outline" size="lg">
                 Cancel
               </Button>

@@ -29,7 +29,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { eventId, name, source } = body;
+    const { eventId, name, source, vehicleId, vehicleConfigurationId, vehicleSetupId, started } = body;
 
     if (!eventId || !name || !source) {
       return NextResponse.json(
@@ -44,6 +44,10 @@ export async function POST(request: NextRequest) {
         name,
         source,
         status: 'active',
+        started: started !== undefined ? started : true, // Default to true for backward compatibility
+        vehicleId: vehicleId || null,
+        vehicleConfigurationId: vehicleConfigurationId || null,
+        vehicleSetupId: vehicleSetupId || null,
       },
     });
 

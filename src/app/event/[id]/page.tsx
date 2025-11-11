@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Calendar, MapPin, Play, Archive, Trash2, Edit } from 'lucide-react';
+import { ArrowLeft, Plus, Calendar, MapPin, Play, Archive, Trash2, Edit, ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -139,12 +139,20 @@ export default function EventPage() {
                 </CardDescription>
               </div>
               {event.sessions.length > 0 && (
-                <Link href={`/session/new?eventId=${eventId}`}>
-                  <Button className="gap-2">
-                    <Plus className="h-5 w-5" />
-                    New Session
-                  </Button>
-                </Link>
+                <div className="flex gap-2">
+                  <Link href={`/event/${eventId}/run-plan`}>
+                    <Button variant="outline" className="gap-2">
+                      <ListChecks className="h-5 w-5" />
+                      Create Run Plan
+                    </Button>
+                  </Link>
+                  <Link href={`/session/new?eventId=${eventId}`}>
+                    <Button className="gap-2">
+                      <Plus className="h-5 w-5" />
+                      New Session
+                    </Button>
+                  </Link>
+                </div>
               )}
             </div>
           </CardHeader>
@@ -152,12 +160,20 @@ export default function EventPage() {
             {event.sessions.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-4">No sessions yet</p>
-                <Link href={`/session/new?eventId=${eventId}`}>
-                  <Button className="gap-2">
-                    <Plus className="h-5 w-5" />
-                    Create First Session
-                  </Button>
-                </Link>
+                <div className="flex gap-3 justify-center">
+                  <Link href={`/event/${eventId}/run-plan`}>
+                    <Button variant="outline" className="gap-2">
+                      <ListChecks className="h-5 w-5" />
+                      Create Run Plan
+                    </Button>
+                  </Link>
+                  <Link href={`/session/new?eventId=${eventId}`}>
+                    <Button className="gap-2">
+                      <Plus className="h-5 w-5" />
+                      Create First Session
+                    </Button>
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

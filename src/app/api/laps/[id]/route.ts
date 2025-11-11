@@ -12,6 +12,9 @@ export async function GET(
         session: {
           include: {
             event: true,
+            vehicle: true,
+            vehicleConfiguration: true,
+            vehicleSetup: true,
           },
         },
         chatMessages: {

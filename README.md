@@ -29,13 +29,36 @@ An AI-powered telemetry analysis tool for Assetto Corsa and Assetto Corsa Compet
 [OpenAI GPT-4 Analysis]
 ```
 
+## Quick Start (Development)
+
+**Start the complete development environment with one command:**
+
+```bash
+npm run dev:start
+```
+
+This starts:
+- ✅ Kafka cluster (Docker)
+- ✅ Kafka-WebSocket bridge
+- ✅ Database consumer
+- ✅ Demo collector (no game required!)
+- ✅ Next.js frontend
+
+**Open:** http://localhost:3000
+
+See [Development Environment Guide](docs/DEV_ENVIRONMENT.md) for details.
+
+---
+
 ## Setup Instructions
 
 ### Prerequisites
 
 - Node.js 18+ installed
-- Assetto Corsa or Assetto Corsa Competizione installed (for live telemetry)
-- OpenAI API key (for AI analysis)
+- Docker (for Kafka)
+- PostgreSQL/TimescaleDB (for database)
+- Assetto Corsa or Assetto Corsa Competizione (for live telemetry - optional)
+- OpenAI API key (for AI analysis - optional)
 
 ### 1. Install Dependencies
 
@@ -287,8 +310,15 @@ This is a personal project, but suggestions and improvements are welcome!
 
 Purple Sector is dual-licensed:
 
-### Open Source License (MIT)
-For **non-commercial use** (personal projects, education, open-source development), this software is available under the MIT License. Feel free to use and modify for your own racing analysis needs.
+### Open Source License (AGPL-3.0)
+For **non-commercial use** (personal projects, education, open-source development), this software is available under the GNU Affero General Public License v3.0 (AGPL-3.0).
+
+**Key Requirements:**
+- You can freely use, modify, and distribute this software
+- If you modify and run it as a network service (web app, API, SaaS), you **must** share your modified source code
+- Derivative works must also be licensed under AGPL-3.0
+
+This ensures that improvements to the software benefit the entire community.
 
 ### Commercial License
 For **commercial use** (businesses, professional racing teams, commercial products), a separate commercial license is required. This includes:
@@ -296,10 +326,11 @@ For **commercial use** (businesses, professional racing teams, commercial produc
 - Integration into commercial products or services
 - Use in professional racing teams or motorsport organizations
 - Any use that generates revenue or commercial advantage
+- Use as a network service without sharing source code modifications
 
 **To obtain a commercial license**, please contact Christopher Marth.
 
-See the [LICENSE](LICENSE) file for full details.
+See the [LICENSE](LICENSE) file for complete details.
 
 ---
 

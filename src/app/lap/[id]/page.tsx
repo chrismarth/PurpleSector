@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { TelemetryChart } from '@/components/TelemetryChart';
 import { TelemetryPlotPanel } from '@/components/TelemetryPlotPanel';
 import { ChatInterface } from '@/components/ChatInterface';
+import { VehicleInfoPanel } from '@/components/VehicleInfoPanel';
 import { formatLapTime } from '@/lib/utils';
 import { TelemetryFrame, LapSuggestion } from '@/types/telemetry';
 import { PlotConfig, DEFAULT_PLOT_CONFIGS, PlotLayout, generateDefaultLayout } from '@/types/plotConfig';
@@ -32,6 +33,23 @@ interface Lap {
     event: {
       name: string;
     };
+    vehicle?: {
+      id: string;
+      name: string;
+      description?: string | null;
+    } | null;
+    vehicleConfiguration?: {
+      id: string;
+      name: string;
+      description?: string | null;
+      parts: string;
+    } | null;
+    vehicleSetup?: {
+      id: string;
+      name: string;
+      description?: string | null;
+      parameters: string;
+    } | null;
   };
   chatMessages: Array<{
     id: string;
@@ -762,6 +780,15 @@ export default function LapPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Vehicle Information */}
+            {lap?.session && (
+              <VehicleInfoPanel
+                vehicle={lap.session.vehicle}
+                configuration={lap.session.vehicleConfiguration}
+                setup={lap.session.vehicleSetup}
+              />
+            )}
 
             {/* Driver Comments - Grows to fill space */}
             <Card className="flex-1 flex flex-col">
