@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Purple Sector Desktop",
+  "version": "0.1.0",
+  "identifier": "com.purplesector.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev:web",
+    "beforeBuildCommand": "npm run build:web",
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../../web/.next"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Purple Sector",
+        "width": 1600,
+        "height": 900,
+        "visible": true,
+        "url": "http://127.0.0.1:3000"
+      }
+    ]
+  },
+  "bundle": {
+    "icon": [
+      "icons/icon.png"
+    ]
+  }
+}

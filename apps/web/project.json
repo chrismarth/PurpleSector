@@ -1,0 +1,18 @@
+{
+  "name": "web",
+  "projectType": "application",
+  "root": "apps/web",
+  "sourceRoot": "apps/web/src",
+  "tags": ["type:app", "scope:web"],
+  "targets": {
+    "serve": {
+      "command": "next dev apps/web"
+    },
+    "build": {
+      "command": "next build apps/web"
+    },
+    "start": {
+      "command": "next start apps/web"
+    }
+  }
+}

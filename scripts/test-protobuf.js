@@ -4,7 +4,7 @@
  * Usage: node scripts/test-protobuf.js
  */
 
-const proto = require('../src/proto/telemetry-proto');
+const proto = require('@purplesector/proto');
 
 async function testProtobuf() {
   console.log('Testing Protocol Buffer implementation...\n');

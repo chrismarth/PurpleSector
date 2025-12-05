@@ -1,0 +1,11 @@
+{
+  "name": "acc-hybrid-websocket",
+  "projectType": "application",
+  "root": "collectors/acc-hybrid-websocket",
+  "tags": ["type:service", "scope:collector"],
+  "targets": {
+    "serve": {
+      "command": "node collectors/acc-hybrid-websocket/acc-collector-hybrid-websocket.js"
+    }
+  }
+}

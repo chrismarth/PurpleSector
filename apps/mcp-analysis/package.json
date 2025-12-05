@@ -1,0 +1,14 @@
+{
+  "name": "mcp-analysis",
+  "projectType": "application",
+  "sourceRoot": "apps/mcp-analysis",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx apps/mcp-analysis/main.ts"
+      }
+    }
+  },
+  "tags": ["type:service", "scope:backend"]
+}

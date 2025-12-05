@@ -10,7 +10,7 @@
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
-const proto = require('../src/proto/telemetry-proto');
+const proto = require('@purplesector/proto');
 
 // Configuration
 const WS_PORT = process.env.WS_PORT || 8080;

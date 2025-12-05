@@ -69,7 +69,7 @@ module.exports = {
     // Demo Collector
     {
       name: 'demo-collector-dev',
-      script: 'services/collectors/demo-collector-kafka.js',
+      script: 'collectors/demo-kafka/demo-collector-kafka.js',
       instances: 1,
       exec_mode: 'fork',
       watch: false,

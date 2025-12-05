@@ -1,0 +1,13 @@
+{
+  "name": "telemetry",
+  "projectType": "library",
+  "root": "packages/telemetry",
+  "sourceRoot": "packages/telemetry/src",
+  "tags": ["type:lib", "scope:shared"],
+  "targets": {
+    "build": {
+      "command": "npx tsc -p packages/telemetry/tsconfig.lib.json",
+      "outputs": ["{projectRoot}/dist"]
+    }
+  }
+}

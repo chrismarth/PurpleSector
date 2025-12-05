@@ -1,0 +1,11 @@
+{
+  "name": "acc-kafka",
+  "projectType": "application",
+  "root": "collectors/acc-kafka",
+  "tags": ["type:service", "scope:collector"],
+  "targets": {
+    "serve": {
+      "command": "node collectors/acc-kafka/acc-collector-kafka.js"
+    }
+  }
+}

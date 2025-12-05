@@ -7,7 +7,7 @@
  */
 
 const WebSocket = require('ws');
-const proto = require('../src/proto/telemetry-proto');
+const proto = require('@purplesector/proto');
 
 async function testWebSocketProtobuf() {
   console.log('Testing WebSocket server with Protocol Buffers...\n');

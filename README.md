@@ -187,34 +187,29 @@ The app will be available at `http://localhost:3000`
    - "Would trail-braking help in Turn 3?"
    - "Am I losing time on corner entry or exit?"
 
-## Project Structure
+## Project Structure (Nx Monorepo)
 
 ```
 PurpleSector/
-├── src/
-│   ├── app/                    # Next.js pages & API routes
-│   │   ├── page.tsx           # Session list
-│   │   ├── session/[id]/      # Live session view
-│   │   ├── lap/[id]/          # Lap analysis view
-│   │   └── api/               # Backend endpoints
-│   ├── components/            # React components
-│   │   ├── ui/               # shadcn/ui components
-│   │   ├── TelemetryChart.tsx
-│   │   ├── SessionCard.tsx
-│   │   └── ChatInterface.tsx
-│   ├── lib/                   # Utilities
-│   │   ├── db.ts             # Prisma client
-│   │   ├── telemetry/        # Telemetry parsing
-│   │   └── ai/               # AI analysis
-│   └── types/                 # TypeScript definitions
-├── services/
-│   ├── ac-telemetry-collector.js  # AC UDP listener
-│   ├── acc-telemetry-collector.js # ACC UDP listener
-│   └── websocket-server.js        # WebSocket relay
-├── prisma/
-│   └── schema.prisma          # Database schema
-└── public/
-    └── demo-telemetry.json    # Demo data
+├── apps/
+│   ├── web/                   # Next.js 14 app (frontend + API routes)
+│   └── desktop/               # Tauri desktop app wrapping web
+│       └── src-tauri/         # Tauri config & Rust side
+├── collectors/                # Runtime collector apps (AC/ACC/demo, Kafka & WebSocket)
+├── services/                  # Runtime infra services (Kafka bridge, DB consumer, legacy WS)
+├── packages/                  # Shared packages (published via npm/GitHub Packages)
+│   ├── core/                  # Core domain types (TelemetryFrame, etc.)
+│   ├── telemetry/             # Telemetry parsing & helpers
+│   ├── config/                # @purplesector/config
+│   ├── logger/                # @purplesector/logger
+│   ├── kafka/                 # @purplesector/kafka (producer/admin/consumer)
+│   ├── proto/                 # @purplesector/proto (protobuf helpers + telemetry.proto)
+│   ├── db-base/               # @purplesector/db-base (DB interfaces)
+│   └── db-prisma/             # @purplesector/db-prisma (Prisma implementation + schema)
+├── prisma/                    # (legacy) old schema location – kept only for history
+├── proto/                     # (legacy) old telemetry.proto location – now under packages/proto
+├── scripts/                   # Operational scripts (dev start/stop, Kafka setup, etc.)
+└── docs/                      # Architecture and operations documentation
 ```
 
 ## Telemetry Data Format

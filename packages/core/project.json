@@ -1,0 +1,13 @@
+{
+  "name": "core",
+  "projectType": "library",
+  "root": "packages/core",
+  "sourceRoot": "packages/core/src",
+  "tags": ["type:lib", "scope:shared"],
+  "targets": {
+    "build": {
+      "command": "npx tsc -p packages/core/tsconfig.lib.json",
+      "outputs": ["{projectRoot}/dist"]
+    }
+  }
+}

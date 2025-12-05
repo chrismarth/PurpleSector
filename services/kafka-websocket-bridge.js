@@ -15,11 +15,10 @@
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
-const KafkaConsumer = require('./lib/kafka-consumer');
-const KafkaAdmin = require('./lib/kafka-admin');
-const config = require('./config');
-const logger = require('./lib/logger').child({ service: 'kafka-ws-bridge' });
-const proto = require('../src/proto/telemetry-proto');
+const { KafkaConsumer, KafkaAdmin } = require('@purplesector/kafka');
+const config = require('@purplesector/config');
+const logger = require('@purplesector/logger').child({ service: 'kafka-ws-bridge' });
+const proto = require('@purplesector/proto');
 
 class KafkaWebSocketBridge {
   constructor() {

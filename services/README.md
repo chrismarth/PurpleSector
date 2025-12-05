@@ -6,16 +6,30 @@ This directory contains the backend services for Purple Sector telemetry collect
 
 ### Kafka-Based (Recommended for Production)
 
+In the monorepo layout, shared infrastructure now lives under `packages/`,
+and this `services/` directory contains only runtime services.
+
 ```
-collectors/          → Kafka producers (game telemetry)
-lib/                → Shared libraries
-  ├── kafka-producer.js
-  ├── kafka-consumer.js
-  ├── kafka-admin.js
-  └── logger.js
-config/             → Centralized configuration
-kafka-websocket-bridge.js → Kafka consumer + WebSocket server
-setup-kafka.js      → Kafka topic setup utility
+collectors/                    → Collector apps (AC/ACC Kafka & WebSocket, demo, embedded)
+  ac-kafka/
+  acc-kafka/
+  demo-kafka/
+  ac-websocket/
+  acc-websocket/
+  acc-hybrid-websocket/
+  embedded/
+
+packages/
+  @purplesector/config         → Centralized configuration (env-driven)
+  @purplesector/logger         → Winston-based structured logger
+  @purplesector/kafka          → KafkaProducer, KafkaAdmin, KafkaConsumer helpers
+
+services/
+  kafka-websocket-bridge.js    → Kafka consumer + WebSocket server
+  kafka-database-consumer.js   → Kafka → DB consumer
+
+scripts/
+  setup-kafka.js               → Kafka topic setup utility
 ```
 
 ### Legacy (WebSocket-Only)
@@ -144,7 +158,7 @@ npm run kafka:db-consumer
 
 ### 5. Kafka Setup Utility
 
-**File:** `setup-kafka.js`
+**File:** `scripts/setup-kafka.js`
 
 Ensures Kafka topics exist with proper configuration.
 
@@ -239,7 +253,7 @@ Winston-based structured logger:
 
 **Example:**
 ```javascript
-const logger = require('./lib/logger');
+const logger = require('@purplesector/logger');
 
 logger.info('Service started', { port: 8080 });
 logger.error('Connection failed', { error: err.message });
@@ -267,7 +281,7 @@ All service configuration in one place with environment variable support.
 
 **Example:**
 ```javascript
-const config = require('./config');
+const config = require('@purplesector/config');
 
 console.log(config.kafka.brokers); // ['localhost:9092']
 console.log(config.websocket.port); // 8080

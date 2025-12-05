@@ -1,0 +1,11 @@
+{
+  "name": "acc-websocket",
+  "projectType": "application",
+  "root": "collectors/acc-websocket",
+  "tags": ["type:service", "scope:collector"],
+  "targets": {
+    "serve": {
+      "command": "node collectors/acc-websocket/acc-collector-websocket.js"
+    }
+  }
+}

@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package purplesector;
+
+// Telemetry frame containing all racing data for a single point in time
+message TelemetryFrame {
+  int64 timestamp = 1;
+  float speed = 2;
+  float throttle = 3;
+  float brake = 4;
+  float steering = 5;
+  int32 gear = 6;
+  int32 rpm = 7;
+  float normalized_position = 8;
+  int32 lap_number = 9;
+  int32 lap_time = 10;
+  
+  // Optional ACC-specific fields
+  optional float session_time = 11;
+  optional int32 session_type = 12;
+  optional int32 track_position = 13;
+  optional int32 delta = 14;
+}
+
+// WebSocket message wrapper
+message WebSocketMessage {
+  enum MessageType {
+    UNKNOWN = 0;
+    CONNECTED = 1;
+    TELEMETRY = 2;
+    START_DEMO = 3;
+    STOP_DEMO = 4;
+    DEMO_COMPLETE = 5;
+    PING = 6;
+    PONG = 7;
+  }
+  
+  MessageType type = 1;
+  
+  // Optional message payload
+  optional TelemetryFrame telemetry = 2;
+  optional StatusMessage status = 3;
+}
+
+// Status/control messages
+message StatusMessage {
+  string message = 1;
+  int64 timestamp = 2;
+}
+
+// Demo data structure with multiple laps
+message DemoData {
+  repeated LapData laps = 1;
+}
+
+message LapData {
+  int32 lap_number = 1;
+  repeated TelemetryFrame frames = 2;
+}
+

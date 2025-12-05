@@ -6,7 +6,7 @@ This document describes the ACC telemetry collector implementations and protocol
 
 Purple Sector provides **two ACC telemetry collectors**:
 
-1. **Broadcasting-only** (`services/acc-telemetry-collector.js`) - Cross-platform, limited telemetry
+1. **Broadcasting-only** (`collectors/acc-websocket/acc-collector-websocket.js`) - Cross-platform, limited telemetry
 2. **Hybrid** (`services/acc-telemetry-collector-hybrid.js`) - Windows-only, complete telemetry ✅ **Recommended**
 
 ### Comparison

@@ -64,11 +64,11 @@ npm run dev
 ## 📁 Key Files
 
 ### Schema
-- `proto/telemetry.proto` - Message definitions
+- `packages/proto/telemetry.proto` - Message definitions
 
 ### Helpers
-- `src/proto/telemetry-proto.js` - Node.js
-- `src/lib/telemetry-proto-browser.ts` - Browser
+- `packages/proto/index.js` - Node.js helper (@purplesector/proto)
+- `apps/web/src/lib/telemetry-proto-browser.ts` - Browser
 
 ### Modified Services
 - `services/websocket-server.js`
@@ -206,7 +206,7 @@ ws.send(createStartDemoMessage());
 
 - `docs/PROTOBUF_MIGRATION.md` - Complete guide
 - `PROTOBUF_MIGRATION_SUMMARY.md` - Summary
-- `proto/telemetry.proto` - Schema
+- `packages/proto/telemetry.proto` - Schema
 
 ## ✅ Production Checklist
 

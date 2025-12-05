@@ -36,7 +36,7 @@ module.exports = {
     // AC Telemetry Collector (Kafka)
     {
       name: 'ac-collector',
-      script: 'services/collectors/ac-collector-kafka.js',
+      script: 'collectors/ac-kafka/ac-collector-kafka.js',
       instances: 1,
       exec_mode: 'fork',
       watch: false,
@@ -59,7 +59,7 @@ module.exports = {
     // ACC Telemetry Collector (Kafka)
     {
       name: 'acc-collector',
-      script: 'services/collectors/acc-collector-kafka.js',
+      script: 'collectors/acc-kafka/acc-collector-kafka.js',
       instances: 1,
       exec_mode: 'fork',
       watch: false,

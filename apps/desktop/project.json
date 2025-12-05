@@ -1,0 +1,14 @@
+{
+  "name": "desktop",
+  "projectType": "application",
+  "root": "apps/desktop",
+  "tags": ["type:app", "scope:desktop"],
+  "targets": {
+    "serve": {
+      "command": "npx tauri dev"
+    },
+    "build": {
+      "command": "npx tauri build"
+    }
+  }
+}

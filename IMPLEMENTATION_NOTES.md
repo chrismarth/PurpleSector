@@ -385,7 +385,7 @@ Must add:
 ### Adding a New Feature
 
 1. **Database Changes**
-   - Update `prisma/schema.prisma`
+   - Update `packages/db-prisma/prisma/schema.prisma`
    - Run `npm run db:push`
 
 2. **Backend API**

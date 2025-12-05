@@ -1,0 +1,9 @@
+# Example GitHub Packages configuration for @purplesector/* packages.
+# Copy this file to .npmrc and replace GITHUB_TOKEN with a real token
+# when you're ready to publish from CI or locally.
+#
+# This does NOT affect installs or publishes until you actually create
+# a .npmrc file with valid credentials.
+
+@purplesector:registry=https://npm.pkg.github.com/
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}

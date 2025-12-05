@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "tasksRunnerOptions": {
+    "default": {
+      "runner": "nx/tasks-runners/default",
+      "options": {
+        "cacheableOperations": ["build", "lint", "test"]
+      }
+    }
+  },
+  "implicitDependencies": {
+    "web": ["core", "telemetry"],
+    "desktop": ["web", "embedded-collector"],
+    "ac-websocket": ["web"],
+    "acc-websocket": ["web"],
+    "acc-hybrid-websocket": ["web"],
+    "ac-kafka": ["web"],
+    "acc-kafka": ["web"],
+    "demo-kafka": ["web"]
+  },
+  "targetDefaults": {
+    "build": {
+      "cache": true
+    },
+    "lint": {
+      "cache": true
+    },
+    "test": {
+      "cache": true
+    }
+  }
+}

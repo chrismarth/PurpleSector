@@ -173,7 +173,7 @@ For production, you should:
 
 2. **Add Connection Pooling**
    ```typescript
-   // prisma/schema.prisma
+   // packages/db-prisma/prisma/schema.prisma
    datasource db {
      provider = "postgresql"
      url      = env("DATABASE_URL")

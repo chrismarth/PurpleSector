@@ -1,0 +1,11 @@
+{
+  "name": "demo-kafka",
+  "projectType": "application",
+  "root": "collectors/demo-kafka",
+  "tags": ["type:service", "scope:collector"],
+  "targets": {
+    "serve": {
+      "command": "node collectors/demo-kafka/demo-collector-kafka.js"
+    }
+  }
+}

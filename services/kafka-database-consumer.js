@@ -16,9 +16,9 @@
  */
 
 const { PrismaClient } = require('@prisma/client');
-const KafkaConsumer = require('./lib/kafka-consumer');
-const config = require('./config');
-const logger = require('./lib/logger').child({ service: 'kafka-db-consumer' });
+const config = require('@purplesector/config');
+const { KafkaConsumer } = require('@purplesector/kafka');
+const logger = require('@purplesector/logger').child({ service: 'kafka-db-consumer' });
 
 class KafkaDatabaseConsumer {
   constructor() {
@@ -157,8 +157,7 @@ class KafkaDatabaseConsumer {
       
       let frame;
       if (encoding === 'protobuf') {
-        // TODO: Decode protobuf
-        const proto = require('../src/proto/telemetry-proto');
+        const proto = require('@purplesector/proto');
         frame = proto.decodeTelemetryFrame(message.value);
       } else {
         frame = JSON.parse(message.value.toString());

@@ -1,0 +1,14 @@
+{
+  "name": "@purplesector/telemetry",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "types": "src/index.ts",
+  "private": false,
+  "license": "SEE LICENSE IN LICENSE",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.lib.json"
+  }
+}

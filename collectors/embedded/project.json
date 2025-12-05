@@ -1,0 +1,11 @@
+{
+  "name": "embedded-collector",
+  "projectType": "application",
+  "root": "collectors/embedded",
+  "tags": ["type:service", "scope:collector", "collector:embedded"],
+  "targets": {
+    "serve": {
+      "command": "node collectors/embedded/embedded-collector.js"
+    }
+  }
+}

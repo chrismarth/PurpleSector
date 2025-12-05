@@ -1,0 +1,14 @@
+{
+  "name": "mcp-telemetry",
+  "projectType": "application",
+  "sourceRoot": "apps/mcp-telemetry",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx apps/mcp-telemetry/main.ts"
+      }
+    }
+  },
+  "tags": ["type:service", "scope:backend"]
+}
