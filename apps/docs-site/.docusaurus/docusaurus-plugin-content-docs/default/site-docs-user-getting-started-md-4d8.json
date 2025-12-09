@@ -1,0 +1,23 @@
+{
+  "id": "user/getting-started",
+  "title": "Getting Started",
+  "description": "This guide walks you through installing Purple Sector and running it locally in development/demo mode.",
+  "source": "@site/docs/user/getting-started.md",
+  "sourceDirName": "user",
+  "slug": "/user/getting-started",
+  "permalink": "/PurpleSector/user/getting-started",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Purple Sector Documentation",
+    "permalink": "/PurpleSector/intro"
+  },
+  "next": {
+    "title": "Using Sessions",
+    "permalink": "/PurpleSector/user/using-sessions"
+  }
+}

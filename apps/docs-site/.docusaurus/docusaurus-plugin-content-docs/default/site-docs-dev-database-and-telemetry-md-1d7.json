@@ -1,0 +1,23 @@
+{
+  "id": "dev/database-and-telemetry",
+  "title": "Database and Telemetry",
+  "description": "This page describes the core telemetry data model and how it is represented in the system.",
+  "source": "@site/docs/dev/database-and-telemetry.md",
+  "sourceDirName": "dev",
+  "slug": "/dev/database-and-telemetry",
+  "permalink": "/PurpleSector/dev/database-and-telemetry",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Development Environment",
+    "permalink": "/PurpleSector/dev/dev-environment"
+  },
+  "next": {
+    "title": "ACC Telemetry Collectors",
+    "permalink": "/PurpleSector/dev/acc-telemetry"
+  }
+}

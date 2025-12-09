@@ -1,0 +1,23 @@
+{
+  "id": "dev/acc-hybrid-collector",
+  "title": "ACC Hybrid Telemetry Collector",
+  "description": "This page explains the hybrid ACC telemetry collector that combines the ACC Broadcasting Protocol with Shared Memory to provide complete telemetry.",
+  "source": "@site/docs/dev/acc-hybrid-collector.md",
+  "sourceDirName": "dev",
+  "slug": "/dev/acc-hybrid-collector",
+  "permalink": "/PurpleSector/dev/acc-hybrid-collector",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "ACC Telemetry Collectors",
+    "permalink": "/PurpleSector/dev/acc-telemetry"
+  },
+  "next": {
+    "title": "LangGraph Analyzer",
+    "permalink": "/PurpleSector/dev/langgraph-analyzer"
+  }
+}

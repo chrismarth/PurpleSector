@@ -1,0 +1,90 @@
+{
+  "/PurpleSector/-a53": {
+    "__comp": "1df93b7f",
+    "__context": {
+      "plugin": "a7456010"
+    },
+    "config": "5e9f5e1a"
+  },
+  "/PurpleSector/-947": {
+    "__comp": "5e95c892",
+    "__context": {
+      "plugin": "aba21aa0"
+    }
+  },
+  "/PurpleSector/-e58": {
+    "__comp": "a7bd4aaa",
+    "__props": "d1c9f980"
+  },
+  "/PurpleSector/-f2a": {
+    "__comp": "a94703ab"
+  },
+  "/PurpleSector/dev/acc-hybrid-collector-37f": {
+    "__comp": "17896441",
+    "content": "58dcf420"
+  },
+  "/PurpleSector/dev/acc-telemetry-db3": {
+    "__comp": "17896441",
+    "content": "70f85e8d"
+  },
+  "/PurpleSector/dev/architecture-f40": {
+    "__comp": "17896441",
+    "content": "e34f3602"
+  },
+  "/PurpleSector/dev/database-and-telemetry-a03": {
+    "__comp": "17896441",
+    "content": "1d7a6b74"
+  },
+  "/PurpleSector/dev/dev-environment-bd5": {
+    "__comp": "17896441",
+    "content": "d34de854"
+  },
+  "/PurpleSector/dev/langgraph-analyzer-8a6": {
+    "__comp": "17896441",
+    "content": "a0c6d515"
+  },
+  "/PurpleSector/dev/monorepo-structure-fbf": {
+    "__comp": "17896441",
+    "content": "933b0044"
+  },
+  "/PurpleSector/dev/plot-layouts-57d": {
+    "__comp": "17896441",
+    "content": "b8cd20ed"
+  },
+  "/PurpleSector/intro-d68": {
+    "__comp": "17896441",
+    "content": "0e384e19"
+  },
+  "/PurpleSector/notes/overview-812": {
+    "__comp": "17896441",
+    "content": "93be321d"
+  },
+  "/PurpleSector/ops/deployment-dcb": {
+    "__comp": "17896441",
+    "content": "efad1bc7"
+  },
+  "/PurpleSector/ops/monitoring-9bd": {
+    "__comp": "17896441",
+    "content": "eda66793"
+  },
+  "/PurpleSector/ops/running-stack-17b": {
+    "__comp": "17896441",
+    "content": "b61b4f12"
+  },
+  "/PurpleSector/user/getting-started-a7a": {
+    "__comp": "17896441",
+    "content": "4d88dca8"
+  },
+  "/PurpleSector/user/telemetry-collectors-616": {
+    "__comp": "17896441",
+    "content": "1b43f51c"
+  },
+  "/PurpleSector/user/troubleshooting-703": {
+    "__comp": "17896441",
+    "content": "8f340f6c"
+  },
+  "/PurpleSector/user/using-sessions-a2d": {
+    "__comp": "17896441",
+    "content": "bf8b906b"
+  }
+}

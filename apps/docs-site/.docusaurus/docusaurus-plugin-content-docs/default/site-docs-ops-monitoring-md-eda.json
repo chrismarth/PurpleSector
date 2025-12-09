@@ -1,0 +1,23 @@
+{
+  "id": "ops/monitoring",
+  "title": "Monitoring",
+  "description": "This page summarizes how to monitor the Kafka pipeline, backend services, and overall telemetry health.",
+  "source": "@site/docs/ops/monitoring.md",
+  "sourceDirName": "ops",
+  "slug": "/ops/monitoring",
+  "permalink": "/PurpleSector/ops/monitoring",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Deployment",
+    "permalink": "/PurpleSector/ops/deployment"
+  },
+  "next": {
+    "title": "Architecture",
+    "permalink": "/PurpleSector/dev/architecture"
+  }
+}

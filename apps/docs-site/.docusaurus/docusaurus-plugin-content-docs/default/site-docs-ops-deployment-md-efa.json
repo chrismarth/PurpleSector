@@ -1,0 +1,23 @@
+{
+  "id": "ops/deployment",
+  "title": "Deployment",
+  "description": "This page describes common deployment patterns for Purple Sector services: PM2, systemd, and Docker.",
+  "source": "@site/docs/ops/deployment.md",
+  "sourceDirName": "ops",
+  "slug": "/ops/deployment",
+  "permalink": "/PurpleSector/ops/deployment",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Running the Stack",
+    "permalink": "/PurpleSector/ops/running-stack"
+  },
+  "next": {
+    "title": "Monitoring",
+    "permalink": "/PurpleSector/ops/monitoring"
+  }
+}

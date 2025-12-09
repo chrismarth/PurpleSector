@@ -1,0 +1,23 @@
+{
+  "id": "dev/plot-layouts",
+  "title": "Plot Layout System",
+  "description": "This page summarizes the plot layout system used in Purple Sector for arranging telemetry charts.",
+  "source": "@site/docs/dev/plot-layouts.md",
+  "sourceDirName": "dev",
+  "slug": "/dev/plot-layouts",
+  "permalink": "/PurpleSector/dev/plot-layouts",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "LangGraph Analyzer",
+    "permalink": "/PurpleSector/dev/langgraph-analyzer"
+  },
+  "next": {
+    "title": "Design Notes",
+    "permalink": "/PurpleSector/notes/overview"
+  }
+}

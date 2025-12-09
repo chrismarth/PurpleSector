@@ -1,0 +1,23 @@
+{
+  "id": "dev/langgraph-analyzer",
+  "title": "LangGraph Analyzer",
+  "description": "This page documents the LangGraph-based analyzer implementation used for lap analysis in Purple Sector.",
+  "source": "@site/docs/dev/langgraph-analyzer.md",
+  "sourceDirName": "dev",
+  "slug": "/dev/langgraph-analyzer",
+  "permalink": "/PurpleSector/dev/langgraph-analyzer",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "ACC Hybrid Telemetry Collector",
+    "permalink": "/PurpleSector/dev/acc-hybrid-collector"
+  },
+  "next": {
+    "title": "Plot Layout System",
+    "permalink": "/PurpleSector/dev/plot-layouts"
+  }
+}

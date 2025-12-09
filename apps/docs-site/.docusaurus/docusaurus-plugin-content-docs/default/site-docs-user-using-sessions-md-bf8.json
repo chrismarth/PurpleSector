@@ -1,0 +1,23 @@
+{
+  "id": "user/using-sessions",
+  "title": "Using Sessions",
+  "description": "This guide explains how to create sessions, capture telemetry, and analyze laps with AI coaching.",
+  "source": "@site/docs/user/using-sessions.md",
+  "sourceDirName": "user",
+  "slug": "/user/using-sessions",
+  "permalink": "/PurpleSector/user/using-sessions",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Getting Started",
+    "permalink": "/PurpleSector/user/getting-started"
+  },
+  "next": {
+    "title": "Telemetry Collectors",
+    "permalink": "/PurpleSector/user/telemetry-collectors"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "notes/overview",
+  "title": "Design Notes",
+  "description": "Historical notes, migration guides, and fix descriptions for Purple Sector.",
+  "source": "@site/docs/notes/overview.md",
+  "sourceDirName": "notes",
+  "slug": "/notes/overview",
+  "permalink": "/PurpleSector/notes/overview",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Plot Layout System",
+    "permalink": "/PurpleSector/dev/plot-layouts"
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/PurpleSector/",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/PurpleSector/",
+          "mainDocId": "intro",
+          "docs": [
+            {
+              "id": "dev/acc-hybrid-collector",
+              "path": "/PurpleSector/dev/acc-hybrid-collector",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "dev/acc-telemetry",
+              "path": "/PurpleSector/dev/acc-telemetry",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "dev/architecture",
+              "path": "/PurpleSector/dev/architecture",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "dev/database-and-telemetry",
+              "path": "/PurpleSector/dev/database-and-telemetry",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "dev/dev-environment",
+              "path": "/PurpleSector/dev/dev-environment",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "dev/langgraph-analyzer",
+              "path": "/PurpleSector/dev/langgraph-analyzer",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "dev/monorepo-structure",
+              "path": "/PurpleSector/dev/monorepo-structure",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "dev/plot-layouts",
+              "path": "/PurpleSector/dev/plot-layouts",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "intro",
+              "path": "/PurpleSector/intro",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "notes/overview",
+              "path": "/PurpleSector/notes/overview",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "ops/deployment",
+              "path": "/PurpleSector/ops/deployment",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "ops/monitoring",
+              "path": "/PurpleSector/ops/monitoring",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "ops/running-stack",
+              "path": "/PurpleSector/ops/running-stack",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "user/getting-started",
+              "path": "/PurpleSector/user/getting-started",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "user/telemetry-collectors",
+              "path": "/PurpleSector/user/telemetry-collectors",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "user/troubleshooting",
+              "path": "/PurpleSector/user/troubleshooting",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "user/using-sessions",
+              "path": "/PurpleSector/user/using-sessions",
+              "sidebar": "userGuide"
+            }
+          ],
+          "draftIds": [],
+          "sidebars": {
+            "userGuide": {
+              "link": {
+                "path": "/PurpleSector/intro",
+                "label": "intro"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}

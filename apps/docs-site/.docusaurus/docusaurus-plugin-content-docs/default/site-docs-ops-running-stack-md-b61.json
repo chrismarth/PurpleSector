@@ -1,0 +1,23 @@
+{
+  "id": "ops/running-stack",
+  "title": "Running the Stack",
+  "description": "This page describes how to start the full Purple Sector stack: Kafka, services, collectors, and the web app.",
+  "source": "@site/docs/ops/running-stack.md",
+  "sourceDirName": "ops",
+  "slug": "/ops/running-stack",
+  "permalink": "/PurpleSector/ops/running-stack",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Troubleshooting",
+    "permalink": "/PurpleSector/user/troubleshooting"
+  },
+  "next": {
+    "title": "Deployment",
+    "permalink": "/PurpleSector/ops/deployment"
+  }
+}

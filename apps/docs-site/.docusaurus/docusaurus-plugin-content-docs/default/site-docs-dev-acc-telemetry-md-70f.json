@@ -1,0 +1,23 @@
+{
+  "id": "dev/acc-telemetry",
+  "title": "ACC Telemetry Collectors",
+  "description": "This page describes the Assetto Corsa Competizione (ACC) telemetry collectors and how they integrate with Purple Sector.",
+  "source": "@site/docs/dev/acc-telemetry.md",
+  "sourceDirName": "dev",
+  "slug": "/dev/acc-telemetry",
+  "permalink": "/PurpleSector/dev/acc-telemetry",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Database and Telemetry",
+    "permalink": "/PurpleSector/dev/database-and-telemetry"
+  },
+  "next": {
+    "title": "ACC Hybrid Telemetry Collector",
+    "permalink": "/PurpleSector/dev/acc-hybrid-collector"
+  }
+}

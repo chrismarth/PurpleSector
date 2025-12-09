@@ -1,0 +1,23 @@
+{
+  "id": "dev/dev-environment",
+  "title": "Development Environment",
+  "description": "The development environment runs the full Kafka-based telemetry pipeline with demo data, so you can work on Purple Sector without having Assetto Corsa or ACC running.",
+  "source": "@site/docs/dev/dev-environment.md",
+  "sourceDirName": "dev",
+  "slug": "/dev/dev-environment",
+  "permalink": "/PurpleSector/dev/dev-environment",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Monorepo Structure",
+    "permalink": "/PurpleSector/dev/monorepo-structure"
+  },
+  "next": {
+    "title": "Database and Telemetry",
+    "permalink": "/PurpleSector/dev/database-and-telemetry"
+  }
+}

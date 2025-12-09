@@ -1,0 +1,23 @@
+{
+  "id": "user/troubleshooting",
+  "title": "Troubleshooting",
+  "description": "Common issues and quick checks when running Purple Sector.",
+  "source": "@site/docs/user/troubleshooting.md",
+  "sourceDirName": "user",
+  "slug": "/user/troubleshooting",
+  "permalink": "/PurpleSector/user/troubleshooting",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Telemetry Collectors",
+    "permalink": "/PurpleSector/user/telemetry-collectors"
+  },
+  "next": {
+    "title": "Running the Stack",
+    "permalink": "/PurpleSector/ops/running-stack"
+  }
+}
