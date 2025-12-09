@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkpurple_sector=self.webpackChunkpurple_sector||[]).push([[583],{8967:(r,e,t)=>{t.r(e),t.d(e,{default:()=>c});t(6540);var u=t(6347),s=t(6025),p=t(4848);function c(){var r=(0,s.Ay)("/intro");return(0,p.jsx)(u.rd,{to:r})}}}]);
