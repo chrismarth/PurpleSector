@@ -1,64 +1,10 @@
 # Purple Sector - Racing Telemetry Analysis
 
-An AI-powered telemetry analysis tool for Assetto Corsa and Assetto Corsa Competizione that helps drivers improve their lap times through real-time data visualization and intelligent coaching suggestions.
+Purple Sector is an AI-powered telemetry analysis tool for Assetto Corsa and Assetto Corsa Competizione. It helps drivers improve their lap times through real-time data visualization and intelligent coaching suggestions.
 
-<div align="center">
-  <img width="75%" alt="PurpleSector_LapAnalysisView" src="https://github.com/user-attachments/assets/60735f3e-00f9-41e8-9cf0-57b0830e107e" />
-</div>
+> Full user and developer documentation is hosted at: **https://chrismarth.github.io/PurpleSector/**
 
-## Features
-
-- 🏎️ **Real-time Telemetry**: Live streaming of throttle, brake, and steering inputs
-- 📊 **Lap Analysis**: Automatic lap detection and archival
-- 🤖 **AI Coaching**: GPT-4 powered suggestions for improving lap times
-- 💬 **Interactive Chat**: Ask specific questions about your driving technique
-- 📁 **Session Management**: Organize and review multiple practice sessions
-- 🎮 **Demo Mode**: Try the app with pre-recorded telemetry data
-
-## Architecture
-
-```
-[Assetto Corsa / ACC UDP Telemetry]
-          ↓
-[Telemetry Collector Service]
-          ↓
-[WebSocket Server] ←→ [Next.js Backend]
-          ↓                    ↓
-[React Frontend] ←→ [SQLite Database]
-          ↓
-[OpenAI GPT-4 Analysis]
-```
-
-## Quick Start (Development)
-
-**Start the complete development environment with one command:**
-
-```bash
-npm run dev:start
-```
-
-This starts:
-- ✅ Kafka cluster (Docker)
-- ✅ Kafka-WebSocket bridge
-- ✅ Database consumer
-- ✅ Demo collector (no game required!)
-- ✅ Next.js frontend
-
-**Open:** http://localhost:3000
-
-See [Development Environment Guide](docs/DEV_ENVIRONMENT.md) for details.
-
----
-
-## Setup Instructions
-
-### Prerequisites
-
-- Node.js 18+ installed
-- Docker (for Kafka)
-- PostgreSQL/TimescaleDB (for database)
-- Assetto Corsa or Assetto Corsa Competizione (for live telemetry - optional)
-- OpenAI API key (for AI analysis - optional)
+## Dev Quickstart
 
 ### 1. Install Dependencies
 
@@ -66,267 +12,65 @@ See [Development Environment Guide](docs/DEV_ENVIRONMENT.md) for details.
 npm install
 ```
 
-### 2. Configure Environment Variables
+### 2. Configure Basic Dev Environment
 
-Create a `.env.local` file:
+Create `.env.local` in the repo root with at least:
 
 ```env
-# OpenAI API Key for AI analysis
 OPENAI_API_KEY=your_openai_api_key_here
-
-# Database
 DATABASE_URL="file:./dev.db"
-
-# WebSocket Server
 WS_PORT=8080
-
-# Telemetry Collector
 TELEMETRY_UDP_PORT=9996
 ```
 
-### 3. Initialize Database
+Initialize the database schema:
 
 ```bash
 npm run db:push
 ```
 
-### 4. Configure Your Sim
+### 3. Start the Full Dev Environment
 
-#### For Assetto Corsa
+Use the one-command startup to run Kafka, services, demo collector, and frontend:
 
-Enable UDP telemetry output:
-
-1. Navigate to `Documents/Assetto Corsa/cfg/`
-2. Edit or create `telemetry.ini`:
-
-```ini
-[TELEMETRY]
-ENABLED=1
-UDP_PORT=9996
-UDP_ADDRESS=127.0.0.1
-```
-
-3. Save and restart Assetto Corsa
-
-#### For Assetto Corsa Competizione
-
-Enable broadcasting:
-
-1. Navigate to `Documents/Assetto Corsa Competizione/Config/`
-2. Edit or create `broadcasting.json`:
-
-```json
-{
-  "updListenerPort": 9000,
-  "connectionPassword": "",
-  "commandPassword": ""
-}
-```
-
-3. Save and restart ACC
-
-### 5. Start the Application
-
-You'll need 3 terminal windows:
-
-**Terminal 1 - Next.js Frontend & API:**
 ```bash
-npm run dev
+npm run dev:start
 ```
 
-**Terminal 2 - WebSocket Server:**
-```bash
-npm run ws-server
+Then open:
+
+```text
+http://localhost:3000
 ```
 
-**Terminal 3 - Telemetry Collector (when racing):**
-
-For Assetto Corsa:
-```bash
-npm run telemetry
-```
-
-For Assetto Corsa Competizione (Broadcasting only - limited telemetry):
-```bash
-npm run telemetry:acc
-```
-
-For Assetto Corsa Competizione (Hybrid - full telemetry, Windows only):
-```bash
-npm run telemetry:acc-hybrid
-```
-
-The app will be available at `http://localhost:3000`
-
-**Note:** The hybrid collector provides complete telemetry (throttle, brake, steering, RPM) by combining ACC's Broadcasting Protocol with Shared Memory. It requires Windows and ACC running on the same machine.
-
-## Usage
-
-### Creating a Session
-
-1. Click "New Session" on the home page
-2. Enter a session name (e.g., "Monza Practice - June 15")
-3. Select telemetry source:
-   - **Live**: Connect to running Assetto Corsa or ACC instance
-   - **Demo**: Use pre-recorded telemetry data
-
-### During a Session
-
-- **Live Telemetry**: View real-time throttle, brake, and steering traces
-- **Pause/Resume**: Pause analysis during cool-down laps
-- **Lap Completion**: Each lap is automatically saved when you cross start/finish
-
-### Analyzing Laps
-
-1. Click on a completed lap from the archive
-2. Click "Analyze Lap" to get AI-powered suggestions
-3. Review suggestions like:
-   - "Brake later entering Turn 2"
-   - "Apply throttle more progressively out of Turn 5"
-4. Use the chat to ask specific questions:
-   - "Would trail-braking help in Turn 3?"
-   - "Am I losing time on corner entry or exit?"
-
-## Project Structure (Nx Monorepo)
-
-```
-PurpleSector/
-├── apps/
-│   ├── web/                   # Next.js 14 app (frontend + API routes)
-│   └── desktop/               # Tauri desktop app wrapping web
-│       └── src-tauri/         # Tauri config & Rust side
-├── collectors/                # Runtime collector apps (AC/ACC/demo, Kafka & WebSocket)
-├── services/                  # Runtime infra services (Kafka bridge, DB consumer, legacy WS)
-├── packages/                  # Shared packages (published via npm/GitHub Packages)
-│   ├── core/                  # Core domain types (TelemetryFrame, etc.)
-│   ├── telemetry/             # Telemetry parsing & helpers
-│   ├── config/                # @purplesector/config
-│   ├── logger/                # @purplesector/logger
-│   ├── kafka/                 # @purplesector/kafka (producer/admin/consumer)
-│   ├── proto/                 # @purplesector/proto (protobuf helpers + telemetry.proto)
-│   ├── db-base/               # @purplesector/db-base (DB interfaces)
-│   └── db-prisma/             # @purplesector/db-prisma (Prisma implementation + schema)
-├── prisma/                    # (legacy) old schema location – kept only for history
-├── proto/                     # (legacy) old telemetry.proto location – now under packages/proto
-├── scripts/                   # Operational scripts (dev start/stop, Kafka setup, etc.)
-└── docs/                      # Architecture and operations documentation
-```
-
-## Telemetry Data Format
-
-The application processes the following telemetry channels:
-
-```typescript
-interface TelemetryFrame {
-  timestamp: number;
-  throttle: number;    // 0.0 - 1.0
-  brake: number;       // 0.0 - 1.0
-  steering: number;    // -1.0 to 1.0
-  speed: number;       // km/h
-  gear: number;
-  rpm: number;
-  lapTime: number;     // milliseconds
-  lapNumber: number;
-  normalizedPosition: number; // 0.0 - 1.0 (track position)
-}
-```
-
-## AI Analysis
-
-The AI analysis uses GPT-4 with a specialized racing coach prompt. It analyzes:
-
-- **Braking points**: Early/late braking detection
-- **Throttle application**: Smoothness and timing
-- **Steering inputs**: Smoothness and corner entry/exit technique
-- **Corner-specific advice**: Turn-by-turn suggestions
-
-## Technologies Used
-
-- **Frontend**: Next.js 14, React, TailwindCSS, shadcn/ui
-- **Charts**: Recharts
-- **Backend**: Next.js API Routes, Node.js
-- **Database**: SQLite with Prisma ORM
-- **Real-time**: WebSockets (ws library)
-- **AI**: OpenAI GPT-4
-- **Icons**: Lucide React
-
-## Development Roadmap
-
-### Phase 1 (Current)
-- ✅ Basic telemetry collection
-- ✅ Session management
-- ✅ Live visualization
-- ✅ AI analysis
-- [ ] Assetto Corsa integration
-
-### Phase 2 (Future)
-- [ ] Lap comparison (overlay multiple laps)
-- [ ] Track map visualization
-- [ ] Sector time analysis
-- [ ] Export telemetry data
-
-### Phase 3 (Advanced)
-- [ ] Deep lap analysis and corner-specific suggestions
-
-## Troubleshooting
-
-### No telemetry data received
-
-**For Assetto Corsa:**
-1. Verify Assetto Corsa is running
-2. Check `telemetry.ini` configuration
-3. Ensure UDP port 9996 is not blocked by firewall
-4. Verify telemetry collector service is running (`npm run telemetry`)
-
-**For ACC:**
-1. Verify ACC is running and you're in a session (not main menu)
-2. Check `broadcasting.json` configuration
-3. Ensure UDP port 9000 is not blocked by firewall
-4. Verify ACC telemetry collector service is running (`npm run telemetry:acc`)
-5. Check that the collector successfully registered with ACC (look for "Successfully registered" message)
-
-### WebSocket connection failed
-
-1. Ensure WebSocket server is running (`npm run ws-server`)
-2. Check port 8080 is available
-3. Verify no CORS issues in browser console
-
-### AI analysis not working
-
-1. Verify `OPENAI_API_KEY` is set in `.env.local`
-2. Check OpenAI API quota/billing
-3. Review API route logs for errors
-
-## Contributing
-
-This is a personal project, but suggestions and improvements are welcome!
+For more details (including manual startup, operations, and architecture), see the **Getting Started** and **Developer Guide** sections in the docs site.
 
 ## License
 
 Purple Sector is dual-licensed:
 
 ### Open Source License (AGPL-3.0)
+
 For **non-commercial use** (personal projects, education, open-source development), this software is available under the GNU Affero General Public License v3.0 (AGPL-3.0).
 
 **Key Requirements:**
-- You can freely use, modify, and distribute this software
-- If you modify and run it as a network service (web app, API, SaaS), you **must** share your modified source code
-- Derivative works must also be licensed under AGPL-3.0
+
+- You can freely use, modify, and distribute this software.
+- If you modify and run it as a network service (web app, API, SaaS), you **must** share your modified source code.
+- Derivative works must also be licensed under AGPL-3.0.
 
 This ensures that improvements to the software benefit the entire community.
 
 ### Commercial License
+
 For **commercial use** (businesses, professional racing teams, commercial products), a separate commercial license is required. This includes:
-- Use by for-profit organizations
-- Integration into commercial products or services
-- Use in professional racing teams or motorsport organizations
-- Any use that generates revenue or commercial advantage
-- Use as a network service without sharing source code modifications
+
+- Use by for-profit organizations.
+- Integration into commercial products or services.
+- Use in professional racing teams or motorsport organizations.
+- Any use that generates revenue or commercial advantage.
+- Use as a network service without sharing source code modifications.
 
 **To obtain a commercial license**, please contact Christopher Marth.
 
 See the [LICENSE](LICENSE) file for complete details.
-
----
-
-**Happy Racing! 🏁**
