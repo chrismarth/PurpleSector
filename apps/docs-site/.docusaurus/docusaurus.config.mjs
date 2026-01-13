@@ -54,7 +54,7 @@ export default {
     },
     "footer": {
       "style": "dark",
-      "copyright": "Copyright \u0000a9 2025 Purple Sector",
+      "copyright": "Copyright \u0000a9 2026 Purple Sector",
       "links": []
     },
     "colorMode": {

@@ -4,17 +4,17 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { GripVertical } from 'lucide-react';
 import { PlotLayoutItem } from '@/types/plotConfig';
 
-interface ResizablePlotGridProps {
+interface ResizablePanelGridProps {
   layout: PlotLayoutItem[];
   onLayoutChange: (layout: PlotLayoutItem[]) => void;
   children: React.ReactNode[];
 }
 
-export function ResizablePlotGrid({ layout, onLayoutChange, children }: ResizablePlotGridProps) {
+export function ResizablePanelGrid({ layout, onLayoutChange, children }: ResizablePanelGridProps) {
   const [resizing, setResizing] = useState<{ index: number; startX: number; startWidth: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Group plots by row
+  // Group panels by row
   const rows = layout.reduce((acc, item, index) => {
     if (!acc[item.y]) {
       acc[item.y] = [];
@@ -27,44 +27,51 @@ export function ResizablePlotGrid({ layout, onLayoutChange, children }: Resizabl
     .sort(([a], [b]) => parseInt(a) - parseInt(b))
     .map(([, items]) => items.sort((a, b) => a.x - b.x));
 
-  const handleMouseDown = useCallback((e: React.MouseEvent, itemIndex: number) => {
-    e.preventDefault();
-    const item = layout[itemIndex];
-    setResizing({
-      index: itemIndex,
-      startX: e.clientX,
-      startWidth: item.w,
-    });
-  }, [layout]);
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent, itemIndex: number) => {
+      e.preventDefault();
+      const item = layout[itemIndex];
+      setResizing({
+        index: itemIndex,
+        startX: e.clientX,
+        startWidth: item.w,
+      });
+    },
+    [layout]
+  );
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!resizing || !containerRef.current) return;
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!resizing || !containerRef.current) return;
 
-    const containerWidth = containerRef.current.offsetWidth;
-    const deltaX = e.clientX - resizing.startX;
-    const deltaColumns = Math.round((deltaX / containerWidth) * 12);
-    const newWidth = Math.max(1, Math.min(12, resizing.startWidth + deltaColumns));
+      const containerWidth = containerRef.current.offsetWidth;
+      const deltaX = e.clientX - resizing.startX;
+      const deltaColumns = Math.round((deltaX / containerWidth) * 12);
+      const newWidth = Math.max(1, Math.min(12, resizing.startWidth + deltaColumns));
 
-    if (newWidth !== layout[resizing.index].w) {
-      const newLayout = [...layout];
-      newLayout[resizing.index] = { ...newLayout[resizing.index], w: newWidth };
-      onLayoutChange(newLayout);
-    }
-  }, [resizing, layout, onLayoutChange]);
+      if (newWidth !== layout[resizing.index].w) {
+        const newLayout = [...layout];
+        newLayout[resizing.index] = { ...newLayout[resizing.index], w: newWidth };
+        onLayoutChange(newLayout);
+      }
+    },
+    [resizing, layout, onLayoutChange]
+  );
 
   const handleMouseUp = useCallback(() => {
     setResizing(null);
   }, []);
 
   useEffect(() => {
-    if (resizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
+    if (!resizing) return;
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
   }, [resizing, handleMouseMove, handleMouseUp]);
 
   return (
@@ -74,7 +81,7 @@ export function ResizablePlotGrid({ layout, onLayoutChange, children }: Resizabl
           {rowItems.map((item, itemIndex) => {
             const child = children[item.index];
             const isLast = itemIndex === rowItems.length - 1;
-            
+
             return (
               <div
                 key={item.plotId}
@@ -85,7 +92,7 @@ export function ResizablePlotGrid({ layout, onLayoutChange, children }: Resizabl
                 }}
               >
                 {child}
-                
+
                 {/* Resize handle */}
                 {!isLast && (
                   <div

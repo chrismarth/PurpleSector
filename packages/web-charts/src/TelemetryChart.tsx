@@ -2,7 +2,7 @@
 
 import { useMemo, memo, useRef, useEffect, useState } from 'react';
 import uPlot from 'uplot';
-import { UPlotChart, UPlotSeries } from '@/components/UPlotChart';
+import { UPlotChart, type UPlotSeries } from './UPlotChart';
 import { TelemetryFrame } from '@/types/telemetry';
 
 interface TelemetryChartProps {

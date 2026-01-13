@@ -1,0 +1,27 @@
+{
+  "id": "user/plugins",
+  "title": "Using Plugins",
+  "description": "Purple Sector is being refactored to support a plugin-based architecture. This page explains what that means for you as a user and how plugins are discovered and enabled today.",
+  "source": "@site/docs/user/plugins.md",
+  "sourceDirName": "user",
+  "slug": "/user/plugins",
+  "permalink": "/PurpleSector/user/plugins",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "plugins",
+    "title": "Using Plugins",
+    "sidebar_label": "Plugins"
+  },
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Telemetry Collectors",
+    "permalink": "/PurpleSector/user/telemetry-collectors"
+  },
+  "next": {
+    "title": "Troubleshooting",
+    "permalink": "/PurpleSector/user/troubleshooting"
+  }
+}

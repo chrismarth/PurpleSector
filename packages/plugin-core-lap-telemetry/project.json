@@ -1,0 +1,15 @@
+{
+  "name": "plugin-core-lap-telemetry",
+  "root": "packages/plugin-core-lap-telemetry",
+  "sourceRoot": "packages/plugin-core-lap-telemetry/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p packages/plugin-core-lap-telemetry/tsconfig.lib.json"
+      }
+    }
+  },
+  "tags": []
+}

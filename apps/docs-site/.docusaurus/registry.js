@@ -1,4 +1,5 @@
 export default {
+  "00b7e089": [() => import(/* webpackChunkName: "00b7e089" */ "@site/docs/user/plugins.md"), "@site/docs/user/plugins.md", require.resolveWeak("@site/docs/user/plugins.md")],
   "0e384e19": [() => import(/* webpackChunkName: "0e384e19" */ "@site/docs/intro.md"), "@site/docs/intro.md", require.resolveWeak("@site/docs/intro.md")],
   "17896441": [() => import(/* webpackChunkName: "17896441" */ "@theme/DocItem"), "@theme/DocItem", require.resolveWeak("@theme/DocItem")],
   "1b43f51c": [() => import(/* webpackChunkName: "1b43f51c" */ "@site/docs/user/telemetry-collectors.md"), "@site/docs/user/telemetry-collectors.md", require.resolveWeak("@site/docs/user/telemetry-collectors.md")],
@@ -20,6 +21,7 @@ export default {
   "b61b4f12": [() => import(/* webpackChunkName: "b61b4f12" */ "@site/docs/ops/running-stack.md"), "@site/docs/ops/running-stack.md", require.resolveWeak("@site/docs/ops/running-stack.md")],
   "b8cd20ed": [() => import(/* webpackChunkName: "b8cd20ed" */ "@site/docs/dev/plot-layouts.md"), "@site/docs/dev/plot-layouts.md", require.resolveWeak("@site/docs/dev/plot-layouts.md")],
   "bf8b906b": [() => import(/* webpackChunkName: "bf8b906b" */ "@site/docs/user/using-sessions.md"), "@site/docs/user/using-sessions.md", require.resolveWeak("@site/docs/user/using-sessions.md")],
+  "c872f9da": [() => import(/* webpackChunkName: "c872f9da" */ "@site/docs/dev/plugins.md"), "@site/docs/dev/plugins.md", require.resolveWeak("@site/docs/dev/plugins.md")],
   "d1c9f980": [() => import(/* webpackChunkName: "d1c9f980" */ "@generated/docusaurus-plugin-content-docs/default/p/purple-sector-063.json"), "@generated/docusaurus-plugin-content-docs/default/p/purple-sector-063.json", require.resolveWeak("@generated/docusaurus-plugin-content-docs/default/p/purple-sector-063.json")],
   "d34de854": [() => import(/* webpackChunkName: "d34de854" */ "@site/docs/dev/dev-environment.md"), "@site/docs/dev/dev-environment.md", require.resolveWeak("@site/docs/dev/dev-environment.md")],
   "e34f3602": [() => import(/* webpackChunkName: "e34f3602" */ "@site/docs/dev/architecture.md"), "@site/docs/dev/architecture.md", require.resolveWeak("@site/docs/dev/architecture.md")],

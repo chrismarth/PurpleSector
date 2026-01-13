@@ -312,7 +312,7 @@ export function PlotConfigDialog({
               </div>
             ) : (
               <div className="space-y-2">
-                {editedConfig.channels.map((channel, index) => (
+                {editedConfig.channels.map((channel) => (
                   <div
                     key={channel.id}
                     className="p-3 border rounded-lg bg-muted/30"

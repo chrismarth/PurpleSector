@@ -8,13 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { TelemetryPlotPanel } from '@/components/TelemetryPlotPanel';
 import { TelemetryFrame } from '@/types/telemetry';
-import { PlotConfig, DEFAULT_PLOT_CONFIGS } from '@/types/plotConfig';
+import { PlotConfig, PlotLayout, DEFAULT_PLOT_CONFIGS, generateDefaultLayout } from '@/types/plotConfig';
 import { formatLapTime } from '@/lib/utils';
 import { msToSeconds } from '@purplesector/telemetry';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { decodeMessage, createStartDemoMessage, createStopDemoMessage, createPingMessage } from '@/lib/telemetry-proto-browser';
+import { getLapAnalysisViews } from '@/plugins';
 
 const SESSION_TAGS = [
   'Testing',
@@ -67,6 +67,9 @@ export default function SessionPage() {
   const [showTagInput, setShowTagInput] = useState(false);
   const [sessionAlreadyOpen, setSessionAlreadyOpen] = useState(false);
   const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(DEFAULT_PLOT_CONFIGS);
+  const [plotLayout, setPlotLayout] = useState<PlotLayout>(
+    generateDefaultLayout(DEFAULT_PLOT_CONFIGS)
+  );
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -240,6 +243,7 @@ export default function SessionPage() {
   const handlePlotConfigsChange = useCallback((configs: PlotConfig[]) => {
     if (!isMountedRef.current) return;
     setPlotConfigs(configs);
+    setPlotLayout(generateDefaultLayout(configs));
     // Auto-save to session
     fetch(`/api/sessions/${sessionId}`, {
       method: 'PATCH',
@@ -247,6 +251,12 @@ export default function SessionPage() {
       body: JSON.stringify({ plotConfigs: JSON.stringify(configs) }),
     }).catch(error => console.error('Error saving plot configs:', error));
   }, [sessionId]);
+
+  const handlePlotLayoutChange = useCallback((layout: PlotLayout) => {
+    if (!isMountedRef.current) return;
+    setPlotLayout(layout);
+    // (Optional) Persist layout to the session in the future
+  }, []);
 
   function connectWebSocket() {
     // Clear any existing connection and timers
@@ -902,16 +912,23 @@ export default function SessionPage() {
                   </CardContent>
                 </Card>
               )}
-              {session.started && (
-                <TelemetryPlotPanel
-                  data={currentLapFrames}
-                  initialPlotConfigs={plotConfigs}
-                  onPlotConfigsChange={handlePlotConfigsChange}
-                  showFullscreenToggle={true}
-                  currentLapNumber={currentLapNumber}
-                  showLapHeader={true}
-                />
-              )}
+              {session.started && (() => {
+                const views = getLapAnalysisViews().filter(v => v.context === 'singleLap');
+                const view = views[0];
+                return view
+                  ? view.render({
+                      context: 'singleLap',
+                      telemetry: currentLapFrames,
+                      compareTelemetry: undefined,
+                      compareLapId: null,
+                      plotConfigs,
+                      plotLayout,
+                      onPlotConfigsChange: handlePlotConfigsChange,
+                      onPlotLayoutChange: handlePlotLayoutChange,
+                      host: {},
+                    })
+                  : null;
+              })()}
             </div>
           )}
 

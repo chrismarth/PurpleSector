@@ -9,15 +9,15 @@ export default [
   },
   {
     path: '/PurpleSector/',
-    component: ComponentCreator('/PurpleSector/', '947'),
+    component: ComponentCreator('/PurpleSector/', '55f'),
     routes: [
       {
         path: '/PurpleSector/',
-        component: ComponentCreator('/PurpleSector/', 'e58'),
+        component: ComponentCreator('/PurpleSector/', '5b2'),
         routes: [
           {
             path: '/PurpleSector/',
-            component: ComponentCreator('/PurpleSector/', 'f2a'),
+            component: ComponentCreator('/PurpleSector/', '76e'),
             routes: [
               {
                 path: '/PurpleSector/dev/acc-hybrid-collector',
@@ -68,6 +68,12 @@ export default [
                 sidebar: "userGuide"
               },
               {
+                path: '/PurpleSector/dev/plugins',
+                component: ComponentCreator('/PurpleSector/dev/plugins', '260'),
+                exact: true,
+                sidebar: "userGuide"
+              },
+              {
                 path: '/PurpleSector/intro',
                 component: ComponentCreator('/PurpleSector/intro', 'd68'),
                 exact: true,
@@ -100,6 +106,12 @@ export default [
               {
                 path: '/PurpleSector/user/getting-started',
                 component: ComponentCreator('/PurpleSector/user/getting-started', 'a7a'),
+                exact: true,
+                sidebar: "userGuide"
+              },
+              {
+                path: '/PurpleSector/user/plugins',
+                component: ComponentCreator('/PurpleSector/user/plugins', '987'),
                 exact: true,
                 sidebar: "userGuide"
               },

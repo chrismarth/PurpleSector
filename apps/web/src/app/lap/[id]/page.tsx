@@ -8,8 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { TelemetryChart } from '@/components/TelemetryChart';
-import { TelemetryPlotPanel } from '@/components/TelemetryPlotPanel';
+import { getLapAnalysisViews } from '@/plugins';
 import { ChatInterface } from '@/components/ChatInterface';
 import { VehicleInfoPanel } from '@/components/VehicleInfoPanel';
 import { formatLapTime } from '@/lib/utils';
@@ -502,17 +501,24 @@ export default function LapPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
           {/* Left Column - Telemetry & Lap Comparison */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Telemetry Charts */}
-            <TelemetryPlotPanel
-              data={telemetryFrames}
-              compareData={compareTelemetry.length > 0 ? compareTelemetry : undefined}
-              compareLapId={compareLapId}
-              initialPlotConfigs={plotConfigs}
-              initialLayout={plotLayout}
-              onPlotConfigsChange={setPlotConfigs}
-              onLayoutChange={setPlotLayout}
-              showFullscreenToggle={true}
-            />
+            {/* Telemetry Charts (provided by plugin) */}
+            {(() => {
+              const views = getLapAnalysisViews().filter(v => v.context === 'singleLap');
+              const view = views[0];
+              return view
+                ? view.render({
+                    context: compareLapId ? 'lapComparison' : 'singleLap',
+                    telemetry: telemetryFrames,
+                    compareTelemetry: compareTelemetry.length > 0 ? compareTelemetry : undefined,
+                    compareLapId,
+                    plotConfigs,
+                    plotLayout,
+                    onPlotConfigsChange: setPlotConfigs,
+                    onPlotLayoutChange: setPlotLayout,
+                    host: {},
+                  })
+                : null;
+            })()}
 
             {/* Lap Comparison */}
             <Card>

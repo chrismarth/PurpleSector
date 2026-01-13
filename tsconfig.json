@@ -20,7 +20,10 @@
       }
     ],
     "paths": {
-      "@/*": ["apps/web/src/*"]
+      "@/*": ["apps/web/src/*"],
+      "@purplesector/plugin-api": ["packages/plugin-api/src"],
+      "@purplesector/web-charts": ["packages/web-charts/src"],
+      "@purplesector/plugin-core-lap-telemetry": ["packages/plugin-core-lap-telemetry/src"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

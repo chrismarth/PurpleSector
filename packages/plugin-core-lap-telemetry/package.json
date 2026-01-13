@@ -1,0 +1,16 @@
+{
+  "name": "@purplesector/plugin-core-lap-telemetry",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "types": "src/index.ts",
+  "private": false,
+  "license": "SEE LICENSE IN LICENSE",
+  "scripts": {
+    "build": "tsc -p tsconfig.lib.json"
+  },
+  "dependencies": {
+    "@purplesector/plugin-api": "file:../plugin-api",
+    "@purplesector/web-charts": "file:../web-charts",
+    "react": "^18.0.0"
+  }
+}

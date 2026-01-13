@@ -51,6 +51,11 @@
               "sidebar": "userGuide"
             },
             {
+              "id": "dev/plugins",
+              "path": "/PurpleSector/dev/plugins",
+              "sidebar": "userGuide"
+            },
+            {
               "id": "intro",
               "path": "/PurpleSector/intro",
               "sidebar": "userGuide"
@@ -78,6 +83,11 @@
             {
               "id": "user/getting-started",
               "path": "/PurpleSector/user/getting-started",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "user/plugins",
+              "path": "/PurpleSector/user/plugins",
               "sidebar": "userGuide"
             },
             {

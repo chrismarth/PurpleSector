@@ -6,17 +6,17 @@
     },
     "config": "5e9f5e1a"
   },
-  "/PurpleSector/-947": {
+  "/PurpleSector/-55f": {
     "__comp": "5e95c892",
     "__context": {
       "plugin": "aba21aa0"
     }
   },
-  "/PurpleSector/-e58": {
+  "/PurpleSector/-5b2": {
     "__comp": "a7bd4aaa",
     "__props": "d1c9f980"
   },
-  "/PurpleSector/-f2a": {
+  "/PurpleSector/-76e": {
     "__comp": "a94703ab"
   },
   "/PurpleSector/dev/acc-hybrid-collector-37f": {
@@ -51,6 +51,10 @@
     "__comp": "17896441",
     "content": "b8cd20ed"
   },
+  "/PurpleSector/dev/plugins-260": {
+    "__comp": "17896441",
+    "content": "c872f9da"
+  },
   "/PurpleSector/intro-d68": {
     "__comp": "17896441",
     "content": "0e384e19"
@@ -74,6 +78,10 @@
   "/PurpleSector/user/getting-started-a7a": {
     "__comp": "17896441",
     "content": "4d88dca8"
+  },
+  "/PurpleSector/user/plugins-987": {
+    "__comp": "17896441",
+    "content": "00b7e089"
   },
   "/PurpleSector/user/telemetry-collectors-616": {
     "__comp": "17896441",
