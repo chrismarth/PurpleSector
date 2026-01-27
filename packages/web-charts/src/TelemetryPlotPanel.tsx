@@ -717,11 +717,6 @@ export function TelemetryPlotPanel({
                                   handleConfigChange(plotIndex, newConfig)
                                 }
                                 onDelete={() => handleDelete(plotIndex)}
-                                onSplitHorizontal={() =>
-                                  handleSplitHorizontal(layoutIndex)
-                                }
-                                onSplitVertical={() => handleSplitVertical(layoutIndex)}
-                                onAddRowBelow={() => handleAddRowBelow(layoutIndex)}
                                 height={plotHeight}
                                 syncedHoverValue={syncedHoverValue}
                                 onHoverChange={setSyncedHoverValue}

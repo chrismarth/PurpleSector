@@ -56,6 +56,13 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
+
+}
+
+/* Make uPlot's zoom selection rectangle clearly visible regardless of theme. */
+.u-select {
+  background: rgba(59, 130, 246, 0.15) !important; /* blue-500 @ 15% */
+  border: 1px solid rgba(59, 130, 246, 0.9) !important;
 }

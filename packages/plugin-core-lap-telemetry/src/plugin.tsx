@@ -7,8 +7,12 @@ import type {
   LapAnalysisView,
   LapAnalysisViewProps,
   PluginManifest,
+  AnalysisPanelProps,
+  AnalysisPanelRenderResult,
 } from '@purplesector/plugin-api';
-import { TelemetryPlotPanel } from '@purplesector/web-charts';
+import { TelemetryPlotPanel, SimpleTelemetryPlotPanel } from '@purplesector/web-charts';
+import { Button } from '@/components/ui/button';
+import { ZoomOut, Pencil } from 'lucide-react';
 
 const lapTelemetryPlotsView: LapAnalysisView = {
   id: 'core-lap-telemetry-plots',
@@ -51,7 +55,77 @@ const manifest: PluginManifest = {
 const plugin: PluginModule = {
   manifest,
   register(ctx: PluginContext) {
+    // Legacy lap analysis view (will be phased out in favor of generic panel grid)
     ctx.registerLapAnalysisView(lapTelemetryPlotsView);
+
+    // Generic analysis panel type for telemetry plots
+    ctx.registerAnalysisPanelType({
+      id: 'plot',
+      label: 'Telemetry Plot',
+    });
+
+    // Default provider for plot panels using a lightweight inner plot panel
+    ctx.registerAnalysisPanelProvider({
+      id: 'core-telemetry-plot-panel',
+      typeId: 'plot',
+      isDefault: true,
+      render: (props: AnalysisPanelProps): AnalysisPanelRenderResult => {
+        let actions:
+          | {
+              resetZoom: () => void;
+              openConfig: () => void;
+            }
+          | null = null;
+
+        const toolbarActions = (
+          <>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6"
+              onClick={(e) => {
+                e.stopPropagation();
+                actions?.resetZoom?.();
+              }}
+              title="Reset zoom"
+            >
+              <ZoomOut className="h-3 w-3" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6"
+              onClick={(e) => {
+                e.stopPropagation();
+                actions?.openConfig?.();
+              }}
+              title="Edit plot"
+            >
+              <Pencil className="h-3 w-3" />
+            </Button>
+          </>
+        );
+
+        return {
+          title: undefined,
+          toolbarActions,
+          content: (
+            <SimpleTelemetryPlotPanel
+              data={props.telemetry}
+              compareData={props.compareTelemetry}
+              syncedHoverValue={props.syncedHoverValue}
+              onHoverChange={props.onHoverChange}
+              onTitleChange={(title) => props.host.setTitle?.(title)}
+              onRegisterActions={(a) => {
+                actions = a;
+              }}
+            />
+          ),
+        };
+      },
+    });
   },
 };
 

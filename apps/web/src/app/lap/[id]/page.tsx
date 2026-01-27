@@ -2,19 +2,22 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { TelemetryDataPanel } from '@/components/TelemetryDataPanel';
 import Link from 'next/link';
-import { ArrowLeft, Brain, Clock, TrendingUp, AlertCircle, Info, MessageSquare, GitCompare, X, Tag, Plus } from 'lucide-react';
+import { Brain, Clock, TrendingUp, AlertCircle, Info, MessageSquare, GitCompare, X, Tag, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { getLapAnalysisViews } from '@/plugins';
 import { ChatInterface } from '@/components/ChatInterface';
 import { VehicleInfoPanel } from '@/components/VehicleInfoPanel';
 import { formatLapTime } from '@/lib/utils';
 import { TelemetryFrame, LapSuggestion } from '@/types/telemetry';
-import { PlotConfig, DEFAULT_PLOT_CONFIGS, PlotLayout, generateDefaultLayout } from '@/types/plotConfig';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import type { AnalysisLayoutJSON } from '@/lib/analysisLayout';
+import { SaveLayoutDialog } from '@/components/SaveLayoutDialog';
+import { AnalysisLoadLayoutDialog } from '@/components/AnalysisLoadLayoutDialog';
+import { AnalysisManageLayoutsDialog } from '@/components/AnalysisManageLayoutsDialog';
 
 interface Lap {
   id: string;
@@ -103,8 +106,11 @@ export default function LapPage() {
   const [showReferenceSelector, setShowReferenceSelector] = useState(false);
   const [eventLaps, setEventLaps] = useState<EventLap[]>([]);
   const [analysisReferenceLap, setAnalysisReferenceLap] = useState<EventLap | null>(null);
-  const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(DEFAULT_PLOT_CONFIGS);
-  const [plotLayout, setPlotLayout] = useState<PlotLayout>(generateDefaultLayout(DEFAULT_PLOT_CONFIGS));
+  const [analysisLayoutId, setAnalysisLayoutId] = useState<string | null>(null);
+  const [analysisLayout, setAnalysisLayout] = useState<AnalysisLayoutJSON | null>(null);
+  const [isSaveLayoutDialogOpen, setIsSaveLayoutDialogOpen] = useState(false);
+  const [isLoadLayoutDialogOpen, setIsLoadLayoutDialogOpen] = useState(false);
+  const [isManageLayoutsDialogOpen, setIsManageLayoutsDialogOpen] = useState(false);
 
   // Handle back button - close tab if opened in new tab
   function handleBack() {
@@ -176,68 +182,134 @@ export default function LapPage() {
       if (data.tags) {
         setTags(JSON.parse(data.tags));
       }
-
-      // Load plot configurations (lap-specific or inherit from session)
-      if (data.plotConfigs) {
-        const parsed = JSON.parse(data.plotConfigs);
-        // Check if it's the new format with layout
-        if (parsed.configs && parsed.layout) {
-          setPlotConfigs(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(parsed.configs)) {
-              return parsed.configs;
-            }
-            return prev;
-          });
-          setPlotLayout(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(parsed.layout)) {
-              return parsed.layout;
-            }
-            return prev;
-          });
-        } else {
-          // Old format - just configs
-          const newConfigs = parsed;
-          setPlotConfigs(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(newConfigs)) {
-              return newConfigs;
-            }
-            return prev;
-          });
-          setPlotLayout(generateDefaultLayout(newConfigs));
-        }
-      } else if (data.session?.plotConfigs) {
-        // Inherit from session if lap doesn't have its own
-        const parsed = JSON.parse(data.session.plotConfigs);
-        if (parsed.configs && parsed.layout) {
-          setPlotConfigs(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(parsed.configs)) {
-              return parsed.configs;
-            }
-            return prev;
-          });
-          setPlotLayout(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(parsed.layout)) {
-              return parsed.layout;
-            }
-            return prev;
-          });
-        } else {
-          const newConfigs = parsed;
-          setPlotConfigs(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(newConfigs)) {
-              return newConfigs;
-            }
-            return prev;
-          });
-          setPlotLayout(generateDefaultLayout(newConfigs));
-        }
-      }
     } catch (error) {
       console.error('Error fetching lap:', error);
     } finally {
       setLoading(false);
     }
   }
+
+  // Load analysis layout for this lap from backend (or use default if none exists)
+  useEffect(() => {
+    if (!lap) return;
+
+    const controller = new AbortController();
+
+    const loadLayout = async () => {
+      const contextKey = `lap:${lapId}`;
+
+      try {
+        const response = await fetch(`/api/analysis-layouts?context=${encodeURIComponent(contextKey)}`, {
+          signal: controller.signal,
+        });
+
+        if (response.ok) {
+          const layouts = await response.json();
+          if (Array.isArray(layouts) && layouts.length > 0) {
+            const layoutRecord = layouts.find((l: any) => l.isDefault) ?? layouts[0];
+            try {
+              const parsed: AnalysisLayoutJSON = JSON.parse(layoutRecord.layout);
+              setAnalysisLayoutId(layoutRecord.id);
+              setAnalysisLayout(parsed);
+              return;
+            } catch (e) {
+              console.error('Failed to parse saved analysis layout JSON:', e);
+            }
+          }
+        }
+      } catch (error) {
+        if ((error as any).name !== 'AbortError') {
+          console.error('Error loading analysis layout:', error);
+        }
+      }
+
+      // Fallback: use a simple default layout if nothing loaded
+      setAnalysisLayout({
+        version: 1,
+        cols: 12,
+        panels: [
+          {
+            id: 'default-plot',
+            typeId: 'plot',
+            x: 0,
+            y: 0,
+            colSpan: 12,
+            rowSpan: 1,
+          },
+        ],
+      });
+    };
+
+    loadLayout();
+
+    return () => {
+      controller.abort();
+    };
+  }, [lap, lapId]);
+
+  const handleSaveAnalysisLayout = useCallback(
+    async (name: string, description?: string) => {
+      if (!lap || !analysisLayout) return;
+
+      const contextKey = `lap:${lapId}`;
+
+      try {
+        if (!analysisLayoutId) {
+          const response = await fetch('/api/analysis-layouts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              description: description ?? null,
+              context: contextKey,
+              layout: analysisLayout,
+              isDefault: true,
+            }),
+          });
+
+          if (response.ok) {
+            const created = await response.json();
+            if (created?.id) {
+              setAnalysisLayoutId(created.id as string);
+            }
+          }
+        } else {
+          await fetch(`/api/analysis-layouts/${analysisLayoutId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              layout: analysisLayout,
+              name,
+              description: description ?? null,
+            }),
+          });
+        }
+      } catch (error) {
+        console.error('Error saving analysis layout:', error);
+      }
+    },
+    [analysisLayout, analysisLayoutId, lap, lapId],
+  );
+
+  const handleLoadAnalysisLayout = useCallback(async (layoutId: string) => {
+    try {
+      const response = await fetch(`/api/analysis-layouts/${layoutId}`);
+      if (!response.ok) return;
+
+      const record = await response.json();
+      if (!record?.layout) return;
+
+      try {
+        const parsed: AnalysisLayoutJSON = JSON.parse(record.layout as string);
+        setAnalysisLayoutId(record.id as string);
+        setAnalysisLayout(parsed);
+      } catch (e) {
+        console.error('Failed to parse analysis layout JSON:', e);
+      }
+    } catch (error) {
+      console.error('Error loading analysis layout:', error);
+    }
+  }, []);
 
   async function fetchAvailableLaps() {
     try {
@@ -339,24 +411,6 @@ export default function LapPage() {
     }
   }, [lapId]);
 
-  // Auto-save plot configurations
-  const autoSavePlotConfigs = useCallback(async (configs: PlotConfig[], layout: PlotLayout) => {
-    if (!lap) return;
-    
-    try {
-      const plotData = {
-        configs,
-        layout,
-      };
-      await fetch(`/api/laps/${lapId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plotConfigs: JSON.stringify(plotData) }),
-      });
-    } catch (error) {
-      console.error('Error saving plot configs:', error);
-    }
-  }, [lap, lapId]);
 
   // Debounced auto-save for comments
   useEffect(() => {
@@ -375,11 +429,7 @@ export default function LapPage() {
     }
   }, [tags, lap, autoSaveTags]);
 
-  // Save plot configurations and layout immediately when changed
-  useEffect(() => {
-    if (!lap) return; // Don't save until lap is loaded
-    autoSavePlotConfigs(plotConfigs, plotLayout);
-  }, [plotConfigs, plotLayout, lap, autoSavePlotConfigs]);
+  // Plot/analysis panel layouts are now owned by plugins and backend layout APIs.
 
   function addTag(tag: string) {
     if (!tags.includes(tag)) {
@@ -501,24 +551,44 @@ export default function LapPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
           {/* Left Column - Telemetry & Lap Comparison */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Telemetry Charts (provided by plugin) */}
-            {(() => {
-              const views = getLapAnalysisViews().filter(v => v.context === 'singleLap');
-              const view = views[0];
-              return view
-                ? view.render({
-                    context: compareLapId ? 'lapComparison' : 'singleLap',
-                    telemetry: telemetryFrames,
-                    compareTelemetry: compareTelemetry.length > 0 ? compareTelemetry : undefined,
-                    compareLapId,
-                    plotConfigs,
-                    plotLayout,
-                    onPlotConfigsChange: setPlotConfigs,
-                    onPlotLayoutChange: setPlotLayout,
-                    host: {},
-                  })
-                : null;
-            })()}
+            {/* Telemetry Data panel using generic analysis layout */}
+            {analysisLayout && (
+              <>
+                <TelemetryDataPanel
+                  context={compareLapId ? 'lapComparison' : 'singleLap'}
+                  telemetry={telemetryFrames}
+                  compareTelemetry={
+                    compareTelemetry.length > 0 ? compareTelemetry : undefined
+                  }
+                  compareLapId={compareLapId}
+                  layout={analysisLayout}
+                  onLayoutChange={setAnalysisLayout}
+                  onSaveLayout={() => setIsSaveLayoutDialogOpen(true)}
+                  onLoadLayout={() => setIsLoadLayoutDialogOpen(true)}
+                  onManageLayouts={() => setIsManageLayoutsDialogOpen(true)}
+                  hasSavedLayout={!!analysisLayoutId}
+                />
+
+                <SaveLayoutDialog
+                  open={isSaveLayoutDialogOpen}
+                  onOpenChange={setIsSaveLayoutDialogOpen}
+                  onSave={handleSaveAnalysisLayout}
+                />
+
+                <AnalysisLoadLayoutDialog
+                  open={isLoadLayoutDialogOpen}
+                  onOpenChange={setIsLoadLayoutDialogOpen}
+                  onLoad={handleLoadAnalysisLayout}
+                  context={`lap:${lapId}`}
+                />
+
+                <AnalysisManageLayoutsDialog
+                  open={isManageLayoutsDialogOpen}
+                  onOpenChange={setIsManageLayoutsDialogOpen}
+                  context={`lap:${lapId}`}
+                />
+              </>
+            )}
 
             {/* Lap Comparison */}
             <Card>

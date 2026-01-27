@@ -9,12 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { TelemetryFrame } from '@/types/telemetry';
-import { PlotConfig, PlotLayout, DEFAULT_PLOT_CONFIGS, generateDefaultLayout } from '@/types/plotConfig';
 import { formatLapTime } from '@/lib/utils';
 import { msToSeconds } from '@purplesector/telemetry';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { decodeMessage, createStartDemoMessage, createStopDemoMessage, createPingMessage } from '@/lib/telemetry-proto-browser';
-import { getLapAnalysisViews } from '@/plugins';
+import { AnalysisPanelGrid } from '@/components/AnalysisPanelGrid';
+import type { AnalysisLayoutJSON } from '@/lib/analysisLayout';
 
 const SESSION_TAGS = [
   'Testing',
@@ -66,10 +66,8 @@ export default function SessionPage() {
   const [customSessionTag, setCustomSessionTag] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
   const [sessionAlreadyOpen, setSessionAlreadyOpen] = useState(false);
-  const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(DEFAULT_PLOT_CONFIGS);
-  const [plotLayout, setPlotLayout] = useState<PlotLayout>(
-    generateDefaultLayout(DEFAULT_PLOT_CONFIGS)
-  );
+  const [analysisLayoutId, setAnalysisLayoutId] = useState<string | null>(null);
+  const [analysisLayout, setAnalysisLayout] = useState<AnalysisLayoutJSON | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -195,17 +193,6 @@ export default function SessionPage() {
         });
       }
 
-      // Load plot configurations (only if different from current)
-      if (data.plotConfigs) {
-        const newConfigs = JSON.parse(data.plotConfigs);
-        setPlotConfigs(prev => {
-          // Only update if actually different
-          if (JSON.stringify(prev) !== JSON.stringify(newConfigs)) {
-            return newConfigs;
-          }
-          return prev;
-        });
-      }
     } catch (error) {
       console.error('Error fetching session:', error);
     } finally {
@@ -239,24 +226,115 @@ export default function SessionPage() {
     };
   }, []);
 
-  // Memoized callback for plot config changes
-  const handlePlotConfigsChange = useCallback((configs: PlotConfig[]) => {
-    if (!isMountedRef.current) return;
-    setPlotConfigs(configs);
-    setPlotLayout(generateDefaultLayout(configs));
-    // Auto-save to session
-    fetch(`/api/sessions/${sessionId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plotConfigs: JSON.stringify(configs) }),
-    }).catch(error => console.error('Error saving plot configs:', error));
-  }, [sessionId]);
+  // Load analysis layout for this session from backend (or use default if none exists)
+  useEffect(() => {
+    if (!session) return;
 
-  const handlePlotLayoutChange = useCallback((layout: PlotLayout) => {
-    if (!isMountedRef.current) return;
-    setPlotLayout(layout);
-    // (Optional) Persist layout to the session in the future
-  }, []);
+    const controller = new AbortController();
+
+    const loadLayout = async () => {
+      const contextKey = `session:${sessionId}`;
+
+      try {
+        const response = await fetch(`/api/analysis-layouts?context=${encodeURIComponent(contextKey)}`, {
+          signal: controller.signal,
+        });
+
+        if (response.ok) {
+          const layouts = await response.json();
+          if (Array.isArray(layouts) && layouts.length > 0) {
+            const layoutRecord = layouts.find((l: any) => l.isDefault) ?? layouts[0];
+            try {
+              const parsed: AnalysisLayoutJSON = JSON.parse(layoutRecord.layout);
+              setAnalysisLayoutId(layoutRecord.id);
+              setAnalysisLayout(parsed);
+              return;
+            } catch (e) {
+              console.error('Failed to parse saved analysis layout JSON for session:', e);
+            }
+          }
+        }
+      } catch (error) {
+        if ((error as any).name !== 'AbortError') {
+          console.error('Error loading analysis layout for session:', error);
+        }
+      }
+
+      // Fallback: simple default layout
+      setAnalysisLayout({
+        version: 1,
+        cols: 12,
+        panels: [
+          {
+            id: 'default-plot',
+            typeId: 'plot',
+            x: 0,
+            y: 0,
+            colSpan: 12,
+            rowSpan: 1,
+          },
+        ],
+      });
+    };
+
+    loadLayout();
+
+    return () => {
+      controller.abort();
+    };
+  }, [session, sessionId]);
+
+  // Persist analysis layout changes to backend for this session
+  useEffect(() => {
+    if (!session || !analysisLayout) return;
+
+    const controller = new AbortController();
+
+    const saveLayout = async () => {
+      const contextKey = `session:${sessionId}`;
+
+      try {
+        if (!analysisLayoutId) {
+          const response = await fetch('/api/analysis-layouts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: `${session.name} Live Layout`,
+              description: null,
+              context: contextKey,
+              layout: analysisLayout,
+              isDefault: true,
+            }),
+            signal: controller.signal,
+          });
+
+          if (response.ok) {
+            const created = await response.json();
+            if (created?.id) {
+              setAnalysisLayoutId(created.id as string);
+            }
+          }
+        } else {
+          await fetch(`/api/analysis-layouts/${analysisLayoutId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ layout: analysisLayout }),
+            signal: controller.signal,
+          });
+        }
+      } catch (error) {
+        if ((error as any).name !== 'AbortError') {
+          console.error('Error saving analysis layout for session:', error);
+        }
+      }
+    };
+
+    saveLayout();
+
+    return () => {
+      controller.abort();
+    };
+  }, [analysisLayout, analysisLayoutId, session, sessionId]);
 
   function connectWebSocket() {
     // Clear any existing connection and timers
@@ -912,23 +990,16 @@ export default function SessionPage() {
                   </CardContent>
                 </Card>
               )}
-              {session.started && (() => {
-                const views = getLapAnalysisViews().filter(v => v.context === 'singleLap');
-                const view = views[0];
-                return view
-                  ? view.render({
-                      context: 'singleLap',
-                      telemetry: currentLapFrames,
-                      compareTelemetry: undefined,
-                      compareLapId: null,
-                      plotConfigs,
-                      plotLayout,
-                      onPlotConfigsChange: handlePlotConfigsChange,
-                      onPlotLayoutChange: handlePlotLayoutChange,
-                      host: {},
-                    })
-                  : null;
-              })()}
+              {session.started && analysisLayout && (
+                <AnalysisPanelGrid
+                  context="live"
+                  telemetry={currentLapFrames}
+                  compareTelemetry={undefined}
+                  compareLapId={null}
+                  layout={analysisLayout}
+                  onLayoutChange={setAnalysisLayout}
+                />
+              )}
             </div>
           )}
 

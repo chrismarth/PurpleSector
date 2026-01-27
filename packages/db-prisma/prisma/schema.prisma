@@ -98,6 +98,22 @@ model SavedPlotLayout {
   @@index([createdAt])
 }
 
+model SavedAnalysisLayout {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  // JSON blob describing analysis panel instances and grid options
+  layout      String
+  // Arbitrary string context, e.g. "lap:<lapId>", "session:<sessionId>", "global:live"
+  context     String   @default("global")
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([context, isDefault])
+  @@index([createdAt])
+}
+
 model Vehicle {
   id                    String                 @id @default(cuid())
   name                  String

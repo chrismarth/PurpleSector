@@ -34,8 +34,8 @@ export interface UPlotChartProps {
   height: number;
   onHover?: (index: number | null) => void;
   syncedHoverIndex?: number | null;
-  onZoom?: (min: number, max: number) => void;
   className?: string;
+  onReady?: (chart: uPlot) => void;
 }
 
 export function UPlotChart({
@@ -46,12 +46,11 @@ export function UPlotChart({
   height,
   onHover,
   syncedHoverIndex,
-  onZoom,
   className = '',
+  onReady,
 }: UPlotChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<uPlot | null>(null);
-  const [isSelecting, setIsSelecting] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
   // Detect dark mode changes
@@ -145,16 +144,6 @@ export function UPlotChart({
         x: true,
         y: false,
       },
-      bind: {
-        mousedown: (u, targ, handler) => {
-          setIsSelecting(true);
-          return handler;
-        },
-        mouseup: (u, targ, handler) => {
-          setIsSelecting(false);
-          return handler;
-        },
-      },
     };
 
     const hooks: uPlot.Hooks.Arrays = {
@@ -169,14 +158,11 @@ export function UPlotChart({
       setSelect: [
         (u) => {
           const select = u.select;
-          if (select && select.width > 5 && onZoom) {
-            const min = u.posToVal(select.left, 'x');
-            const max = u.posToVal(select.left + select.width, 'x');
-            onZoom(min, max);
-            setTimeout(() => {
-              u.setSelect({ left: 0, top: 0, width: 0, height: 0 });
-            }, 0);
-          }
+          if (!select || select.width <= 5) return;
+
+          const min = u.posToVal(select.left, 'x');
+          const max = u.posToVal(select.left + select.width, 'x');
+          u.setScale('x', { min, max });
         },
       ],
     };
@@ -191,6 +177,15 @@ export function UPlotChart({
       legend: {
         show: false,
       },
+      // Enable the built-in selection rectangle for zooming. Styling is
+      // provided by the default uPlot CSS.
+      select: {
+        show: true,
+        left: 0,
+        top: 0,
+        width: 0,
+        height: 0,
+      },
       scales: {
         x: {},
         y: {},
@@ -200,12 +195,15 @@ export function UPlotChart({
 
     const chart = new uPlot(opts, data, containerRef.current);
     chartRef.current = chart;
+    if (onReady) {
+      onReady(chart);
+    }
 
     return () => {
       chart.destroy();
       chartRef.current = null;
     };
-  }, [data, series, axes, width, height, onHover, onZoom, darkMode]);
+  }, [data, series, axes, width, height, onHover, darkMode, onReady]);
 
   useEffect(() => {
     if (!chartRef.current || syncedHoverIndex === undefined) return;
@@ -233,10 +231,6 @@ export function UPlotChart({
   }, [width, height]);
 
   return (
-    <div
-      ref={containerRef}
-      className={`uplot-chart ${className}`}
-      style={{ cursor: isSelecting ? 'crosshair' : 'default' }}
-    />
+    <div ref={containerRef} className={`uplot-chart ${className}`} />
   );
 }

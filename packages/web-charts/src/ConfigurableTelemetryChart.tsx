@@ -1,19 +1,11 @@
 'use client';
 
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
-import { Trash2, ZoomOut, MoreVertical, SplitSquareHorizontal, SplitSquareVertical, Pencil, Plus } from 'lucide-react';
 import uPlot from 'uplot';
 import { UPlotChart, type UPlotSeries, type UPlotAxis } from './UPlotChart';
 import { TelemetryFrame } from '@/types/telemetry';
 import { PlotConfig, CHANNEL_METADATA, TelemetryChannel } from '@/types/plotConfig';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { PlotConfigDialog } from '@purplesector/web-charts';
 
 interface ConfigurableTelemetryChartProps {
@@ -22,12 +14,13 @@ interface ConfigurableTelemetryChartProps {
   config: PlotConfig;
   onConfigChange: (config: PlotConfig) => void;
   onDelete?: () => void;
-  onSplitHorizontal?: () => void;
-  onSplitVertical?: () => void;
-  onAddRowBelow?: () => void;
   height?: number;
   syncedHoverValue?: number | null;
   onHoverChange?: (value: number | null) => void;
+  // Allow parent toolbars to trigger a zoom reset via changing token.
+  externalResetZoomToken?: number;
+  // Allow parent toolbars to open the config dialog via changing token.
+  externalOpenConfigToken?: number;
 }
 
 export function ConfigurableTelemetryChart({
@@ -36,22 +29,17 @@ export function ConfigurableTelemetryChart({
   config,
   onConfigChange,
   onDelete,
-  onSplitHorizontal,
-  onSplitVertical,
-  onAddRowBelow,
   height = 250,
   syncedHoverValue,
   onHoverChange,
+  externalResetZoomToken,
+  externalOpenConfigToken,
 }: ConfigurableTelemetryChartProps) {
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(800);
 
-  const [zoomDomain, setZoomDomain] = useState<{
-    x?: [number, number];
-    y?: [number, number];
-    y2?: [number, number];
-  } | null>(null);
+  const chartRef = useRef<uPlot | null>(null);
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [syncedHoverIndex, setSyncedHoverIndex] = useState<number | null>(null);
@@ -186,23 +174,47 @@ export function ConfigurableTelemetryChart({
     [data, onHoverChange]
   );
 
-  const handleZoom = useCallback(
-    (min: number, max: number) => {
-      setZoomDomain({
-        x: [min, max],
-      });
-    },
-    []
-  );
-
   const resetZoom = useCallback(() => {
-    setZoomDomain(null);
+    if (!chartRef.current) return;
+
+    const xVals = chartData.uplotData[0];
+    if (!xVals || xVals.length === 0) return;
+
+    const min = xVals[0] as number;
+    const max = xVals[xVals.length - 1] as number;
+
+    chartRef.current.setScale('x', { min, max });
+    chartRef.current.setSelect({ left: 0, top: 0, width: 0, height: 0 });
+  }, [chartData.uplotData]);
+
+  useEffect(() => {
+    if (externalResetZoomToken !== undefined) {
+      resetZoom();
+    }
+  }, [externalResetZoomToken, resetZoom]);
+
+  useEffect(() => {
+    if (externalOpenConfigToken !== undefined) {
+      setShowConfigDialog(true);
+    }
+  }, [externalOpenConfigToken]);
+
+  const handleChartReady = useCallback((chart: uPlot) => {
+    chartRef.current = chart;
   }, []);
 
   const renderCustomLegend = () => {
     if (!data || data.length === 0 || chartData.series.length === 0) return null;
 
-    const currentIndex = hoveredIndex ?? data.length - 1;
+    // hoveredIndex can sometimes be out of bounds (e.g. -1) depending on chart hover behavior.
+    let currentIndex = hoveredIndex ?? data.length - 1;
+    if (currentIndex < 0 || currentIndex >= data.length) {
+      currentIndex = data.length - 1;
+    }
+    if (currentIndex < 0 || currentIndex >= data.length) {
+      return null;
+    }
+
     const currentTime = data[currentIndex].lapTime / 1000;
 
     const values = chartData.series.map((series, seriesIndex) => {
@@ -239,68 +251,14 @@ export function ConfigurableTelemetryChart({
   };
 
   return (
-    <TooltipProvider>
-      <div ref={containerRef} className="bg-card rounded-lg border p-4 space-y-3">
+    <div ref={containerRef} className="bg-card rounded-lg border p-4 space-y-3">
+      {config.title && (
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{config.title}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={resetZoom}
-                  disabled={!zoomDomain}
-                >
-                  <ZoomOut className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Reset zoom</TooltipContent>
-            </Tooltip>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setShowConfigDialog(true)}>
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Configure Plot
-                </DropdownMenuItem>
-                {onSplitHorizontal && (
-                  <DropdownMenuItem onClick={onSplitHorizontal}>
-                    <SplitSquareHorizontal className="h-4 w-4 mr-2" />
-                    Split Horizontally
-                  </DropdownMenuItem>
-                )}
-                {onSplitVertical && (
-                  <DropdownMenuItem onClick={onSplitVertical}>
-                    <SplitSquareVertical className="h-4 w-4 mr-2" />
-                    Split Vertically
-                  </DropdownMenuItem>
-                )}
-                {onAddRowBelow && (
-                  <DropdownMenuItem onClick={onAddRowBelow}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Row Below
-                  </DropdownMenuItem>
-                )}
-                {onDelete && (
-                  <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Remove Plot
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <span className="font-medium text-sm truncate">{config.title}</span>
         </div>
+      )}
 
-        {config.channels.length === 0 ? (
+      {config.channels.length === 0 ? (
           <div
             className="flex items-center justify-center text-muted-foreground"
             style={{ height: `${height}px` }}
@@ -322,20 +280,19 @@ export function ConfigurableTelemetryChart({
               height={height}
               onHover={handleHover}
               syncedHoverIndex={syncedHoverIndex}
-              onZoom={handleZoom}
+              onReady={handleChartReady}
             />
           </div>
         )}
 
-        {config.channels.length > 0 && renderCustomLegend()}
+      {config.channels.length > 0 && renderCustomLegend()}
 
-        <PlotConfigDialog
-          open={showConfigDialog}
-          onOpenChange={setShowConfigDialog}
-          config={config}
-          onSave={onConfigChange}
-        />
-      </div>
-    </TooltipProvider>
+      <PlotConfigDialog
+        open={showConfigDialog}
+        onOpenChange={setShowConfigDialog}
+        config={config}
+        onSave={onConfigChange}
+      />
+    </div>
   );
 }
