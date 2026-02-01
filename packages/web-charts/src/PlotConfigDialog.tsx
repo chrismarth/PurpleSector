@@ -29,14 +29,15 @@ import {
   PlotConfig,
   ChannelConfig,
   TelemetryChannel,
-  CHANNEL_METADATA,
 } from '@/types/plotConfig';
+import { RAW_CHANNELS, RawTelemetryChannel, MathTelemetryChannel, TelemetryChannelDefinition } from '@purplesector/telemetry';
 
 interface PlotConfigDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   config: PlotConfig;
   onSave: (config: PlotConfig) => void;
+  mathChannels?: MathTelemetryChannel[];
 }
 
 export function PlotConfigDialog({
@@ -44,23 +45,30 @@ export function PlotConfigDialog({
   onOpenChange,
   config,
   onSave,
+  mathChannels = [],
 }: PlotConfigDialogProps) {
   const [editedConfig, setEditedConfig] = useState<PlotConfig>(config);
 
-  // Get all available channels
-  const allChannels = Object.values(CHANNEL_METADATA);
+  // Get all available channels from the shared registry (raw + math)
+  const allChannels: TelemetryChannelDefinition[] = [...RAW_CHANNELS, ...mathChannels];
   
   // Get channels that can be used as X-axis (time-based)
   const xAxisChannels = allChannels.filter(ch => ch.isTimeAxis);
   
-  // Get channels that can be plotted (non-time-based)
-  const dataChannels = allChannels.filter(ch => !ch.isTimeAxis);
+  // Get channels that can be plotted (non-time-based, and validated if math)
+  const dataChannels = allChannels.filter(ch => {
+    if (ch.isTimeAxis) return false;
+    // For math channels, only show validated ones
+    if (ch.kind === 'math') return ch.validated;
+    return true;
+  });
 
   const handleAddChannel = () => {
+    const throttleDef = RAW_CHANNELS.find(ch => ch.id === 'throttle');
     const newChannel: ChannelConfig = {
       id: `channel-${Date.now()}`,
-      channel: 'throttle',
-      color: CHANNEL_METADATA.throttle.defaultColor,
+      channelId: 'throttle',
+      color: throttleDef?.defaultColor ?? '#10b981',
       useSecondaryAxis: false,
     };
 
@@ -89,9 +97,9 @@ export function PlotConfigDialog({
           const updated = { ...ch, [field]: value };
           
           // Auto-update color when channel changes
-          if (field === 'channel') {
-            const metadata = CHANNEL_METADATA[value as TelemetryChannel];
-            updated.color = metadata.defaultColor;
+          if (field === 'channelId') {
+            const channelDef = allChannels.find(ch => ch.id === value);
+            updated.color = channelDef?.defaultColor ?? '#000000';
           }
           
           return updated;
@@ -102,14 +110,17 @@ export function PlotConfigDialog({
   };
 
   const handleAutoGenerate = () => {
-    const xMeta = CHANNEL_METADATA[editedConfig.xAxis];
+    const channelDefsById = new Map(allChannels.map(ch => [ch.id, ch]));
+    const xMeta = channelDefsById.get(editedConfig.xAxis);
     const primaryChannels = editedConfig.channels.filter(ch => !ch.useSecondaryAxis);
     const secondaryChannels = editedConfig.channels.filter(ch => ch.useSecondaryAxis);
     
     // Generate plot title from channel names
     let title = '';
     if (editedConfig.channels.length > 0) {
-      const channelNames = editedConfig.channels.map(ch => CHANNEL_METADATA[ch.channel].label);
+      const channelNames = editedConfig.channels.map(
+        (ch) => channelDefsById.get(ch.channelId)?.label ?? ch.channelId,
+      );
       if (channelNames.length === 1) {
         title = channelNames[0];
       } else if (channelNames.length === 2) {
@@ -120,13 +131,21 @@ export function PlotConfigDialog({
     }
     
     // Generate X-axis label
-    const xAxisLabel = `${xMeta.label}${xMeta.unit ? ` (${xMeta.unit})` : ''}`;
+    const xAxisLabel = xMeta ? `${xMeta.label}${xMeta.unit ? ` (${xMeta.unit})` : ''}` : 'X-Axis';
     
     // Generate primary Y-axis label
     let yAxisLabel = '';
     if (primaryChannels.length > 0) {
-      const channelLabels = primaryChannels.map(ch => CHANNEL_METADATA[ch.channel].label);
-      const units = [...new Set(primaryChannels.map(ch => CHANNEL_METADATA[ch.channel].unit))];
+      const channelLabels = primaryChannels.map(
+        (ch) => channelDefsById.get(ch.channelId)?.label ?? ch.channelId,
+      );
+      const units = [
+        ...new Set(
+          primaryChannels.map(
+            (ch) => channelDefsById.get(ch.channelId)?.unit ?? '',
+          ),
+        ),
+      ];
       
       if (channelLabels.length === 1) {
         yAxisLabel = `${channelLabels[0]}${units[0] ? ` (${units[0]})` : ''}`;
@@ -142,8 +161,16 @@ export function PlotConfigDialog({
     // Generate secondary Y-axis label
     let yAxisLabelSecondary = '';
     if (secondaryChannels.length > 0) {
-      const channelLabels = secondaryChannels.map(ch => CHANNEL_METADATA[ch.channel].label);
-      const units = [...new Set(secondaryChannels.map(ch => CHANNEL_METADATA[ch.channel].unit))];
+      const channelLabels = secondaryChannels.map(
+        (ch) => channelDefsById.get(ch.channelId)?.label ?? ch.channelId,
+      );
+      const units = [
+        ...new Set(
+          secondaryChannels.map(
+            (ch) => channelDefsById.get(ch.channelId)?.unit ?? '',
+          ),
+        ),
+      ];
       
       if (channelLabels.length === 1) {
         yAxisLabelSecondary = `${channelLabels[0]}${units[0] ? ` (${units[0]})` : ''}`;
@@ -232,7 +259,7 @@ export function PlotConfigDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {xAxisChannels.map((ch) => (
-                    <SelectItem key={ch.key} value={ch.key}>
+                    <SelectItem key={ch.id} value={ch.id}>
                       {ch.label}
                     </SelectItem>
                   ))}
@@ -321,41 +348,50 @@ export function PlotConfigDialog({
                       {/* Channel Select */}
                       <div className="flex-1">
                         <Select
-                          value={channel.channel}
+                          value={channel.channelId}
                           onValueChange={(value) =>
-                            handleChannelChange(
-                              channel.id,
-                              'channel',
-                              value
-                            )
+                            handleChannelChange(channel.id, 'channelId', value)
                           }
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select channel" />
                           </SelectTrigger>
                           <SelectContent>
-                            {dataChannels.map((ch) => (
-                              <SelectItem key={ch.key} value={ch.key}>
-                                {ch.label}
-                              </SelectItem>
-                            ))}
+                            {dataChannels.map((ch) => {
+                              const isInvalid = ch.kind === 'math' && !ch.validated;
+                              return (
+                                <SelectItem 
+                                  key={ch.id} 
+                                  value={ch.id}
+                                  disabled={isInvalid}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span>{ch.label}</span>
+                                    {isInvalid && (
+                                      <span className="text-xs text-destructive">(Invalid)</span>
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                       </div>
 
                       {/* Color Picker */}
-                      <div className="w-20">
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-6 h-6 rounded-full border-2 border-border"
+                          style={{ backgroundColor: channel.color || '#000000' }}
+                          title="Channel color"
+                        />
                         <Input
                           type="color"
                           value={channel.color || '#000000'}
                           onChange={(e) =>
-                            handleChannelChange(
-                              channel.id,
-                              'color',
-                              e.target.value
-                            )
+                            handleChannelChange(channel.id, 'color', e.target.value)
                           }
-                          className="h-10 p-1 cursor-pointer"
+                          className="h-10 w-16 p-1 cursor-pointer"
                         />
                       </div>
 
@@ -369,7 +405,7 @@ export function PlotConfigDialog({
                             handleChannelChange(
                               channel.id,
                               'useSecondaryAxis',
-                              e.target.checked
+                              e.target.checked,
                             )
                           }
                           className="rounded"

@@ -167,3 +167,17 @@ model VehicleSetup {
   @@index([createdAt])
 }
 
+model MathChannel {
+  id          String   @id @default(cuid())
+  label       String
+  unit        String
+  expression  String   // mathjs expression
+  inputs      String   // JSON array of MathChannelInput[] with channelId and alias
+  validated   Boolean  @default(false) // Whether the expression has been validated
+  comment     String?  // Optional description/documentation for the channel
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([createdAt])
+}
+

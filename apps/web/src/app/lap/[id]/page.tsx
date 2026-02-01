@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { TelemetryDataPanel } from '@/components/TelemetryDataPanel';
 import Link from 'next/link';
@@ -13,6 +13,12 @@ import { ChatInterface } from '@/components/ChatInterface';
 import { VehicleInfoPanel } from '@/components/VehicleInfoPanel';
 import { formatLapTime } from '@/lib/utils';
 import { TelemetryFrame, LapSuggestion } from '@/types/telemetry';
+import {
+  RAW_CHANNELS,
+  CompositeChannelRegistry,
+  MathTelemetryChannel,
+} from '@purplesector/telemetry';
+import { ChannelEditorDialog } from '@/components/ChannelEditorDialog';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import type { AnalysisLayoutJSON } from '@/lib/analysisLayout';
 import { SaveLayoutDialog } from '@/components/SaveLayoutDialog';
@@ -112,6 +118,16 @@ export default function LapPage() {
   const [isLoadLayoutDialogOpen, setIsLoadLayoutDialogOpen] = useState(false);
   const [isManageLayoutsDialogOpen, setIsManageLayoutsDialogOpen] = useState(false);
 
+  // Math channels loaded from backend
+  const [mathChannels, setMathChannels] = useState<MathTelemetryChannel[]>([]);
+  const [showChannelEditor, setShowChannelEditor] = useState(false);
+
+  // Instantiate the composite channel registry with raw + math channels
+  const channelRegistry = useMemo(
+    () => new CompositeChannelRegistry(RAW_CHANNELS, mathChannels),
+    [mathChannels],
+  );
+
   // Handle back button - close tab if opened in new tab
   function handleBack() {
     // Check if this lap was marked as opened in a new tab (use localStorage for cross-tab)
@@ -130,6 +146,7 @@ export default function LapPage() {
 
   useEffect(() => {
     fetchLap();
+    fetchMathChannels();
   }, [lapId]);
 
   // Fetch available laps after lap is loaded and poll for updates
@@ -157,6 +174,93 @@ export default function LapPage() {
       console.error('Error fetching event laps:', error);
     }
   }
+
+  async function fetchMathChannels() {
+    try {
+      const response = await fetch('/api/channels/math');
+      if (response.ok) {
+        const data = await response.json();
+        setMathChannels(data);
+      }
+    } catch (error) {
+      console.error('Error fetching math channels:', error);
+    }
+  }
+
+  const handleMathChannelCreate = async (channel: MathTelemetryChannel) => {
+    console.log('Creating math channel:', channel);
+    try {
+      const response = await fetch('/api/channels/math', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: channel.label,
+          unit: channel.unit,
+          expression: channel.expression,
+          inputs: channel.inputs,
+          validated: channel.validated,
+        }),
+      });
+
+      console.log('API response status:', response.status);
+      
+      if (response.ok) {
+        const newChannel = await response.json();
+        console.log('New channel from API:', newChannel);
+        console.log('Current math channels:', mathChannels);
+        setMathChannels([...mathChannels, newChannel]);
+        console.log('Updated math channels state');
+      } else {
+        const errorText = await response.text();
+        console.error('API error:', response.status, errorText);
+        alert(`Failed to create math channel: ${errorText}`);
+      }
+    } catch (error) {
+      console.error('Error creating math channel:', error);
+      alert('Failed to create math channel');
+    }
+  };
+
+  const handleMathChannelUpdate = async (channel: MathTelemetryChannel) => {
+    try {
+      const response = await fetch(`/api/channels/math/${channel.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: channel.label,
+          unit: channel.unit,
+          expression: channel.expression,
+          inputs: channel.inputs,
+          validated: channel.validated,
+        }),
+      });
+
+      if (response.ok) {
+        const updatedChannel = await response.json();
+        setMathChannels(
+          mathChannels.map((ch) => (ch.id === updatedChannel.id ? updatedChannel : ch))
+        );
+      }
+    } catch (error) {
+      console.error('Error updating math channel:', error);
+      alert('Failed to update math channel');
+    }
+  };
+
+  const handleMathChannelDelete = async (channelId: string) => {
+    try {
+      const response = await fetch(`/api/channels/math/${channelId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setMathChannels(mathChannels.filter((ch) => ch.id !== channelId));
+      }
+    } catch (error) {
+      console.error('Error deleting math channel:', error);
+      alert('Failed to delete math channel');
+    }
+  };
 
   async function fetchLap() {
     try {
@@ -548,12 +652,12 @@ export default function LapPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-stretch">
           {/* Left Column - Telemetry & Lap Comparison */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 flex flex-col gap-6">
             {/* Telemetry Data panel using generic analysis layout */}
             {analysisLayout && (
-              <>
+              <div className="flex-1 flex flex-col">
                 <TelemetryDataPanel
                   context={compareLapId ? 'lapComparison' : 'singleLap'}
                   telemetry={telemetryFrames}
@@ -566,7 +670,9 @@ export default function LapPage() {
                   onSaveLayout={() => setIsSaveLayoutDialogOpen(true)}
                   onLoadLayout={() => setIsLoadLayoutDialogOpen(true)}
                   onManageLayouts={() => setIsManageLayoutsDialogOpen(true)}
+                  onManageChannels={() => setShowChannelEditor(true)}
                   hasSavedLayout={!!analysisLayoutId}
+                  mathChannels={mathChannels}
                 />
 
                 <SaveLayoutDialog
@@ -587,7 +693,7 @@ export default function LapPage() {
                   onOpenChange={setIsManageLayoutsDialogOpen}
                   context={`lap:${lapId}`}
                 />
-              </>
+              </div>
             )}
 
             {/* Lap Comparison */}
@@ -912,6 +1018,35 @@ export default function LapPage() {
           </Card>
         </div>
       </main>
+
+      {/* Channel Editor Dialog */}
+      <ChannelEditorDialog
+        open={showChannelEditor}
+        onOpenChange={setShowChannelEditor}
+        mathChannels={mathChannels}
+        onMathChannelCreate={handleMathChannelCreate}
+        onMathChannelUpdate={handleMathChannelUpdate}
+        onMathChannelDelete={handleMathChannelDelete}
+        availableRawChannelIds={new Set(RAW_CHANNELS.map((ch) => ch.id))}
+      />
+
+      {/* Analysis Layout Dialogs */}
+      <SaveLayoutDialog
+        open={isSaveLayoutDialogOpen}
+        onOpenChange={setIsSaveLayoutDialogOpen}
+        onSave={handleSaveAnalysisLayout}
+      />
+      <AnalysisLoadLayoutDialog
+        open={isLoadLayoutDialogOpen}
+        onOpenChange={setIsLoadLayoutDialogOpen}
+        context={`lap:${lapId}`}
+        onLoad={handleLoadAnalysisLayout}
+      />
+      <AnalysisManageLayoutsDialog
+        open={isManageLayoutsDialogOpen}
+        onOpenChange={setIsManageLayoutsDialogOpen}
+        context={`lap:${lapId}`}
+      />
     </div>
   );
 }

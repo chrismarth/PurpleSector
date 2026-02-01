@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TelemetryFrame } from '@/types/telemetry';
+import { MathTelemetryChannel } from '@purplesector/telemetry';
 import { getAnalysisPanelTypes, getDefaultProviderForType } from '@/plugins';
 import type {
   AnalysisPanelContext,
@@ -26,6 +27,7 @@ interface AnalysisPanelGridProps {
   compareLapId?: string | null;
   layout: AnalysisLayoutJSON;
   onLayoutChange?: (layout: AnalysisLayoutJSON) => void;
+  mathChannels?: MathTelemetryChannel[];
 }
 
 export function AnalysisPanelGrid({
@@ -35,6 +37,7 @@ export function AnalysisPanelGrid({
   compareLapId,
   layout,
   onLayoutChange,
+  mathChannels,
 }: AnalysisPanelGridProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const layoutRef = useRef(layout);
@@ -177,6 +180,7 @@ export function AnalysisPanelGrid({
               },
               syncedHoverValue: hoverValue,
               onHoverChange: setHoverValue,
+              mathChannels,
             })
           : null;
 

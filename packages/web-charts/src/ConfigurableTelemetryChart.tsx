@@ -4,7 +4,15 @@ import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import uPlot from 'uplot';
 import { UPlotChart, type UPlotSeries, type UPlotAxis } from './UPlotChart';
 import { TelemetryFrame } from '@/types/telemetry';
-import { PlotConfig, CHANNEL_METADATA, TelemetryChannel } from '@/types/plotConfig';
+import { PlotConfig, TelemetryChannel } from '@/types/plotConfig';
+import {
+  RAW_CHANNELS,
+  RawTelemetryChannel,
+  TelemetryChannelDefinition,
+  MathTelemetryChannel,
+  evaluateMathChannelSeries,
+  TimeSeries,
+} from '@purplesector/telemetry';
 import { Button } from '@/components/ui/button';
 import { PlotConfigDialog } from '@purplesector/web-charts';
 
@@ -21,6 +29,7 @@ interface ConfigurableTelemetryChartProps {
   externalResetZoomToken?: number;
   // Allow parent toolbars to open the config dialog via changing token.
   externalOpenConfigToken?: number;
+  mathChannels?: MathTelemetryChannel[];
 }
 
 export function ConfigurableTelemetryChart({
@@ -34,6 +43,7 @@ export function ConfigurableTelemetryChart({
   onHoverChange,
   externalResetZoomToken,
   externalOpenConfigToken,
+  mathChannels = [],
 }: ConfigurableTelemetryChartProps) {
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,6 +53,15 @@ export function ConfigurableTelemetryChart({
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [syncedHoverIndex, setSyncedHoverIndex] = useState<number | null>(null);
+
+  // Build a lookup map from RAW_CHANNELS and mathChannels for metadata
+  const channelDefsById = useMemo(
+    () => {
+      const allChannels: TelemetryChannelDefinition[] = [...RAW_CHANNELS, ...mathChannels];
+      return new Map<string, TelemetryChannelDefinition>(allChannels.map((ch) => [ch.id, ch]));
+    },
+    [mathChannels],
+  );
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -98,21 +117,89 @@ export function ConfigurableTelemetryChart({
     const series: UPlotSeries[] = [];
 
     primaryChannels.forEach((channelConfig) => {
-      const values = data.map((frame) => getChannelValue(frame, channelConfig.channel));
+      const channelDef = channelDefsById.get(channelConfig.channelId);
+      
+      // Skip invalid math channels
+      if (channelDef?.kind === 'math' && !channelDef.validated) {
+        return;
+      }
+      
+      let values: number[];
+      
+      if (!channelDef || channelDef.kind === 'raw') {
+        // Raw channel: use existing getChannelValue path
+        values = data.map((frame) =>
+          getChannelValue(frame, channelConfig.channelId as TelemetryChannel),
+        );
+      } else {
+        // Math channel: channelDef.kind === 'math'
+        const mathDef = channelDef; // TypeScript now knows this is MathTelemetryChannel
+        const inputSeries: Record<string, TimeSeries> = {};
+        
+        // Build input series for each required channel
+        for (const input of mathDef.inputs) {
+          const inputDef = channelDefsById.get(input.channelId);
+          if (inputDef && inputDef.kind === 'raw') {
+            inputSeries[input.channelId] = data.map((frame) => ({
+              t: frame.lapTime / 1000,
+              v: getChannelValue(frame, input.channelId as TelemetryChannel),
+            }));
+          }
+        }
+        
+        // Evaluate the math channel
+        const resultSeries = evaluateMathChannelSeries(mathDef, inputSeries);
+        values = resultSeries.map(s => s.v ?? 0);
+      }
+      
       seriesData.push(values);
       series.push({
-        label: CHANNEL_METADATA[channelConfig.channel].label,
-        color: channelConfig.color || CHANNEL_METADATA[channelConfig.channel].defaultColor,
+        label: channelDef?.label ?? channelConfig.channelId,
+        color: channelConfig.color ?? channelDef?.defaultColor ?? '#000000',
         scale: 'y',
       });
     });
 
     secondaryChannels.forEach((channelConfig) => {
-      const values = data.map((frame) => getChannelValue(frame, channelConfig.channel));
+      const channelDef = channelDefsById.get(channelConfig.channelId);
+      
+      // Skip invalid math channels
+      if (channelDef?.kind === 'math' && !channelDef.validated) {
+        return;
+      }
+      
+      let values: number[];
+      
+      if (!channelDef || channelDef.kind === 'raw') {
+        // Raw channel: use existing getChannelValue path
+        values = data.map((frame) =>
+          getChannelValue(frame, channelConfig.channelId as TelemetryChannel),
+        );
+      } else {
+        // Math channel: channelDef.kind === 'math'
+        const mathDef = channelDef as MathTelemetryChannel;
+        const inputSeries: Record<string, TimeSeries> = {};
+        
+        // Build input series for each required channel
+        for (const input of mathDef.inputs) {
+          const inputDef = channelDefsById.get(input.channelId);
+          if (inputDef && inputDef.kind === 'raw') {
+            inputSeries[input.channelId] = data.map((frame) => ({
+              t: frame.lapTime / 1000,
+              v: getChannelValue(frame, input.channelId as TelemetryChannel),
+            }));
+          }
+        }
+        
+        // Evaluate the math channel
+        const resultSeries = evaluateMathChannelSeries(mathDef, inputSeries);
+        values = resultSeries.map(s => s.v ?? 0);
+      }
+      
       seriesData.push(values);
       series.push({
-        label: CHANNEL_METADATA[channelConfig.channel].label,
-        color: channelConfig.color || CHANNEL_METADATA[channelConfig.channel].defaultColor,
+        label: channelDef?.label ?? channelConfig.channelId,
+        color: channelConfig.color ?? channelDef?.defaultColor ?? '#000000',
         scale: 'y2',
       });
     });
@@ -139,7 +226,7 @@ export function ConfigurableTelemetryChart({
     }
 
     return { uplotData, series, axes };
-  }, [data, config, getChannelValue]);
+  }, [data, config, getChannelValue, channelDefsById]);
 
   useEffect(() => {
     if (syncedHoverValue == null || !data || data.length === 0) {
@@ -194,7 +281,7 @@ export function ConfigurableTelemetryChart({
   }, [externalResetZoomToken, resetZoom]);
 
   useEffect(() => {
-    if (externalOpenConfigToken !== undefined) {
+    if (externalOpenConfigToken !== undefined && externalOpenConfigToken > 0) {
       setShowConfigDialog(true);
     }
   }, [externalOpenConfigToken]);
@@ -219,13 +306,16 @@ export function ConfigurableTelemetryChart({
 
     const values = chartData.series.map((series, seriesIndex) => {
       const channelConfig = config.channels[seriesIndex];
-      const channel = CHANNEL_METADATA[channelConfig.channel];
-      const value = getChannelValue(data[currentIndex], channelConfig.channel);
+      const channelDef = channelDefsById.get(channelConfig.channelId);
+      
+      // Get value from chartData.uplotData instead of getChannelValue
+      // seriesIndex + 1 because uplotData[0] is the time/x-axis data
+      const value = chartData.uplotData[seriesIndex + 1]?.[currentIndex] ?? 0;
 
       return {
-        label: channel.label,
+        label: channelDef?.label ?? channelConfig.channelId,
         value,
-        unit: channel.unit,
+        unit: channelDef?.unit ?? '',
         color: series.color,
       };
     });
@@ -271,7 +361,7 @@ export function ConfigurableTelemetryChart({
             </div>
           </div>
         ) : (
-          <div style={{ height: `${height}px` }}>
+          <div style={{ height: `${height}px` }} className="overflow-hidden">
             <UPlotChart
               data={chartData.uplotData}
               series={chartData.series}
@@ -292,6 +382,7 @@ export function ConfigurableTelemetryChart({
         onOpenChange={setShowConfigDialog}
         config={config}
         onSave={onConfigChange}
+        mathChannels={mathChannels}
       />
     </div>
   );

@@ -121,6 +121,7 @@ const plugin: PluginModule = {
               onRegisterActions={(a) => {
                 actions = a;
               }}
+              mathChannels={props.mathChannels}
             />
           ),
         };

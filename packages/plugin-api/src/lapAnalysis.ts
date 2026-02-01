@@ -16,7 +16,7 @@ export type TelemetryChannel =
 
 export interface ChannelConfig {
   id: string;
-  channel: TelemetryChannel;
+  channelId: string; // ID of the telemetry channel to plot
   color?: string;
   useSecondaryAxis?: boolean;
 }

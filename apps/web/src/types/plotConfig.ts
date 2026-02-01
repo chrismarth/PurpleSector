@@ -1,6 +1,9 @@
 // Plot configuration types for configurable telemetry charts
 
-export type TelemetryChannel = 
+// For now we keep TelemetryChannel as the explicit union used across the app.
+// These IDs correspond to the raw channels defined in the shared telemetry
+// package's RAW_CHANNELS list.
+export type TelemetryChannel =
   | 'time'
   | 'throttle'
   | 'brake'
@@ -12,7 +15,7 @@ export type TelemetryChannel =
 
 export interface ChannelConfig {
   id: string;
-  channel: TelemetryChannel;
+  channelId: string; // ID of the telemetry channel to plot
   color?: string;
   useSecondaryAxis?: boolean; // If true, plot on right Y-axis
 }
@@ -43,74 +46,6 @@ export interface PlotLayout {
   cols: number; // Total columns in grid (default: 12)
 }
 
-// Channel metadata for UI
-export interface ChannelMetadata {
-  key: TelemetryChannel;
-  label: string;
-  unit: string;
-  defaultColor: string;
-  isTimeAxis: boolean; // Can be used as X axis (time-based)
-}
-
-export const CHANNEL_METADATA: Record<TelemetryChannel, ChannelMetadata> = {
-  time: {
-    key: 'time',
-    label: 'Time',
-    unit: 's',
-    defaultColor: '#000000',
-    isTimeAxis: true,
-  },
-  normalizedPosition: {
-    key: 'normalizedPosition',
-    label: 'Track Position',
-    unit: '%',
-    defaultColor: '#000000',
-    isTimeAxis: true,
-  },
-  throttle: {
-    key: 'throttle',
-    label: 'Throttle',
-    unit: '%',
-    defaultColor: '#10b981',
-    isTimeAxis: false,
-  },
-  brake: {
-    key: 'brake',
-    label: 'Brake',
-    unit: '%',
-    defaultColor: '#ef4444',
-    isTimeAxis: false,
-  },
-  steering: {
-    key: 'steering',
-    label: 'Steering',
-    unit: '%',
-    defaultColor: '#8b5cf6',
-    isTimeAxis: false,
-  },
-  speed: {
-    key: 'speed',
-    label: 'Speed',
-    unit: 'km/h',
-    defaultColor: '#3b82f6',
-    isTimeAxis: false,
-  },
-  gear: {
-    key: 'gear',
-    label: 'Gear',
-    unit: '',
-    defaultColor: '#f59e0b',
-    isTimeAxis: false,
-  },
-  rpm: {
-    key: 'rpm',
-    label: 'RPM',
-    unit: 'rpm',
-    defaultColor: '#ec4899',
-    isTimeAxis: false,
-  },
-};
-
 // Helper function to generate default layout from plot configs
 export function generateDefaultLayout(plotConfigs: PlotConfig[]): PlotLayout {
   const items: PlotLayoutItem[] = plotConfigs.map((config, index) => ({
@@ -138,12 +73,12 @@ export const DEFAULT_PLOT_CONFIGS: PlotConfig[] = [
     channels: [
       {
         id: 'throttle-1',
-        channel: 'throttle',
+        channelId: 'throttle',
         color: '#10b981',
       },
       {
         id: 'brake-1',
-        channel: 'brake',
+        channelId: 'brake',
         color: '#ef4444',
       },
     ],
@@ -157,7 +92,7 @@ export const DEFAULT_PLOT_CONFIGS: PlotConfig[] = [
     channels: [
       {
         id: 'steering-1',
-        channel: 'steering',
+        channelId: 'steering',
         color: '#8b5cf6',
       },
     ],
@@ -171,7 +106,7 @@ export const DEFAULT_PLOT_CONFIGS: PlotConfig[] = [
     channels: [
       {
         id: 'speed-1',
-        channel: 'speed',
+        channelId: 'speed',
         color: '#3b82f6',
       },
     ],

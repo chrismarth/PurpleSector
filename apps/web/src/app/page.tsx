@@ -155,18 +155,18 @@ export default function HomePage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <CardTitle className="text-xl">{event.name}</CardTitle>
-                      <CardDescription className="space-y-1 mt-2">
+                      <div className="space-y-1 mt-2">
                         {event.location && (
-                          <div className="flex items-center gap-2">
+                          <CardDescription className="flex items-center gap-2">
                             <MapPin className="h-4 w-4" />
                             {event.location}
-                          </div>
+                          </CardDescription>
                         )}
-                        <div className="flex items-center gap-2">
+                        <CardDescription className="flex items-center gap-2">
                           <Calendar className="h-4 w-4" />
                           {formatTimestamp(new Date(event.createdAt))}
-                        </div>
-                      </CardDescription>
+                        </CardDescription>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
@@ -267,11 +267,9 @@ export default function HomePage() {
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <CardTitle className="text-xl">{vehicle.name}</CardTitle>
-                              <CardDescription className="space-y-1 mt-2">
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="h-4 w-4" />
-                                  {formatTimestamp(new Date(vehicle.createdAt))}
-                                </div>
+                              <CardDescription className="flex items-center gap-2 mt-2">
+                                <Calendar className="h-4 w-4" />
+                                {formatTimestamp(new Date(vehicle.createdAt))}
                               </CardDescription>
                             </div>
                           </div>

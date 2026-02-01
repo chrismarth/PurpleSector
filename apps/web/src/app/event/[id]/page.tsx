@@ -105,18 +105,18 @@ export default function EventPage() {
               </Link>
               <div className="flex-1">
                 <CardTitle className="text-2xl">{event.name}</CardTitle>
-                <CardDescription className="flex items-center gap-4 mt-1">
+                <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
                   {event.location && (
-                    <div className="flex items-center gap-1">
+                    <span className="flex items-center gap-1">
                       <MapPin className="h-4 w-4" />
                       {event.location}
-                    </div>
+                    </span>
                   )}
-                  <div className="flex items-center gap-1">
+                  <span className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
                     {formatTimestamp(new Date(event.createdAt))}
-                  </div>
-                </CardDescription>
+                  </span>
+                </div>
               </div>
             </div>
           </CardHeader>

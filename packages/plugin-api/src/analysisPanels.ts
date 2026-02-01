@@ -1,5 +1,6 @@
 import type * as React from 'react';
 import type { TelemetryFrame } from '@purplesector/core';
+import type { MathTelemetryChannel } from '@purplesector/telemetry';
 
 export type AnalysisPanelContext = 'live' | 'singleLap' | 'lapComparison';
 
@@ -20,6 +21,8 @@ export interface AnalysisPanelProps {
   syncedHoverValue?: number | null;
   // Called by a panel when its local hover changes so the host can sync others.
   onHoverChange?: (value: number | null) => void;
+  // Math channels available for plotting
+  mathChannels?: MathTelemetryChannel[];
 }
 
 // Result returned by an analysis panel provider. This allows providers to

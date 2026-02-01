@@ -29,6 +29,7 @@ import { ManageLayoutsDialog } from '@/components/ManageLayoutsDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConfigurableTelemetryChart } from './ConfigurableTelemetryChart';
 import { TelemetryFrame } from '@/types/telemetry';
+import { MathTelemetryChannel } from '@purplesector/telemetry';
 import {
   PlotConfig,
   DEFAULT_PLOT_CONFIGS,
@@ -50,6 +51,7 @@ interface TelemetryPlotPanelProps {
   currentLapNumber?: number;
   showLapHeader?: boolean;
   layoutContext?: 'global' | 'session' | 'lap';
+  mathChannels?: MathTelemetryChannel[];
 }
 
 export function TelemetryPlotPanel({
@@ -64,6 +66,7 @@ export function TelemetryPlotPanel({
   currentLapNumber,
   showLapHeader = false,
   layoutContext = 'global',
+  mathChannels = [],
 }: TelemetryPlotPanelProps) {
   const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(
     initialPlotConfigs || DEFAULT_PLOT_CONFIGS
@@ -720,6 +723,7 @@ export function TelemetryPlotPanel({
                                 height={plotHeight}
                                 syncedHoverValue={syncedHoverValue}
                                 onHoverChange={setSyncedHoverValue}
+                                mathChannels={mathChannels}
                               />
 
                               {subIndex === columnItems.length - 1 && (
