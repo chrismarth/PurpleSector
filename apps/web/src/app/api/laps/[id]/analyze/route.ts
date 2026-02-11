@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { generateLapSuggestions, analyzeTelemetryData } from '@purplesector/analysis-base';
 import { createAnalyzer } from '@purplesector/analysis-factory';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // POST /api/laps/[id]/analyze - Analyze a lap with AI
 export async function POST(
@@ -9,11 +10,18 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { referenceLapId } = body;
 
-    const lap = await prisma.lap.findUnique({
-      where: { id: params.id },
+    const lap = await (prisma as any).lap.findFirst({
+      where: { id: params.id, userId },
     });
 
     if (!lap) {
@@ -50,8 +58,8 @@ export async function POST(
     
     if (referenceLapId) {
       // Use explicitly selected reference lap
-      const selectedReferenceLap = await prisma.lap.findUnique({
-        where: { id: referenceLapId },
+      const selectedReferenceLap = await (prisma as any).lap.findFirst({
+        where: { id: referenceLapId, userId },
       });
       
       if (selectedReferenceLap && selectedReferenceLap.id !== lap.id) {
@@ -63,8 +71,9 @@ export async function POST(
       }
     } else {
       // Auto-find fastest lap in the same session
-      const fastestLap = await prisma.lap.findFirst({
+      const fastestLap = await (prisma as any).lap.findFirst({
         where: {
+          userId,
           sessionId: lap.sessionId,
           lapTime: { not: null },
         },
@@ -97,7 +106,7 @@ export async function POST(
     const suggestions = result.suggestions;
 
     // Update lap with suggestions
-    const updatedLap = await prisma.lap.update({
+    const updatedLap = await (prisma as any).lap.update({
       where: { id: params.id },
       data: {
         analyzed: true,

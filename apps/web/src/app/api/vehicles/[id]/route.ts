@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/vehicles/[id] - Get a specific vehicle
 export async function GET(
@@ -7,10 +8,18 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: params.id },
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const vehicle = await (prisma as any).vehicle.findFirst({
+      where: { id: params.id, userId },
       include: {
         configurations: {
+          where: { userId },
           orderBy: { createdAt: 'desc' },
           include: {
             _count: {
@@ -19,6 +28,7 @@ export async function GET(
           },
         },
         setups: {
+          where: { userId },
           orderBy: { createdAt: 'desc' },
           include: {
             vehicleConfiguration: true,
@@ -56,6 +66,13 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { name, description, inServiceDate, outOfServiceDate, tags } = body;
 
@@ -66,11 +83,16 @@ export async function PATCH(
     if (outOfServiceDate !== undefined) updateData.outOfServiceDate = outOfServiceDate ? new Date(outOfServiceDate) : null;
     if (tags !== undefined) updateData.tags = tags ? JSON.stringify(tags) : null;
 
-    const vehicle = await prisma.vehicle.update({
-      where: { id: params.id },
+    const result = await (prisma as any).vehicle.updateMany({
+      where: { id: params.id, userId },
       data: updateData,
     });
 
+    if (!result.count) {
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 });
+    }
+
+    const vehicle = await (prisma as any).vehicle.findFirst({ where: { id: params.id, userId } });
     return NextResponse.json(vehicle);
   } catch (error) {
     console.error('Error updating vehicle:', error);
@@ -90,9 +112,20 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.vehicle.delete({
-      where: { id: params.id },
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const result = await (prisma as any).vehicle.deleteMany({
+      where: { id: params.id, userId },
     });
+
+    if (!result.count) {
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

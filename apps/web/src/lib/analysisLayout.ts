@@ -18,6 +18,79 @@ export interface AnalysisLayoutJSON {
   panels: AnalysisPanelCell[];
 }
 
+/**
+ * Default analysis layout used by both live sessions and archived laps when no
+ * saved layout exists.  Panels carry their initial channel configuration in the
+ * `state` field so the registered provider can render the correct channels.
+ *
+ * This is intentionally generic — it references the 'plot' panel type id which
+ * is registered by whatever plugin provides telemetry plotting.
+ */
+export const DEFAULT_ANALYSIS_LAYOUT: AnalysisLayoutJSON = {
+  version: 1,
+  cols: 12,
+  panels: [
+    {
+      id: 'default-throttle-brake',
+      typeId: 'plot',
+      x: 0,
+      y: 0,
+      colSpan: 12,
+      rowSpan: 1,
+      state: {
+        id: 'throttle-brake',
+        title: 'Throttle & Brake',
+        xAxis: 'time',
+        xAxisLabel: 'Time (s)',
+        yAxisLabel: 'Input (%)',
+        yAxisLabelSecondary: '',
+        channels: [
+          { id: 'throttle-1', channelId: 'throttle', color: '#10b981' },
+          { id: 'brake-1', channelId: 'brake', color: '#ef4444' },
+        ],
+      },
+    },
+    {
+      id: 'default-steering',
+      typeId: 'plot',
+      x: 0,
+      y: 1,
+      colSpan: 12,
+      rowSpan: 1,
+      state: {
+        id: 'steering',
+        title: 'Steering Input',
+        xAxis: 'time',
+        xAxisLabel: 'Time (s)',
+        yAxisLabel: 'Steering (%)',
+        yAxisLabelSecondary: '',
+        channels: [
+          { id: 'steering-1', channelId: 'steering', color: '#8b5cf6' },
+        ],
+      },
+    },
+    {
+      id: 'default-speed',
+      typeId: 'plot',
+      x: 0,
+      y: 2,
+      colSpan: 12,
+      rowSpan: 1,
+      state: {
+        id: 'speed',
+        title: 'Speed',
+        xAxis: 'time',
+        xAxisLabel: 'Time (s)',
+        yAxisLabel: 'Speed (km/h)',
+        yAxisLabelSecondary: '',
+        channels: [
+          { id: 'speed-1', channelId: 'speed', color: '#3b82f6' },
+        ],
+      },
+    },
+  ],
+};
+
 // Row operations
 export function insertRowBelow(layout: AnalysisLayoutJSON, r: number): AnalysisLayoutJSON {
   const panels = layout.panels.map((p) => ({ ...p }));

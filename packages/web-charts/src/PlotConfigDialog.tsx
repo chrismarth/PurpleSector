@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Trash2, Sparkles } from 'lucide-react';
 import {
   Dialog,
@@ -48,6 +48,13 @@ export function PlotConfigDialog({
   mathChannels = [],
 }: PlotConfigDialogProps) {
   const [editedConfig, setEditedConfig] = useState<PlotConfig>(config);
+
+  // Sync editedConfig when the dialog opens so it reflects the latest config
+  useEffect(() => {
+    if (open) {
+      setEditedConfig(config);
+    }
+  }, [open, config]);
 
   // Get all available channels from the shared registry (raw + math)
   const allChannels: TelemetryChannelDefinition[] = [...RAW_CHANNELS, ...mathChannels];

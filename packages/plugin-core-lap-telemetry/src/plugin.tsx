@@ -64,18 +64,18 @@ const plugin: PluginModule = {
       label: 'Telemetry Plot',
     });
 
-    // Default provider for plot panels using a lightweight inner plot panel
+    // Per-panel stable action refs so toolbar buttons can reach the
+    // imperative actions registered by each SimpleTelemetryPlotPanel instance.
+    type PanelActions = { resetZoom: () => void; openConfig: () => void };
+    const panelActionsMap = new Map<string, PanelActions>();
+
     ctx.registerAnalysisPanelProvider({
       id: 'core-telemetry-plot-panel',
       typeId: 'plot',
       isDefault: true,
       render: (props: AnalysisPanelProps): AnalysisPanelRenderResult => {
-        let actions:
-          | {
-              resetZoom: () => void;
-              openConfig: () => void;
-            }
-          | null = null;
+        // Use the panel id from the host to key actions per panel instance.
+        const panelId = props.panelId ?? `plot-${panelActionsMap.size}`;
 
         const toolbarActions = (
           <>
@@ -86,7 +86,7 @@ const plugin: PluginModule = {
               className="h-6 w-6"
               onClick={(e) => {
                 e.stopPropagation();
-                actions?.resetZoom?.();
+                panelActionsMap.get(panelId)?.resetZoom?.();
               }}
               title="Reset zoom"
             >
@@ -99,7 +99,7 @@ const plugin: PluginModule = {
               className="h-6 w-6"
               onClick={(e) => {
                 e.stopPropagation();
-                actions?.openConfig?.();
+                panelActionsMap.get(panelId)?.openConfig?.();
               }}
               title="Edit plot"
             >
@@ -117,9 +117,10 @@ const plugin: PluginModule = {
               compareData={props.compareTelemetry}
               syncedHoverValue={props.syncedHoverValue}
               onHoverChange={props.onHoverChange}
+              initialConfig={props.panelState as any}
               onTitleChange={(title) => props.host.setTitle?.(title)}
               onRegisterActions={(a) => {
-                actions = a;
+                panelActionsMap.set(panelId, a);
               }}
               mathChannels={props.mathChannels}
             />

@@ -152,7 +152,7 @@ class ACCCollector {
     try {
       // Generate session ID (in production, this would come from user/session management)
       this.currentSessionId = `acc-session-${Date.now()}`;
-      this.currentUserId = 'user-1'; // TODO: Get from authentication
+      this.currentUserId = process.env.PS_USER_ID || 'user';
       
       // Ensure user topic exists
       logger.info('Ensuring user topic exists', { userId: this.currentUserId });

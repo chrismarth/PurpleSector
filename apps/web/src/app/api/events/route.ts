@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/events - List all events
 export async function GET() {
   try {
-    const events = await prisma.event.findMany({
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const events = await (prisma as any).event.findMany({
+      where: { userId },
       include: {
         _count: {
           select: { sessions: true },
@@ -28,6 +37,12 @@ export async function GET() {
 // POST /api/events - Create a new event
 export async function POST(request: NextRequest) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const body = await request.json();
     const { name, description, location, startDate, endDate } = body;
 
@@ -38,8 +53,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const event = await prisma.event.create({
+    const event = await (prisma as any).event.create({
       data: {
+        userId,
         name,
         description,
         location,

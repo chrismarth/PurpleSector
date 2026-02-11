@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@purplesector/db-prisma';
 import { MathTelemetryChannel, MathChannelInput } from '@purplesector/telemetry';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // Color palette for math channels (visible on dark themes)
 const MATH_CHANNEL_COLORS = [
@@ -18,17 +19,23 @@ function getMathChannelColor(index: number): string {
   return MATH_CHANNEL_COLORS[index % MATH_CHANNEL_COLORS.length];
 }
 
-const prisma = new PrismaClient();
-
 // GET /api/channels/math - List all math channels
 export async function GET() {
   try {
-    const mathChannels = await prisma.mathChannel.findMany({
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const mathChannels = await (prisma as any).mathChannel.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
     });
 
     // Convert DB records to MathTelemetryChannel format
-    const channels: MathTelemetryChannel[] = mathChannels.map((ch, index) => ({
+    const channels: MathTelemetryChannel[] = (mathChannels as any[]).map((ch: any, index: number) => ({
       id: ch.id,
       label: ch.label,
       unit: ch.unit,
@@ -54,6 +61,13 @@ export async function GET() {
 // POST /api/channels/math - Create a new math channel
 export async function POST(request: NextRequest) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { label, unit, expression, inputs, validated, comment } = body;
 
@@ -64,8 +78,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const mathChannel = await prisma.mathChannel.create({
+    const mathChannel = await (prisma as any).mathChannel.create({
       data: {
+        userId,
         label,
         unit: unit || '',
         expression,
@@ -76,7 +91,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Get the count of existing channels to determine color
-    const existingCount = await prisma.mathChannel.count();
+    const existingCount = await (prisma as any).mathChannel.count({ where: { userId } });
     
     const channel: MathTelemetryChannel = {
       id: mathChannel.id,

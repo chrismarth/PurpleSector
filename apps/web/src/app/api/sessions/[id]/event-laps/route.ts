@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/sessions/[id]/event-laps - Get all laps from the event
 export async function GET(
@@ -7,9 +8,16 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Get the session to find its event
-    const session = await prisma.session.findUnique({
-      where: { id: params.id },
+    const session = await (prisma as any).session.findFirst({
+      where: { id: params.id, userId },
     });
 
     if (!session) {
@@ -20,16 +28,17 @@ export async function GET(
     }
 
     // Get all sessions in the event
-    const sessions = await prisma.session.findMany({
-      where: { eventId: session.eventId },
+    const sessions = await (prisma as any).session.findMany({
+      where: { eventId: session.eventId, userId },
       select: { id: true, name: true },
     });
 
-    const sessionIds = sessions.map(s => s.id);
+    const sessionIds = (sessions as any[]).map((s: any) => s.id);
 
     // Get all laps from all sessions in the event
-    const laps = await prisma.lap.findMany({
+    const laps = await (prisma as any).lap.findMany({
       where: {
+        userId,
         sessionId: { in: sessionIds },
         lapTime: { not: null },
       },
@@ -45,9 +54,9 @@ export async function GET(
     });
 
     // Add session name to each lap
-    const lapsWithSession = laps.map(lap => ({
+    const lapsWithSession = (laps as any[]).map((lap: any) => ({
       ...lap,
-      sessionName: sessions.find(s => s.id === lap.sessionId)?.name || 'Unknown',
+      sessionName: (sessions as any[]).find((s: any) => s.id === lap.sessionId)?.name || 'Unknown',
     }));
 
     return NextResponse.json(lapsWithSession);

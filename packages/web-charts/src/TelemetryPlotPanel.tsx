@@ -512,7 +512,13 @@ export function TelemetryPlotPanel({
   }, [resizing]);
 
   return (
-    <Card className={isFullscreen ? 'fixed inset-0 z-50 rounded-none' : ''}>
+    <Card
+      className={
+        isFullscreen
+          ? 'fixed inset-0 z-50 rounded-none flex flex-col'
+          : 'flex flex-col'
+      }
+    >
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -611,7 +617,7 @@ export function TelemetryPlotPanel({
       </CardHeader>
       <CardContent
         ref={containerRef}
-        className={isFullscreen ? 'h-[calc(100vh-8rem)] overflow-y-auto' : ''}
+        className={isFullscreen ? 'flex-1 overflow-y-auto' : ''}
       >
         <div className="space-y-4">
           {(() => {

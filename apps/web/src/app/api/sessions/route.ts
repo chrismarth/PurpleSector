@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/sessions - List all sessions
 export async function GET() {
   try {
-    const sessions = await prisma.session.findMany({
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const sessions = await (prisma as any).session.findMany({
+      where: { userId },
       include: {
         _count: {
           select: { laps: true },
@@ -28,6 +37,13 @@ export async function GET() {
 // POST /api/sessions - Create a new session
 export async function POST(request: NextRequest) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { eventId, name, source, vehicleId, vehicleConfigurationId, vehicleSetupId, started } = body;
 
@@ -38,8 +54,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const session = await prisma.session.create({
+    const event = await (prisma as any).event.findFirst({ where: { id: eventId, userId } });
+    if (!event) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    const session = await (prisma as any).session.create({
       data: {
+        userId,
         eventId,
         name,
         source,

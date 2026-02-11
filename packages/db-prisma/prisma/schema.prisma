@@ -12,6 +12,7 @@ datasource db {
 
 model Event {
   id              String   @id @default(cuid())
+  userId          String
   name            String
   description     String?
   location        String?
@@ -20,13 +21,16 @@ model Event {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions        Session[]
   
   @@index([createdAt])
+  @@index([userId])
 }
 
 model Session {
   id                      String   @id @default(cuid())
+  userId                  String
   eventId                 String
   name                    String
   source                  String   // "live" | "demo"
@@ -40,6 +44,7 @@ model Session {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   
+  user                    User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   event                   Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
   vehicle                 Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   vehicleConfiguration    VehicleConfiguration? @relation(fields: [vehicleConfigurationId], references: [id], onDelete: SetNull)
@@ -47,12 +52,14 @@ model Session {
   laps                    Lap[]
   
   @@index([eventId])
+  @@index([userId])
   @@index([vehicleId])
   @@index([createdAt])
 }
 
 model Lap {
   id              String   @id @default(cuid())
+  userId          String
   sessionId       String
   lapNumber       Int
   lapTime         Float?   // in seconds
@@ -64,27 +71,33 @@ model Lap {
   plotConfigs     String?  // JSON array of plot configurations
   createdAt       DateTime @default(now())
   
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   chatMessages    ChatMessage[]
   
   @@unique([sessionId, lapNumber])
   @@index([sessionId, lapNumber])
+  @@index([userId])
 }
 
 model ChatMessage {
   id              String   @id @default(cuid())
+  userId          String
   lapId           String
   role            String   // "user" | "assistant"
   content         String
   createdAt       DateTime @default(now())
   
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   lap             Lap      @relation(fields: [lapId], references: [id], onDelete: Cascade)
   
   @@index([lapId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model SavedPlotLayout {
   id              String   @id @default(cuid())
+  userId          String
   name            String
   description     String?
   plotConfigs     String   // JSON array of PlotConfig[]
@@ -93,13 +106,17 @@ model SavedPlotLayout {
   context         String   @default("global") // "global" | "session" | "lap"
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@index([isDefault, context])
   @@index([createdAt])
+  @@index([userId])
 }
 
 model SavedAnalysisLayout {
   id          String   @id @default(cuid())
+  userId      String
   name        String
   description String?
   // JSON blob describing analysis panel instances and grid options
@@ -110,12 +127,16 @@ model SavedAnalysisLayout {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([context, isDefault])
   @@index([createdAt])
+  @@index([userId])
 }
 
 model Vehicle {
   id                    String                 @id @default(cuid())
+  userId                String
   name                  String
   description           String?
   inServiceDate         DateTime?
@@ -124,15 +145,18 @@ model Vehicle {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   configurations        VehicleConfiguration[]
   setups                VehicleSetup[]
   sessions              Session[]
   
   @@index([createdAt])
+  @@index([userId])
 }
 
 model VehicleConfiguration {
   id              String   @id @default(cuid())
+  userId          String
   vehicleId       String
   name            String
   description     String?
@@ -140,16 +164,19 @@ model VehicleConfiguration {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   vehicle         Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   setups          VehicleSetup[]
   sessions        Session[]
   
   @@index([vehicleId])
   @@index([createdAt])
+  @@index([userId])
 }
 
 model VehicleSetup {
   id                      String                @id @default(cuid())
+  userId                  String
   vehicleId               String
   vehicleConfigurationId  String?
   name                    String
@@ -158,6 +185,7 @@ model VehicleSetup {
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
   
+  user                    User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   vehicle                 Vehicle               @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   vehicleConfiguration    VehicleConfiguration? @relation(fields: [vehicleConfigurationId], references: [id], onDelete: SetNull)
   sessions                Session[]
@@ -165,10 +193,12 @@ model VehicleSetup {
   @@index([vehicleId])
   @@index([vehicleConfigurationId])
   @@index([createdAt])
+  @@index([userId])
 }
 
 model MathChannel {
   id          String   @id @default(cuid())
+  userId      String
   label       String
   unit        String
   expression  String   // mathjs expression
@@ -177,7 +207,94 @@ model MathChannel {
   comment     String?  // Optional description/documentation for the channel
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@index([createdAt])
+  @@index([userId])
+}
+
+model User {
+  id              String   @id
+  username        String   @unique
+  fullName        String
+  avatarUrl       String?  // URL or path to the user's avatar image
+  role            String   // "ORG_ADMIN" | "USER" (stubbed for now)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  settings        UserSettings?
+  events          Event[]
+  sessions        Session[]
+  laps            Lap[]
+  vehicles        Vehicle[]
+  vehicleConfigurations VehicleConfiguration[]
+  vehicleSetups    VehicleSetup[]
+  plotLayouts     SavedPlotLayout[]
+  analysisLayouts SavedAnalysisLayout[]
+  mathChannels    MathChannel[]
+  chatMessages    ChatMessage[]
+
+  orgMemberships  OrganizationMember[]
+  groupMemberships GroupMember[]
+}
+
+model UserSettings {
+  userId    String  @id
+  theme     String? // "light" | "dark"
+  data      String? // JSON blob for additional settings
+  updatedAt DateTime @updatedAt
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   OrganizationMember[]
+  groups    Group[]
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           String   // "ADMIN" | "MEMBER"
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+model Group {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members        GroupMember[]
+
+  @@index([organizationId])
+}
+
+model GroupMember {
+  id      String @id @default(cuid())
+  groupId String
+  userId  String
+  createdAt DateTime @default(now())
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
 }
 

@@ -74,9 +74,11 @@ module.exports = {
       exec_mode: 'fork',
       watch: false,
       max_memory_restart: '200M',
-      args: '--userId=demo-user --loop',
+      args: '--loop',
       env: {
         NODE_ENV: 'development',
+        PS_USER_ID: 'user',
+        PS_DEMO_SOURCE: 'file',
         LOG_LEVEL: 'info',
         LOG_FORMAT: 'pretty',
         SERVICE_NAME: 'demo-collector-dev',

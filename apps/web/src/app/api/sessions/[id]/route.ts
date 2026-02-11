@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/sessions/[id] - Get a specific session
 export async function GET(
@@ -7,11 +8,19 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await prisma.session.findUnique({
-      where: { id: params.id },
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const session = await (prisma as any).session.findFirst({
+      where: { id: params.id, userId },
       include: {
         event: true,
         laps: {
+          where: { userId },
           orderBy: { lapNumber: 'asc' },
         },
       },
@@ -40,6 +49,13 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { name, status, tags, plotConfigs } = body;
 
@@ -49,11 +65,16 @@ export async function PATCH(
     if (tags !== undefined) updateData.tags = tags;
     if (plotConfigs !== undefined) updateData.plotConfigs = plotConfigs;
 
-    const session = await prisma.session.update({
-      where: { id: params.id },
+    const result = await (prisma as any).session.updateMany({
+      where: { id: params.id, userId },
       data: updateData,
     });
 
+    if (!result.count) {
+      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+
+    const session = await (prisma as any).session.findFirst({ where: { id: params.id, userId } });
     return NextResponse.json(session);
   } catch (error) {
     console.error('Error updating session:', error);
@@ -73,9 +94,20 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.session.delete({
-      where: { id: params.id },
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const result = await (prisma as any).session.deleteMany({
+      where: { id: params.id, userId },
     });
+
+    if (!result.count) {
+      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

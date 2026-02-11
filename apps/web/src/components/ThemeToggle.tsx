@@ -17,6 +17,22 @@ export function ThemeToggle() {
     
     setTheme(initialTheme);
     applyTheme(initialTheme);
+
+    // Best-effort: fetch persisted theme from DB (may override localStorage)
+    fetch('/api/user/settings', { cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return (await res.json()) as { theme: 'light' | 'dark' | null };
+      })
+      .then((data) => {
+        if (!data?.theme) return;
+        setTheme(data.theme);
+        applyTheme(data.theme);
+        localStorage.setItem('theme', data.theme);
+      })
+      .catch(() => {
+        // ignore
+      });
   }, []);
 
   const applyTheme = (newTheme: 'light' | 'dark') => {
@@ -33,6 +49,15 @@ export function ThemeToggle() {
     setTheme(newTheme);
     applyTheme(newTheme);
     localStorage.setItem('theme', newTheme);
+
+    // Best-effort persistence
+    fetch('/api/user/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme: newTheme }),
+    }).catch(() => {
+      // ignore
+    });
   };
 
   // Prevent hydration mismatch by not rendering until mounted

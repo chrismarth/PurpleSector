@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/events/[id] - Get a specific event
 export async function GET(
@@ -7,10 +8,18 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const event = await prisma.event.findUnique({
-      where: { id: params.id },
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const event = await (prisma as any).event.findFirst({
+      where: { id: params.id, userId },
       include: {
         sessions: {
+          where: { userId },
           orderBy: { createdAt: 'asc' },
           include: {
             _count: {
@@ -44,6 +53,13 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { name, description, location, startDate, endDate } = body;
 
@@ -54,11 +70,16 @@ export async function PATCH(
     if (startDate !== undefined) updateData.startDate = startDate ? new Date(startDate) : null;
     if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
 
-    const event = await prisma.event.update({
-      where: { id: params.id },
+    const result = await (prisma as any).event.updateMany({
+      where: { id: params.id, userId },
       data: updateData,
     });
 
+    if (!result.count) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    const event = await (prisma as any).event.findFirst({ where: { id: params.id, userId } });
     return NextResponse.json(event);
   } catch (error) {
     console.error('Error updating event:', error);
@@ -78,9 +99,20 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.event.delete({
-      where: { id: params.id },
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const result = await (prisma as any).event.deleteMany({
+      where: { id: params.id, userId },
     });
+
+    if (!result.count) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

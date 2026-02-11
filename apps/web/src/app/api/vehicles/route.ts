@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/vehicles - List all vehicles
 export async function GET() {
   try {
-    const vehicles = await prisma.vehicle.findMany({
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const vehicles = await (prisma as any).vehicle.findMany({
+      where: { userId },
       include: {
         _count: {
           select: { 
@@ -32,6 +41,13 @@ export async function GET() {
 // POST /api/vehicles - Create a new vehicle
 export async function POST(request: NextRequest) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { name, description, inServiceDate, outOfServiceDate, tags } = body;
 
@@ -42,8 +58,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const vehicle = await prisma.vehicle.create({
+    const vehicle = await (prisma as any).vehicle.create({
       data: {
+        userId,
         name,
         description,
         inServiceDate: inServiceDate ? new Date(inServiceDate) : null,

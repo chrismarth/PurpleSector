@@ -21,6 +21,7 @@ import {
 import { ChannelEditorDialog } from '@/components/ChannelEditorDialog';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import type { AnalysisLayoutJSON } from '@/lib/analysisLayout';
+import { DEFAULT_ANALYSIS_LAYOUT } from '@/lib/analysisLayout';
 import { SaveLayoutDialog } from '@/components/SaveLayoutDialog';
 import { AnalysisLoadLayoutDialog } from '@/components/AnalysisLoadLayoutDialog';
 import { AnalysisManageLayoutsDialog } from '@/components/AnalysisManageLayoutsDialog';
@@ -327,21 +328,8 @@ export default function LapPage() {
         }
       }
 
-      // Fallback: use a simple default layout if nothing loaded
-      setAnalysisLayout({
-        version: 1,
-        cols: 12,
-        panels: [
-          {
-            id: 'default-plot',
-            typeId: 'plot',
-            x: 0,
-            y: 0,
-            colSpan: 12,
-            rowSpan: 1,
-          },
-        ],
-      });
+      // Fallback: use the shared default layout
+      setAnalysisLayout(DEFAULT_ANALYSIS_LAYOUT);
     };
 
     loadLayout();

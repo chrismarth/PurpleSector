@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@purplesector/db-prisma';
 import { MathTelemetryChannel, MathChannelInput } from '@purplesector/telemetry';
-
-const prisma = new PrismaClient();
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // PUT /api/channels/math/[id] - Update a math channel
 export async function PUT(
@@ -10,6 +9,13 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = params;
     const body = await request.json();
     const { label, unit, expression, inputs, validated, comment } = body;
@@ -21,8 +27,8 @@ export async function PUT(
       );
     }
 
-    const mathChannel = await prisma.mathChannel.update({
-      where: { id },
+    const updateResult = await (prisma as any).mathChannel.updateMany({
+      where: { id, userId },
       data: {
         label,
         unit: unit || '',
@@ -33,11 +39,18 @@ export async function PUT(
       },
     });
 
+    if (!updateResult.count) {
+      return NextResponse.json({ error: 'Math channel not found' }, { status: 404 });
+    }
+
+    const mathChannel = await (prisma as any).mathChannel.findFirst({ where: { id, userId } });
+
     // Get all channels to determine index for color
-    const allChannels = await prisma.mathChannel.findMany({
+    const allChannels = await (prisma as any).mathChannel.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
     });
-    const channelIndex = allChannels.findIndex(ch => ch.id === id);
+    const channelIndex = (allChannels as any[]).findIndex((ch: any) => ch.id === id);
     
     // Color palette for math channels (visible on dark themes)
     const MATH_CHANNEL_COLORS = [
@@ -75,11 +88,22 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = params;
 
-    await prisma.mathChannel.delete({
-      where: { id },
+    const result = await (prisma as any).mathChannel.deleteMany({
+      where: { id, userId },
     });
+
+    if (!result.count) {
+      return NextResponse.json({ error: 'Math channel not found' }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

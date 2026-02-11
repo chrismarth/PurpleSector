@@ -14,7 +14,7 @@ import {
   TimeSeries,
 } from '@purplesector/telemetry';
 import { Button } from '@/components/ui/button';
-import { PlotConfigDialog } from '@purplesector/web-charts';
+import { PlotConfigDialog } from './PlotConfigDialog';
 
 interface ConfigurableTelemetryChartProps {
   data: TelemetryFrame[];
@@ -53,6 +53,36 @@ export function ConfigurableTelemetryChart({
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [syncedHoverIndex, setSyncedHoverIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (config.channels.length > 0) return;
+
+    const throttleDef = RAW_CHANNELS.find((ch) => ch.id === 'throttle');
+    const brakeDef = RAW_CHANNELS.find((ch) => ch.id === 'brake');
+
+    onConfigChange({
+      ...config,
+      title: config.title && config.title !== 'New Plot' ? config.title : 'Throttle & Brake',
+      xAxis: 'time',
+      xAxisLabel: 'Time (s)',
+      yAxisLabel: 'Input (%)',
+      channels: [
+        {
+          id: `throttle-${Date.now()}`,
+          channelId: 'throttle',
+          color: throttleDef?.defaultColor ?? '#10b981',
+          useSecondaryAxis: false,
+        },
+        {
+          id: `brake-${Date.now() + 1}`,
+          channelId: 'brake',
+          color: brakeDef?.defaultColor ?? '#ef4444',
+          useSecondaryAxis: false,
+        },
+      ],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Build a lookup map from RAW_CHANNELS and mathChannels for metadata
   const channelDefsById = useMemo(

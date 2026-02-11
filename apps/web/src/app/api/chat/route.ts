@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { chatAboutLap, analyzeTelemetryData } from '@purplesector/analysis-base';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // POST /api/chat - Handle chat messages about a lap
 export async function POST(request: NextRequest) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { lapId, message } = body;
 
@@ -16,8 +24,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get lap data
-    const lap = await prisma.lap.findUnique({
-      where: { id: lapId },
+    const lap = await (prisma as any).lap.findFirst({
+      where: { id: lapId, userId },
       include: {
         chatMessages: {
           orderBy: { createdAt: 'asc' },
@@ -33,8 +41,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Save user message
-    await prisma.chatMessage.create({
+    await (prisma as any).chatMessage.create({
       data: {
+        userId,
         lapId,
         role: 'user',
         content: message,
@@ -47,8 +56,9 @@ export async function POST(request: NextRequest) {
     const suggestions = lap.suggestions ? JSON.parse(lap.suggestions) : [];
 
     // Find fastest lap in the same session for reference
-    const fastestLap = await prisma.lap.findFirst({
+    const fastestLap = await (prisma as any).lap.findFirst({
       where: {
+        userId,
         sessionId: lap.sessionId,
         lapTime: { not: null },
       },
@@ -68,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build conversation history
-    const conversationHistory = lap.chatMessages.map(msg => ({
+    const conversationHistory = (lap.chatMessages as any[]).map((msg: any) => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
     }));
@@ -88,8 +98,9 @@ export async function POST(request: NextRequest) {
     );
 
     // Save assistant message
-    const assistantMessage = await prisma.chatMessage.create({
+    const assistantMessage = await (prisma as any).chatMessage.create({
       data: {
+        userId,
         lapId,
         role: 'assistant',
         content: aiResponse,

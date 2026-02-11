@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@purplesector/db-prisma';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/plot-layouts/[id] - Get a specific plot layout
 export async function GET(
@@ -9,8 +8,15 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const layout = await prisma.savedPlotLayout.findUnique({
-      where: { id: params.id },
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const layout = await (prisma as any).savedPlotLayout.findFirst({
+      where: { id: params.id, userId },
     });
 
     if (!layout) {
@@ -36,9 +42,20 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.savedPlotLayout.delete({
-      where: { id: params.id },
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const result = await (prisma as any).savedPlotLayout.deleteMany({
+      where: { id: params.id, userId },
     });
+
+    if (!result.count) {
+      return NextResponse.json({ error: 'Plot layout not found' }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -56,6 +73,13 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { name, description, plotConfigs, layout } = body;
 
@@ -65,11 +89,16 @@ export async function PATCH(
     if (plotConfigs !== undefined) updateData.plotConfigs = JSON.stringify(plotConfigs);
     if (layout !== undefined) updateData.layout = JSON.stringify(layout);
 
-    const updatedLayout = await prisma.savedPlotLayout.update({
-      where: { id: params.id },
+    const result = await (prisma as any).savedPlotLayout.updateMany({
+      where: { id: params.id, userId },
       data: updateData,
     });
 
+    if (!result.count) {
+      return NextResponse.json({ error: 'Plot layout not found' }, { status: 404 });
+    }
+
+    const updatedLayout = await (prisma as any).savedPlotLayout.findFirst({ where: { id: params.id, userId } });
     return NextResponse.json(updatedLayout);
   } catch (error) {
     console.error('Error updating plot layout:', error);

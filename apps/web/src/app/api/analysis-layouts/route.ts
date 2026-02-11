@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@purplesector/db-prisma';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/analysis-layouts - Get all saved analysis layouts (optionally filtered by context)
 export async function GET(request: NextRequest) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const context = searchParams.get('context');
 
-    const layouts = await prisma.savedAnalysisLayout.findMany({
-      where: context ? { context } : undefined,
+    const layouts = await (prisma as any).savedAnalysisLayout.findMany({
+      where: context ? { userId, context } : { userId },
       orderBy: [
         { isDefault: 'desc' },
         { createdAt: 'desc' },
@@ -30,6 +36,13 @@ export async function GET(request: NextRequest) {
 // POST /api/analysis-layouts - Create a new saved analysis layout
 export async function POST(request: NextRequest) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { name, description, layout, context = 'global', isDefault = false } = body;
 
@@ -40,8 +53,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const savedLayout = await prisma.savedAnalysisLayout.create({
+    const savedLayout = await (prisma as any).savedAnalysisLayout.create({
       data: {
+        userId,
         name,
         description,
         layout: JSON.stringify(layout),

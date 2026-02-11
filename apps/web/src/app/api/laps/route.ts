@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { calculateLapTime, normalizeTelemetryFrames } from '@/lib/utils';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // POST /api/laps - Create a new lap
 export async function POST(request: NextRequest) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { sessionId, lapNumber, telemetryData } = body;
 
@@ -22,8 +30,9 @@ export async function POST(request: NextRequest) {
     const normalizedTelemetryData = JSON.stringify(normalizedFrames);
 
     // Check if lap already exists (prevent duplicates)
-    const existingLap = await prisma.lap.findFirst({
+    const existingLap = await (prisma as any).lap.findFirst({
       where: {
+        userId,
         sessionId,
         lapNumber,
       },
@@ -35,8 +44,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify session exists before creating lap
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
+    const session = await (prisma as any).session.findFirst({
+      where: { id: sessionId, userId },
     });
 
     if (!session) {
@@ -47,8 +56,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const lap = await prisma.lap.create({
+    const lap = await (prisma as any).lap.create({
       data: {
+        userId,
         sessionId,
         lapNumber,
         lapTime,

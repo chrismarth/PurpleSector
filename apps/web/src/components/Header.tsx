@@ -6,7 +6,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ThemeToggle } from './ThemeToggle';
+import { UserMenu } from './UserMenu';
 
 export default function Header() {
   return (
@@ -23,7 +23,7 @@ export default function Header() {
               priority
             />
           </Link>
-          <ThemeToggle />
+          <UserMenu />
         </div>
       </div>
     </header>

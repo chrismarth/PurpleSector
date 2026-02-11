@@ -50,13 +50,21 @@ export default function HomePage() {
   async function fetchData() {
     try {
       const [eventsResponse, vehiclesResponse] = await Promise.all([
-        fetch('/api/events'),
-        fetch('/api/vehicles'),
+        fetch('/api/events', { cache: 'no-store' }),
+        fetch('/api/vehicles', { cache: 'no-store' }),
       ]);
+
+      if (eventsResponse.status === 401 || vehiclesResponse.status === 401) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?next=${next}`;
+        return;
+      }
+
       const eventsData = await eventsResponse.json();
       const vehiclesData = await vehiclesResponse.json();
-      setEvents(eventsData);
-      setVehicles(vehiclesData);
+
+      setEvents(Array.isArray(eventsData) ? eventsData : []);
+      setVehicles(Array.isArray(vehiclesData) ? vehiclesData : []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {

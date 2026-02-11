@@ -10,11 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { TelemetryFrame } from '@/types/telemetry';
 import { formatLapTime } from '@/lib/utils';
-import { msToSeconds } from '@purplesector/telemetry';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { decodeMessage, createStartDemoMessage, createStopDemoMessage, createPingMessage } from '@/lib/telemetry-proto-browser';
-import { AnalysisPanelGrid } from '@/components/AnalysisPanelGrid';
 import type { AnalysisLayoutJSON } from '@/lib/analysisLayout';
+import { DEFAULT_ANALYSIS_LAYOUT } from '@/lib/analysisLayout';
+import { useAuth } from '@/components/AuthProvider';
+import { TelemetryDataPanel } from '@/components/TelemetryDataPanel';
 
 const SESSION_TAGS = [
   'Testing',
@@ -53,6 +54,7 @@ interface Lap {
 export default function SessionPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const sessionId = params.id as string;
 
   const [session, setSession] = useState<Session | null>(null);
@@ -81,6 +83,7 @@ export default function SessionPage() {
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null); // Heartbeat to keep connection alive
   const lastSavedTagsRef = useRef<string>('[]'); // Track last saved tags to prevent duplicate saves
   const lastLapTimeRef = useRef(0); // Track last lapTime to detect resets (new lap)
+  const seenLapBoundaryRef = useRef(false); // True once we've seen a lap-time reset; prevents saving a partial first lap
 
   useEffect(() => {
     // Reset lap-related state/refs whenever we switch sessions so that
@@ -91,6 +94,7 @@ export default function SessionPage() {
     setCurrentLapNumber(1);
     lastLapTimeRef.current = 0;
     lastUpdateTimeRef.current = 0;
+    seenLapBoundaryRef.current = false;
 
     // Check if this session is already open in another tab
     const sessionLockKey = `session-${sessionId}-lock`;
@@ -246,8 +250,19 @@ export default function SessionPage() {
             const layoutRecord = layouts.find((l: any) => l.isDefault) ?? layouts[0];
             try {
               const parsed: AnalysisLayoutJSON = JSON.parse(layoutRecord.layout);
+              // If the saved layout has no panel types configured, default first panel to plot
+              const hasAnyType = parsed.panels.some((p) => !!p.typeId);
+              const nextLayout = hasAnyType
+                ? parsed
+                : {
+                    ...parsed,
+                    panels: parsed.panels.map((p, idx) =>
+                      idx === 0 ? { ...p, typeId: 'plot' } : p,
+                    ),
+                  };
+
               setAnalysisLayoutId(layoutRecord.id);
-              setAnalysisLayout(parsed);
+              setAnalysisLayout(nextLayout);
               return;
             } catch (e) {
               console.error('Failed to parse saved analysis layout JSON for session:', e);
@@ -260,21 +275,10 @@ export default function SessionPage() {
         }
       }
 
-      // Fallback: simple default layout
-      setAnalysisLayout({
-        version: 1,
-        cols: 12,
-        panels: [
-          {
-            id: 'default-plot',
-            typeId: 'plot',
-            x: 0,
-            y: 0,
-            colSpan: 12,
-            rowSpan: 1,
-          },
-        ],
-      });
+      // Fallback: use the shared default layout
+      setAnalysisLayoutId(null);
+      setAnalysisLayout(DEFAULT_ANALYSIS_LAYOUT);
+
     };
 
     loadLayout();
@@ -349,9 +353,11 @@ export default function SessionPage() {
 
     console.log('Connecting to WebSocket...');
     // Include userId in connection (for Kafka user-scoped topics)
-    // In production, this would come from authentication
-    // For now, use 'demo-user' to match the demo collector
-    const userId = 'demo-user';
+    const userId = user?.id;
+    if (!userId) {
+      console.error('Cannot connect WebSocket: no authenticated user');
+      return;
+    }
     const ws = new WebSocket(`ws://localhost:8080?userId=${userId}`);
     ws.binaryType = 'arraybuffer'; // Receive binary data as ArrayBuffer for protobuf
     wsRef.current = ws;
@@ -375,17 +381,10 @@ export default function SessionPage() {
         }
       }, 30000);
 
-      // If demo mode, request demo data
-      if (session?.source === 'demo') {
-        console.log('Requesting demo mode telemetry...');
-        try {
-          ws.send(createStartDemoMessage());
-        } catch (error) {
-          console.error('Error requesting demo:', error);
-        }
-      } else {
-        console.log('Session source:', session?.source, '- waiting for live telemetry');
-      }
+      // All sessions (including demo) receive telemetry through the Kafka
+      // pipeline.  The demo collector publishes generated data to Kafka, so
+      // there is no need to request the bridge's built-in demo playback.
+      console.log('Session source:', session?.source, '- waiting for live telemetry via Kafka');
     };
 
     ws.onmessage = (event) => {
@@ -446,33 +445,52 @@ export default function SessionPage() {
           const isNewLap = frame.lapTime < lastLapTimeRef.current && lastLapTimeRef.current > 1000;
           
           if (isNewLap) {
-            // Lap boundary detected
-            if (currentLapFramesRef.current.length > 0) {
-              // We have frames from a lap, save it
-              console.log(`Lap ${currentLapNumberRef.current} completed! ${currentLapFramesRef.current.length} frames`);
-              
-              if (!savingLapRef.current) {
-                savingLapRef.current = true;
-                const lapToSave = currentLapFramesRef.current;
-                const lapNum = currentLapNumberRef.current;
-                
-                saveLap(lapToSave, lapNum).finally(() => {
-                  savingLapRef.current = false;
-                });
+            if (!seenLapBoundaryRef.current && session?.source === 'demo') {
+              // First boundary since connecting to a demo session — the frames
+              // collected so far are a partial lap (we joined mid-playback).
+              // Discard them so only complete laps get saved.
+              console.log(`Demo: discarding partial first lap (${currentLapFramesRef.current.length} frames)`);
+              seenLapBoundaryRef.current = true;
+
+              // Reset to lap 1 with the new frame
+              currentLapNumberRef.current = 1;
+              currentLapFramesRef.current = [frame];
+
+              if (isMountedRef.current) {
+                setCurrentLapFrames([frame]);
+                setCurrentLapNumber(1);
               }
+
+              lastUpdateTimeRef.current = Date.now();
+            } else {
+              seenLapBoundaryRef.current = true;
+              // Lap boundary detected and we have a complete lap — save it
+              if (currentLapFramesRef.current.length > 0) {
+                console.log(`Lap ${currentLapNumberRef.current} completed! ${currentLapFramesRef.current.length} frames`);
+                
+                if (!savingLapRef.current) {
+                  savingLapRef.current = true;
+                  const lapToSave = currentLapFramesRef.current;
+                  const lapNum = currentLapNumberRef.current;
+                  
+                  saveLap(lapToSave, lapNum).finally(() => {
+                    savingLapRef.current = false;
+                  });
+                }
+              }
+              
+              // Start new lap
+              const nextLapNumber = currentLapNumberRef.current + 1;
+              currentLapNumberRef.current = nextLapNumber;
+              currentLapFramesRef.current = [frame];
+              
+              if (isMountedRef.current) {
+                setCurrentLapFrames([frame]);
+                setCurrentLapNumber(nextLapNumber);
+              }
+              
+              lastUpdateTimeRef.current = Date.now();
             }
-            
-            // Start new lap
-            const nextLapNumber = currentLapNumberRef.current + 1;
-            currentLapNumberRef.current = nextLapNumber; // Update ref
-            currentLapFramesRef.current = [frame];
-            
-            if (isMountedRef.current) {
-              setCurrentLapFrames([frame]);
-              setCurrentLapNumber(nextLapNumber);
-            }
-            
-            lastUpdateTimeRef.current = Date.now();
           } else {
             // Same lap, add frame
             currentLapFramesRef.current = [...currentLapFramesRef.current, frame];
@@ -612,6 +630,7 @@ export default function SessionPage() {
         setCurrentLapNumber(1);
         lastLapTimeRef.current = 0;
         lastUpdateTimeRef.current = 0;
+        seenLapBoundaryRef.current = false;
         
         // WebSocket will connect automatically via useEffect when session.started becomes true
       }
@@ -721,6 +740,21 @@ export default function SessionPage() {
 
   async function endSession() {
     try {
+      // Prevent the onclose handler from reconnecting and stop all further
+      // state updates.  Without this the close → reconnect loop floods the
+      // main thread and makes the page unresponsive.
+      isMountedRef.current = false;
+
+      // Clear all timers first so nothing fires while we tear down
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+
       // Send stop_demo message before closing connection
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         try {
@@ -738,14 +772,11 @@ export default function SessionPage() {
         wsRef.current = null;
       }
 
-      // Clear all timers
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-        heartbeatIntervalRef.current = null;
+      // Save current lap in background (don't wait for it)
+      if (currentLapFrames.length > 0) {
+        saveLap(currentLapFrames, currentLapNumberRef.current).catch(err => {
+          console.error('Error saving final lap:', err);
+        });
       }
 
       // Update session status
@@ -754,13 +785,6 @@ export default function SessionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'archived' }),
       });
-
-      // Save current lap in background (don't wait for it)
-      if (currentLapFrames.length > 0) {
-        saveLap(currentLapFrames, currentLapNumberRef.current).catch(err => {
-          console.error('Error saving final lap:', err);
-        });
-      }
 
       // Navigate back to event page (session list)
       if (session?.eventId) {
@@ -991,13 +1015,12 @@ export default function SessionPage() {
                 </Card>
               )}
               {session.started && analysisLayout && (
-                <AnalysisPanelGrid
+                <TelemetryDataPanel
                   context="live"
                   telemetry={currentLapFrames}
-                  compareTelemetry={undefined}
-                  compareLapId={null}
                   layout={analysisLayout}
                   onLayoutChange={setAnalysisLayout}
+                  hasSavedLayout={!!analysisLayoutId}
                 />
               )}
             </div>

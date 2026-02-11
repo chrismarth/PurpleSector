@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/vehicles/[id]/setups - List all setups for a vehicle
 export async function GET(
@@ -7,8 +8,20 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const setups = await prisma.vehicleSetup.findMany({
-      where: { vehicleId: params.id },
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const vehicle = await (prisma as any).vehicle.findFirst({ where: { id: params.id, userId } });
+    if (!vehicle) {
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 });
+    }
+
+    const setups = await (prisma as any).vehicleSetup.findMany({
+      where: { vehicleId: params.id, userId },
       include: {
         vehicleConfiguration: true,
         _count: {
@@ -36,6 +49,18 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const vehicle = await (prisma as any).vehicle.findFirst({ where: { id: params.id, userId } });
+    if (!vehicle) {
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 });
+    }
+
     const body = await request.json();
     const { name, description, vehicleConfigurationId, parameters } = body;
 
@@ -46,8 +71,9 @@ export async function POST(
       );
     }
 
-    const setup = await prisma.vehicleSetup.create({
+    const setup = await (prisma as any).vehicleSetup.create({
       data: {
+        userId,
         vehicleId: params.id,
         vehicleConfigurationId: vehicleConfigurationId || null,
         name,

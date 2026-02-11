@@ -26,10 +26,13 @@ const logger = require('@purplesector/logger').child({ service: 'demo-collector'
 class DemoCollector {
   constructor(options = {}) {
     // Configuration
-    this.userId = options.userId || 'demo-user';
+    this.userId = options.userId || process.env.PS_USER_ID || 'demo-user';
     this.sessionId = options.sessionId || `demo-session-${Date.now()}`;
     this.frameRate = options.frameRate || 60; // Hz
     this.loop = options.loop !== undefined ? options.loop : true;
+    this.demoSource = String(options.demoSource || process.env.PS_DEMO_SOURCE || 'file')
+      .trim()
+      .toLowerCase();
     
     // Kafka producer and admin
     this.producer = null;
@@ -55,6 +58,65 @@ class DemoCollector {
     // Shutdown flag
     this.shuttingDown = false;
   }
+
+  applyLapVariations(data) {
+    const laps = data?.laps;
+    if (!Array.isArray(laps) || laps.length === 0) return data;
+
+    // If we only have one lap, create additional laps with slight variations.
+    if (laps.length === 1) {
+      const baseLap = laps[0];
+      const makeClone = (lapNumber) => ({
+        ...baseLap,
+        lapNumber,
+        frames: baseLap.frames.map((f) => ({ ...f, lapNumber })),
+      });
+      data = {
+        ...data,
+        laps: [baseLap, makeClone(2), makeClone(3)],
+      };
+    }
+
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+    // Deterministic per-lap jitter (no Math.random) so playback feels consistent.
+    const jitter = (lapIndex, frameIndex) => {
+      const x = Math.sin((lapIndex + 1) * 999 + (frameIndex + 1) * 0.017) * 10000;
+      return x - Math.floor(x);
+    };
+
+    const nextLaps = data.laps.map((lap, lapIndex) => {
+      const variation = 1 + (lapIndex - 1) * 0.015; // -1.5%, 0%, +1.5%
+      const frames = Array.isArray(lap.frames) ? lap.frames : [];
+
+      const nextFrames = frames.map((frame, frameIndex) => {
+        const noise = 1 + (jitter(lapIndex, frameIndex) - 0.5) * 0.03; // ±1.5%
+        const speed = Number(frame.speed ?? 0);
+        const rpm = Number(frame.rpm ?? 0);
+        const throttle = Number(frame.throttle ?? 0);
+        const brake = Number(frame.brake ?? 0);
+        const steering = Number(frame.steering ?? 0);
+
+        return {
+          ...frame,
+          lapNumber: lap.lapNumber ?? lapIndex + 1,
+          throttle: clamp(throttle * noise, 0, 1),
+          brake: clamp(brake * noise, 0, 1),
+          steering: clamp(steering * noise, -1, 1),
+          speed: Math.max(0, speed * variation * noise),
+          rpm: Math.max(0, rpm * variation * noise),
+        };
+      });
+
+      return {
+        ...lap,
+        lapNumber: lap.lapNumber ?? lapIndex + 1,
+        frames: nextFrames,
+      };
+    });
+
+    return { ...data, laps: nextLaps };
+  }
   
   /**
    * Initialize the collector
@@ -66,6 +128,7 @@ class DemoCollector {
         sessionId: this.sessionId,
         frameRate: this.frameRate,
         loop: this.loop,
+        demoSource: this.demoSource,
       });
       
       // Load demo data
@@ -94,9 +157,24 @@ class DemoCollector {
    */
   loadDemoData() {
     try {
-      // Use the shared demo telemetry JSON that the web app also serves
-      // __dirname = collectors/demo-kafka, so ../../apps/web/public points at app public dir
-      const demoPath = path.join(__dirname, '../demo-data/demo-telemetry.json');
+      if (this.demoSource !== 'file') {
+        this.demoData = this.generateFallbackDemoData();
+        logger.info('Generated fallback demo data', {
+          demoSource: this.demoSource,
+          laps: this.demoData?.laps?.length ?? 0,
+          totalFrames: this.getTotalFrames?.() ?? undefined,
+        });
+        return;
+      }
+
+      // Prefer the original recorded demo telemetry the web UI serves.
+      // __dirname = collectors/demo-kafka
+      const recordedDemoPath = path.join(__dirname, '../../apps/web/public/demo-telemetry.json');
+      const bundledDemoPath = path.join(__dirname, '../demo-data/demo-telemetry.json');
+
+      const demoPath = fs.existsSync(recordedDemoPath)
+        ? recordedDemoPath
+        : bundledDemoPath;
       
       if (fs.existsSync(demoPath)) {
         const rawData = fs.readFileSync(demoPath, 'utf8');
@@ -104,18 +182,20 @@ class DemoCollector {
         
         // Handle new format with multiple laps
         if (data.laps && Array.isArray(data.laps)) {
-          this.demoData = data;
-          const totalFrames = data.laps.reduce((sum, lap) => sum + lap.frames.length, 0);
+          this.demoData = this.applyLapVariations(data);
+          const totalFrames = this.demoData.laps.reduce((sum, lap) => sum + lap.frames.length, 0);
           logger.info('Loaded demo data', {
-            laps: data.laps.length,
+            demoSource: this.demoSource,
+            demoPath,
+            laps: this.demoData.laps.length,
             totalFrames,
           });
         } else if (data.frames) {
           // Handle old format with single lap
-          this.demoData = {
-            laps: [{ lapNumber: 1, frames: data.frames }],
-          };
+          this.demoData = this.applyLapVariations({ laps: [{ lapNumber: 1, frames: data.frames }] });
           logger.info('Loaded demo data (legacy format)', {
+            demoSource: this.demoSource,
+            demoPath,
             frames: data.frames.length,
           });
         } else {
@@ -136,71 +216,125 @@ class DemoCollector {
    * Generate fallback demo data
    */
   generateFallbackDemoData() {
-    const frameRate = 60; // 60 Hz
+    const frameRate = this.frameRate || 60;
 
-    // Create a few laps with different durations and small variations
-    // so demo mode feels more like real driving sessions
-    const lapDurationsMs = [65000, 68000, 71000]; // ~65s, 68s, 71s
+    // Target ~30s laps for demo mode
+    const lapDurationsMs = [30000, 30500, 31000];
     const laps = lapDurationsMs.map((duration, lapIndex) => {
       const frames = [];
       const totalFrames = Math.round((duration / 1000) * frameRate);
       const lapNumber = lapIndex + 1;
 
+      const jitter = (i) => {
+        const x = Math.sin((lapIndex + 1) * 997 + (i + 1) * 0.013) * 10000;
+        return x - Math.floor(x);
+      };
+
+      const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+      // Simple track profile: each segment defines a target speed and curvature.
+      // This gives realistic correlations between throttle/brake/steering/speed.
+      const profile = [
+        { from: 0.0, to: 0.12, targetKmh: 235, curvature: 0.05 },
+        { from: 0.12, to: 0.18, targetKmh: 95, curvature: 0.85 },
+        { from: 0.18, to: 0.33, targetKmh: 210, curvature: -0.18 },
+        { from: 0.33, to: 0.40, targetKmh: 125, curvature: -0.65 },
+        { from: 0.40, to: 0.55, targetKmh: 205, curvature: 0.12 },
+        { from: 0.55, to: 0.63, targetKmh: 80, curvature: 0.95 },
+        { from: 0.63, to: 0.78, targetKmh: 190, curvature: -0.22 },
+        { from: 0.78, to: 0.90, targetKmh: 145, curvature: 0.55 },
+        { from: 0.90, to: 1.01, targetKmh: 220, curvature: -0.08 },
+      ];
+
+      const getSegment = (pos) => profile.find((s) => pos >= s.from && pos < s.to) ?? profile[profile.length - 1];
+
+      // Per-lap slight performance variation
+      const variation = 1 + (lapIndex - 1) * 0.012; // -1.2%, 0%, +1.2%
+
+      // Evolve speed over time (instead of directly setting it) for more realistic dynamics.
+      let speedKmh = 110 * variation;
+      let gear = 3;
+
+      // Approximate ratios for RPM computation; values tuned for plausible RPM bands.
+      const ratios = [0, 14.2, 10.4, 7.7, 6.0, 5.0, 4.2];
+      const finalDrive = 1.0;
+      const rpmFromSpeed = (kmh, g) => {
+        const base = kmh * (ratios[g] ?? ratios[6]) * finalDrive * 7.4;
+        return clamp(base + 1100, 1200, 9200);
+      };
+
+      const dt = 1 / frameRate;
+
       for (let i = 0; i < totalFrames; i++) {
         const t = i / totalFrames; // 0 → 1 over lap
         const lapTime = (i / frameRate) * 1000;
+        const seg = getSegment(t);
 
-        // Sector-based behaviour: accel, heavy brake, mid-speed, etc.
-        const sector = t < 0.3 ? 'accel' : t < 0.5 ? 'brake' : t < 0.8 ? 'mid' : 'finish';
+        // Noise to avoid perfectly smooth curves
+        const noise = (jitter(i) - 0.5) * 0.08; // ±4%
 
-        let throttle;
-        let brake;
-        let steering;
-        let baseSpeed;
+        const targetKmh = seg.targetKmh * variation * (1 + noise * 0.35);
+        const curvature = seg.curvature * (1 + noise * 0.2);
 
-        switch (sector) {
-          case 'accel':
-            throttle = 0.7 + 0.25 * Math.sin(t * Math.PI * 4);
-            brake = 0;
-            steering = 0.2 * Math.sin(t * Math.PI * 6);
-            baseSpeed = 80 + 90 * t; // build speed down the straight
-            break;
-          case 'brake':
-            throttle = 0.2 + 0.1 * Math.sin(t * Math.PI * 4);
-            brake = 0.5 + 0.4 * Math.sin((t - 0.3) * Math.PI * 4) ** 2;
-            steering = 0.4 * Math.sin(t * Math.PI * 5);
-            baseSpeed = 150 - 60 * (t - 0.3); // braking zone
-            break;
-          case 'mid':
-            throttle = 0.5 + 0.3 * Math.sin(t * Math.PI * 3);
-            brake = 0.1 * Math.max(0, Math.sin((t - 0.5) * Math.PI * 6));
-            steering = 0.6 * Math.sin(t * Math.PI * 8);
-            baseSpeed = 110 + 20 * Math.sin(t * Math.PI * 2);
-            break;
-          default: // finish
-            throttle = 0.8 + 0.15 * Math.sin(t * Math.PI * 2);
-            brake = 0;
-            steering = 0.15 * Math.sin(t * Math.PI * 4);
-            baseSpeed = 140 + 15 * Math.sin(t * Math.PI * 2);
-            break;
+        // Controller: if below target -> throttle; above -> brake.
+        const error = targetKmh - speedKmh;
+
+        let throttle = clamp(error / 55, 0, 1);
+        let brake = clamp(-error / 40, 0, 1);
+
+        // Lift slightly in high-curvature segments even if under target.
+        const cornerLift = clamp(Math.abs(curvature) - 0.35, 0, 1);
+        throttle = clamp(throttle * (1 - 0.55 * cornerLift), 0, 1);
+
+        // Ensure throttle/brake don't overlap much (typical driver behaviour)
+        if (brake > 0.08) {
+          throttle = Math.min(throttle, 0.05);
         }
 
-        // Small per-lap variation so each lap looks slightly different
-        const variation = 1 + (lapIndex - 1) * 0.03; // -3%, 0%, +3%
-        const noise = 1 + (Math.random() - 0.5) * 0.04; // ±2%
+        // Steering follows curvature, reduced at high speeds.
+        const speedNorm = clamp(speedKmh / 240, 0, 1);
+        let steering = curvature * (1 - 0.55 * speedNorm) + noise * 0.08;
+        steering = clamp(steering, -1, 1);
 
-        const speed = Math.max(40, baseSpeed * variation * noise);
-        const rpmBase = 3500 + 3200 * Math.sin(t * Math.PI * 6);
-        const rpm = rpmBase * variation * noise;
+        // Very simple longitudinal model (km/h per second).
+        const accelKmhPerSec = 30 * throttle;
+        const brakeKmhPerSec = 55 * brake;
+        const aeroDragKmhPerSec = 0.028 * speedKmh * speedKmh / 100; // grows with speed
+        const cornerDragKmhPerSec = 10 * Math.abs(steering) * speedNorm;
 
-        const gear = Math.min(6, Math.max(1, Math.floor(1 + 5 * t)));
+        speedKmh += (accelKmhPerSec - brakeKmhPerSec - aeroDragKmhPerSec - cornerDragKmhPerSec) * dt;
+        speedKmh = clamp(speedKmh, 35, 260);
+
+        // Gear shift logic using RPM thresholds.
+        let rpm = rpmFromSpeed(speedKmh, gear);
+
+        const upshiftRpm = 8200;
+        const downshiftRpm = 2600;
+
+        if (throttle > 0.55 && rpm > upshiftRpm && gear < 6) {
+          gear += 1;
+          rpm = rpmFromSpeed(speedKmh, gear);
+        }
+
+        if (brake > 0.25 && rpm < downshiftRpm && gear > 1) {
+          gear -= 1;
+          rpm = rpmFromSpeed(speedKmh, gear);
+        }
+
+        // Small throttle modulation / brake tap variability so the UI has texture.
+        if (throttle > 0.2 && brake < 0.05) {
+          throttle = clamp(throttle + Math.sin(t * Math.PI * 18) * 0.035 + noise * 0.02, 0, 1);
+        }
+        if (brake > 0.15) {
+          brake = clamp(brake + Math.sin(t * Math.PI * 14) * 0.04 + noise * 0.02, 0, 1);
+        }
 
         frames.push({
           timestamp: Date.now() + lapTime,
-          throttle: Math.max(0, Math.min(1, throttle)),
-          brake: Math.max(0, Math.min(1, brake)),
-          steering: Math.max(-1, Math.min(1, steering)),
-          speed,
+          throttle: clamp(throttle, 0, 1),
+          brake: clamp(brake, 0, 1),
+          steering: clamp(steering, -1, 1),
+          speed: speedKmh,
           gear,
           rpm,
           normalizedPosition: t,

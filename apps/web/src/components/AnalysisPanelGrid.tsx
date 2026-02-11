@@ -178,6 +178,8 @@ export function AnalysisPanelGrid({
                   }));
                 },
               },
+              panelId: panel.id,
+              panelState: panel.state,
               syncedHoverValue: hoverValue,
               onHoverChange: setHoverValue,
               mathChannels,

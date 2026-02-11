@@ -59,14 +59,16 @@ export function TelemetryDataPanel({
             </CardDescription>
           </div>
           <div className="flex gap-2 items-center">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onManageChannels}
-              title="Manage channels"
-            >
-              <Sliders className="h-4 w-4" />
-            </Button>
+            {onManageChannels && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onManageChannels}
+                title="Manage channels"
+              >
+                <Sliders className="h-4 w-4" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -79,28 +81,36 @@ export function TelemetryDataPanel({
                 <Maximize2 className="h-4 w-4" />
               )}
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Layout options"
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onSaveLayout}>
-                  Save layout…
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onLoadLayout}>
-                  Load layout…
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onManageLayouts}>
-                  Manage layouts…
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {(onSaveLayout || onLoadLayout || onManageLayouts) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Layout options"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {onSaveLayout && (
+                    <DropdownMenuItem onClick={onSaveLayout}>
+                      Save layout…
+                    </DropdownMenuItem>
+                  )}
+                  {onLoadLayout && (
+                    <DropdownMenuItem onClick={onLoadLayout}>
+                      Load layout…
+                    </DropdownMenuItem>
+                  )}
+                  {onManageLayouts && (
+                    <DropdownMenuItem onClick={onManageLayouts}>
+                      Manage layouts…
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </CardHeader>

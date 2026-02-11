@@ -17,6 +17,10 @@ export interface AnalysisPanelProps {
   compareTelemetry?: TelemetryFrame[];
   compareLapId?: string | null;
   host: AnalysisHostAPI;
+  // Stable identifier for this panel instance (from the layout).
+  panelId?: string;
+  // Optional per-panel state from the layout definition.
+  panelState?: unknown;
   // Optional cross-panel hover synchronization value (e.g. time in seconds).
   syncedHoverValue?: number | null;
   // Called by a panel when its local hover changes so the host can sync others.

@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@purplesector/db-prisma';
+import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/plot-layouts - Get all saved plot layouts
 export async function GET(request: NextRequest) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const context = searchParams.get('context') || 'global';
 
-    const layouts = await prisma.savedPlotLayout.findMany({
+    const layouts = await (prisma as any).savedPlotLayout.findMany({
       where: {
+        userId,
         context,
       },
       orderBy: [
@@ -32,6 +39,13 @@ export async function GET(request: NextRequest) {
 // POST /api/plot-layouts - Create a new saved plot layout
 export async function POST(request: NextRequest) {
   try {
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { name, description, plotConfigs, layout, context = 'global' } = body;
 
@@ -42,8 +56,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const savedLayout = await prisma.savedPlotLayout.create({
+    const savedLayout = await (prisma as any).savedPlotLayout.create({
       data: {
+        userId,
         name,
         description,
         plotConfigs: JSON.stringify(plotConfigs),

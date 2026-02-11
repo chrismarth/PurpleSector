@@ -6,11 +6,34 @@ import type { TelemetryFrame } from '@/types/telemetry';
 import { type PlotConfig } from '@/types/plotConfig';
 import { RAW_CHANNELS, MathTelemetryChannel } from '@purplesector/telemetry';
 
+const DEFAULT_CONFIG: PlotConfig = {
+  id: `plot_default`,
+  title: 'Throttle & Brake',
+  xAxis: 'time',
+  xAxisLabel: 'Time (s)',
+  yAxisLabel: 'Input (%)',
+  yAxisLabelSecondary: '',
+  channels: [
+    {
+      id: 'throttle-1',
+      channelId: 'throttle',
+      color: '#10b981',
+    },
+    {
+      id: 'brake-1',
+      channelId: 'brake',
+      color: '#ef4444',
+    },
+  ],
+};
+
 interface SimpleTelemetryPlotPanelProps {
   data: TelemetryFrame[];
   compareData?: TelemetryFrame[];
   syncedHoverValue?: number | null;
   onHoverChange?: (value: number | null) => void;
+  // Optional initial plot configuration (overrides the default Throttle & Brake).
+  initialConfig?: PlotConfig;
   // Called when the plot title changes so an outer toolbar can reflect it.
   onTitleChange?: (title: string) => void;
   // Allows the host/provider to get imperative actions for toolbar buttons.
@@ -26,19 +49,14 @@ export function SimpleTelemetryPlotPanel({
   compareData,
   syncedHoverValue,
   onHoverChange,
+  initialConfig,
   onTitleChange,
   onRegisterActions,
   mathChannels = [],
 }: SimpleTelemetryPlotPanelProps) {
-  const [config, setConfig] = useState<PlotConfig>({
-    id: `plot_${Date.now()}`,
-    title: 'New Plot',
-    xAxis: 'time',
-    xAxisLabel: 'Time (s)',
-    yAxisLabel: 'Value',
-    yAxisLabelSecondary: '',
-    channels: [],
-  });
+  const [config, setConfig] = useState<PlotConfig>(
+    initialConfig ?? { ...DEFAULT_CONFIG, id: `plot_${Date.now()}` },
+  );
 
   const handleConfigChange = useCallback(
     (next: PlotConfig) => {
