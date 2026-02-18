@@ -45,6 +45,11 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchData();
+
+    // Re-fetch when the AI agent mutates data (e.g. creates an event)
+    const onDataMutated = () => fetchData();
+    window.addEventListener('agent:data-mutated', onDataMutated);
+    return () => window.removeEventListener('agent:data-mutated', onDataMutated);
   }, []);
 
   async function fetchData() {

@@ -1,5 +1,5 @@
 {
-  "name": "@purplesector/analysis-factory",
+  "name": "@purplesector/lap-analysis-langgraph",
   "version": "0.1.0",
   "private": true,
   "main": "index.ts",

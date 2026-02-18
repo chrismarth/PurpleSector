@@ -1,7 +1,7 @@
 // Core telemetry data types
 
 import type { TelemetryFrame as CoreTelemetryFrame } from '@purplesector/core';
-import type { LapSuggestion as BaseLapSuggestion } from '@purplesector/analysis-base';
+import type { LapSuggestion as BaseLapSuggestion } from '@purplesector/lap-analysis-base';
 
 // Re-export TelemetryFrame from the shared core package so existing imports
 // from '@/types/telemetry' continue to work.

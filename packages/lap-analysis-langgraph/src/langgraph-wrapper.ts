@@ -4,7 +4,7 @@
  * Wraps the LangGraph analyzer to implement the LapAnalyzer interface.
  */
 
-import type { LapAnalyzer, AnalysisParams, AnalysisResult } from '@purplesector/analysis-base';
+import type { LapAnalyzer, AnalysisParams, AnalysisResult } from '@purplesector/lap-analysis-base';
 import { LangGraphAnalyzer } from './langgraph-analyzer';
 
 export class LangGraphAnalyzerWrapper implements LapAnalyzer {

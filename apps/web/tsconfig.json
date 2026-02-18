@@ -9,6 +9,15 @@
       "@purplesector/plugin-api": [
         "../../packages/plugin-api/src"
       ],
+      "@purplesector/plugin-registry": [
+        "../../packages/plugin-registry/src"
+      ],
+      "@purplesector/plugin-agent": [
+        "../../packages/plugin-agent/src"
+      ],
+      "@purplesector/plugin-agent/server": [
+        "../../packages/plugin-agent/src/plugin.server"
+      ],
       "@purplesector/web-charts": [
         "../../packages/web-charts/src"
       ],

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
-import { chatAboutLap, analyzeTelemetryData } from '@purplesector/analysis-base';
+import { chatAboutLap, analyzeTelemetryData } from '@purplesector/lap-analysis-base';
 import { requireAuthUserId } from '@/lib/api-auth';
 
 // POST /api/chat - Handle chat messages about a lap

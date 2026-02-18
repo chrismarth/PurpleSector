@@ -29,6 +29,7 @@ yarn-error.log*
 *.db
 *.db-journal
 prisma/migrations/
+packages/db-prisma/prisma/schema.generated.prisma
 
 # IDE
 .vscode/

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import type {
   PluginModule,
-  PluginContext,
+  PluginClientContext,
   LapAnalysisView,
   LapAnalysisViewProps,
   PluginManifest,
@@ -54,7 +54,7 @@ const manifest: PluginManifest = {
 
 const plugin: PluginModule = {
   manifest,
-  register(ctx: PluginContext) {
+  register(ctx: PluginClientContext) {
     // Legacy lap analysis view (will be phased out in favor of generic panel grid)
     ctx.registerLapAnalysisView(lapTelemetryPlotsView);
 

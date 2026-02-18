@@ -4,16 +4,34 @@ import type {
   AnalysisPanelType,
   AnalysisPanelProvider,
 } from './analysisPanels';
+import type { GlobalPanelRegistration, SettingsTabRegistration } from './globalUI';
+import type { AgentToolDefinition } from './agentTools';
+import type { PluginServerContext } from './serverPlugin';
 
-export interface PluginContext {
+export interface PluginClientContext {
   registerLapAnalysisView(view: LapAnalysisView): void;
 
   // Generic analysis panel system
   registerAnalysisPanelType(type: AnalysisPanelType): void;
   registerAnalysisPanelProvider(provider: AnalysisPanelProvider): void;
+
+  // Global UI slots
+  registerGlobalPanel(panel: GlobalPanelRegistration): void;
+
+  // Settings tabs
+  registerSettingsTab(tab: SettingsTabRegistration): void;
+
+  // Agent tool definitions (client-side metadata only)
+  registerAgentTool(tool: AgentToolDefinition): void;
 }
+
+/**
+ * @deprecated Use PluginClientContext instead. Kept for backward compatibility.
+ */
+export type PluginContext = PluginClientContext;
 
 export interface PluginModule {
   manifest: PluginManifest;
-  register: (ctx: PluginContext) => void;
+  register?: (ctx: PluginClientContext) => void;
+  registerServer?: (ctx: PluginServerContext) => void;
 }

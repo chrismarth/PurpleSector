@@ -1,5 +1,5 @@
 {
-  "name": "@purplesector/analysis-simple",
+  "name": "@purplesector/lap-analysis-simple",
   "version": "0.1.0",
   "private": true,
   "main": "index.ts",

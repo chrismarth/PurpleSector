@@ -22,6 +22,9 @@
     "paths": {
       "@/*": ["apps/web/src/*"],
       "@purplesector/plugin-api": ["packages/plugin-api/src"],
+      "@purplesector/plugin-agent": ["packages/plugin-agent/src"],
+      "@purplesector/plugin-agent/server": ["packages/plugin-agent/src/plugin.server"],
+      "@purplesector/plugin-registry": ["packages/plugin-registry/src"],
       "@purplesector/web-charts": ["packages/web-charts/src"],
       "@purplesector/plugin-core-lap-telemetry": ["packages/plugin-core-lap-telemetry/src"]
     }

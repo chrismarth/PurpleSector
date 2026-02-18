@@ -2,7 +2,7 @@
  * Simple Analyzer package.
  *
  * Re-exports the SimpleAnalyzer implementation so consumers can depend
- * on @purplesector/analysis-simple instead of app-local paths.
+ * on @purplesector/lap-analysis-simple instead of app-local paths.
  */
 
 import { prisma } from '@purplesector/db-prisma';
@@ -12,7 +12,7 @@ import {
   AnalysisResult,
   analyzeTelemetryData,
   generateLapSuggestions,
-} from '@purplesector/analysis-base';
+} from '@purplesector/lap-analysis-base';
 
 export class SimpleAnalyzer implements LapAnalyzer {
   getName(): string {

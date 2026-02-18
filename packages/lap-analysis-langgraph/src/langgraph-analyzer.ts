@@ -22,7 +22,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { LapSuggestion } from '@/types/telemetry';
 import { prisma } from '@purplesector/db-prisma';
-import { analyzeTelemetryData } from '@purplesector/analysis-base';
+import { analyzeTelemetryData } from '@purplesector/lap-analysis-base';
 
 /**
  * Define the state structure for our workflow using LangGraph Annotation

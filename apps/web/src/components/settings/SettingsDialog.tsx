@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { getLoadedPlugins } from '@/plugins';
+import { getLoadedPlugins, getSettingsTabs } from '@/plugins';
 import { AvatarCropDialog } from '@/components/settings/AvatarCropDialog';
 
 interface SettingsDialogProps {
@@ -161,6 +161,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   }, [cropImageSrc]);
 
   const plugins = getLoadedPlugins();
+  const pluginSettingsTabs = getSettingsTabs();
 
   const isFullNameValid = fullName.trim().length > 0;
   const hasProfileChanges =
@@ -198,6 +199,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   <Sliders className="h-4 w-4" />
                   General Settings
                 </TabsTrigger>
+                {pluginSettingsTabs.map((tab) => (
+                  <TabsTrigger key={tab.id} value={`plugin-${tab.id}`} className="justify-start gap-2">
+                    <tab.icon className="h-4 w-4" />
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
                 <TabsTrigger value="extensions" className="justify-start gap-2">
                   <Layers className="h-4 w-4" />
                   Extensions
@@ -429,6 +436,13 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                       <div className="text-sm text-muted-foreground">(placeholder)</div>
                     </div>
                   </TabsContent>
+
+                  {/* ── Plugin Settings Tabs ── */}
+                  {pluginSettingsTabs.map((tab) => (
+                    <TabsContent key={tab.id} value={`plugin-${tab.id}`} className="m-0">
+                      {tab.render()}
+                    </TabsContent>
+                  ))}
 
                   {/* ── About ── */}
                   <TabsContent value="about" className="m-0">

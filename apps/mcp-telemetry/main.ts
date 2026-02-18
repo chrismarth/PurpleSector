@@ -13,7 +13,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { prisma } from '@purplesector/db-prisma';
-import { analyzeTelemetryData } from '@purplesector/analysis-base';
+import { analyzeTelemetryData } from '@purplesector/lap-analysis-base';
 
 // Create MCP server
 const server = new Server(
