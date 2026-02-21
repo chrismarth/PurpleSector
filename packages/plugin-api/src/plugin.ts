@@ -4,7 +4,13 @@ import type {
   AnalysisPanelType,
   AnalysisPanelProvider,
 } from './analysisPanels';
-import type { GlobalPanelRegistration, SettingsTabRegistration } from './globalUI';
+import type {
+  GlobalPanelRegistration,
+  SettingsTabRegistration,
+  NavTabRegistration,
+  ContentTabRegistration,
+  ToolbarItemRegistration,
+} from './globalUI';
 import type { AgentToolDefinition } from './agentTools';
 import type { PluginServerContext } from './serverPlugin';
 
@@ -23,6 +29,15 @@ export interface PluginClientContext {
 
   // Agent tool definitions (client-side metadata only)
   registerAgentTool(tool: AgentToolDefinition): void;
+
+  // App Shell: Navigation pane tabs
+  registerNavTab(tab: NavTabRegistration): void;
+
+  // App Shell: Content pane tab types
+  registerContentTab(tab: ContentTabRegistration): void;
+
+  // App Shell: Toolbar items
+  registerToolbarItem(item: ToolbarItemRegistration): void;
 }
 
 /**

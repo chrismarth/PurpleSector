@@ -1,7 +1,7 @@
 {
   "id": "dev/database-and-telemetry",
   "title": "Database and Telemetry",
-  "description": "This page describes the core telemetry data model and how it is represented in the system.",
+  "description": "This page describes the database schema, telemetry data model, and how data is persisted in Purple Sector.",
   "source": "@site/docs/dev/database-and-telemetry.md",
   "sourceDirName": "dev",
   "slug": "/dev/database-and-telemetry",
@@ -13,8 +13,8 @@
   "frontMatter": {},
   "sidebar": "userGuide",
   "previous": {
-    "title": "Development Environment",
-    "permalink": "/PurpleSector/dev/dev-environment"
+    "title": "Analysis Panels",
+    "permalink": "/PurpleSector/dev/analysis-panels"
   },
   "next": {
     "title": "ACC Telemetry Collectors",

@@ -1,7 +1,7 @@
 {
   "id": "notes/overview",
   "title": "Design Notes",
-  "description": "Historical notes, migration guides, and fix descriptions for Purple Sector.",
+  "description": "Historical notes, migration guides, and architectural decisions for Purple Sector.",
   "source": "@site/docs/notes/overview.md",
   "sourceDirName": "notes",
   "slug": "/notes/overview",

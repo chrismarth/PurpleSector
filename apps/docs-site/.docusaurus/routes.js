@@ -9,15 +9,15 @@ export default [
   },
   {
     path: '/PurpleSector/',
-    component: ComponentCreator('/PurpleSector/', '55f'),
+    component: ComponentCreator('/PurpleSector/', '5fe'),
     routes: [
       {
         path: '/PurpleSector/',
-        component: ComponentCreator('/PurpleSector/', '5b2'),
+        component: ComponentCreator('/PurpleSector/', '66d'),
         routes: [
           {
             path: '/PurpleSector/',
-            component: ComponentCreator('/PurpleSector/', '76e'),
+            component: ComponentCreator('/PurpleSector/', '1af'),
             routes: [
               {
                 path: '/PurpleSector/dev/acc-hybrid-collector',
@@ -28,6 +28,18 @@ export default [
               {
                 path: '/PurpleSector/dev/acc-telemetry',
                 component: ComponentCreator('/PurpleSector/dev/acc-telemetry', 'db3'),
+                exact: true,
+                sidebar: "userGuide"
+              },
+              {
+                path: '/PurpleSector/dev/analysis-panels',
+                component: ComponentCreator('/PurpleSector/dev/analysis-panels', '52a'),
+                exact: true,
+                sidebar: "userGuide"
+              },
+              {
+                path: '/PurpleSector/dev/app-shell',
+                component: ComponentCreator('/PurpleSector/dev/app-shell', '3e4'),
                 exact: true,
                 sidebar: "userGuide"
               },
@@ -104,8 +116,32 @@ export default [
                 sidebar: "userGuide"
               },
               {
+                path: '/PurpleSector/user/ai-agent',
+                component: ComponentCreator('/PurpleSector/user/ai-agent', '560'),
+                exact: true,
+                sidebar: "userGuide"
+              },
+              {
+                path: '/PurpleSector/user/events-and-sessions',
+                component: ComponentCreator('/PurpleSector/user/events-and-sessions', '0ba'),
+                exact: true,
+                sidebar: "userGuide"
+              },
+              {
                 path: '/PurpleSector/user/getting-started',
                 component: ComponentCreator('/PurpleSector/user/getting-started', 'a7a'),
+                exact: true,
+                sidebar: "userGuide"
+              },
+              {
+                path: '/PurpleSector/user/lap-analysis',
+                component: ComponentCreator('/PurpleSector/user/lap-analysis', '84d'),
+                exact: true,
+                sidebar: "userGuide"
+              },
+              {
+                path: '/PurpleSector/user/navigating-the-app',
+                component: ComponentCreator('/PurpleSector/user/navigating-the-app', 'c8e'),
                 exact: true,
                 sidebar: "userGuide"
               },
@@ -128,8 +164,8 @@ export default [
                 sidebar: "userGuide"
               },
               {
-                path: '/PurpleSector/user/using-sessions',
-                component: ComponentCreator('/PurpleSector/user/using-sessions', 'a2d'),
+                path: '/PurpleSector/user/vehicles',
+                component: ComponentCreator('/PurpleSector/user/vehicles', '105'),
                 exact: true,
                 sidebar: "userGuide"
               }

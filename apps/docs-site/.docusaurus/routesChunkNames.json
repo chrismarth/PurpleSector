@@ -6,17 +6,17 @@
     },
     "config": "5e9f5e1a"
   },
-  "/PurpleSector/-55f": {
+  "/PurpleSector/-5fe": {
     "__comp": "5e95c892",
     "__context": {
       "plugin": "aba21aa0"
     }
   },
-  "/PurpleSector/-5b2": {
+  "/PurpleSector/-66d": {
     "__comp": "a7bd4aaa",
     "__props": "d1c9f980"
   },
-  "/PurpleSector/-76e": {
+  "/PurpleSector/-1af": {
     "__comp": "a94703ab"
   },
   "/PurpleSector/dev/acc-hybrid-collector-37f": {
@@ -26,6 +26,14 @@
   "/PurpleSector/dev/acc-telemetry-db3": {
     "__comp": "17896441",
     "content": "70f85e8d"
+  },
+  "/PurpleSector/dev/analysis-panels-52a": {
+    "__comp": "17896441",
+    "content": "41d4acbd"
+  },
+  "/PurpleSector/dev/app-shell-3e4": {
+    "__comp": "17896441",
+    "content": "37e0cd9e"
   },
   "/PurpleSector/dev/architecture-f40": {
     "__comp": "17896441",
@@ -75,9 +83,25 @@
     "__comp": "17896441",
     "content": "b61b4f12"
   },
+  "/PurpleSector/user/ai-agent-560": {
+    "__comp": "17896441",
+    "content": "c07de40f"
+  },
+  "/PurpleSector/user/events-and-sessions-0ba": {
+    "__comp": "17896441",
+    "content": "5f7943bf"
+  },
   "/PurpleSector/user/getting-started-a7a": {
     "__comp": "17896441",
     "content": "4d88dca8"
+  },
+  "/PurpleSector/user/lap-analysis-84d": {
+    "__comp": "17896441",
+    "content": "e785b00d"
+  },
+  "/PurpleSector/user/navigating-the-app-c8e": {
+    "__comp": "17896441",
+    "content": "6ecef047"
   },
   "/PurpleSector/user/plugins-987": {
     "__comp": "17896441",
@@ -91,8 +115,8 @@
     "__comp": "17896441",
     "content": "8f340f6c"
   },
-  "/PurpleSector/user/using-sessions-a2d": {
+  "/PurpleSector/user/vehicles-105": {
     "__comp": "17896441",
-    "content": "bf8b906b"
+    "content": "1098b74d"
   }
 }

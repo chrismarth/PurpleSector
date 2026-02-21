@@ -1,7 +1,7 @@
 {
   "id": "dev/plugins",
   "title": "Plugin Architecture",
-  "description": "This document describes the Purple Sector plugin architecture, with a focus on lap analysis view plugins. Over time, the same pattern will be used for vehicles, live views, and analysis modules.",
+  "description": "This document describes the Purple Sector plugin architecture — the type system, registration API, client/server split, and how to write a new plugin.",
   "source": "@site/docs/dev/plugins.md",
   "sourceDirName": "dev",
   "slug": "/dev/plugins",
@@ -17,11 +17,11 @@
   },
   "sidebar": "userGuide",
   "previous": {
-    "title": "LangGraph Analyzer",
-    "permalink": "/PurpleSector/dev/langgraph-analyzer"
+    "title": "App Shell Architecture",
+    "permalink": "/PurpleSector/dev/app-shell"
   },
   "next": {
-    "title": "Plot Layout System",
-    "permalink": "/PurpleSector/dev/plot-layouts"
+    "title": "Analysis Panels",
+    "permalink": "/PurpleSector/dev/analysis-panels"
   }
 }

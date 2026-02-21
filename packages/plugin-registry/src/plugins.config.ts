@@ -8,4 +8,5 @@
 export const enabledPlugins: string[] = [
   'purple-sector.core-lap-views',
   'purple-sector.agent',
+  'purple-sector.vehicles',
 ];

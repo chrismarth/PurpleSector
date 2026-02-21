@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ChatInterface } from '@/components/ChatInterface';
 import { VehicleInfoPanel } from '@/components/VehicleInfoPanel';
 import { formatLapTime } from '@/lib/utils';
 import { TelemetryFrame, LapSuggestion } from '@/types/telemetry';
@@ -18,7 +17,8 @@ import {
   CompositeChannelRegistry,
   MathTelemetryChannel,
 } from '@purplesector/telemetry';
-import { ChannelEditorDialog } from '@/components/ChannelEditorDialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import ChannelEditorContent from '@/components/content/ChannelEditorContent';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import type { AnalysisLayoutJSON } from '@/lib/analysisLayout';
 import { DEFAULT_ANALYSIS_LAYOUT } from '@/lib/analysisLayout';
@@ -188,80 +188,6 @@ export default function LapPage() {
     }
   }
 
-  const handleMathChannelCreate = async (channel: MathTelemetryChannel) => {
-    console.log('Creating math channel:', channel);
-    try {
-      const response = await fetch('/api/channels/math', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label: channel.label,
-          unit: channel.unit,
-          expression: channel.expression,
-          inputs: channel.inputs,
-          validated: channel.validated,
-        }),
-      });
-
-      console.log('API response status:', response.status);
-      
-      if (response.ok) {
-        const newChannel = await response.json();
-        console.log('New channel from API:', newChannel);
-        console.log('Current math channels:', mathChannels);
-        setMathChannels([...mathChannels, newChannel]);
-        console.log('Updated math channels state');
-      } else {
-        const errorText = await response.text();
-        console.error('API error:', response.status, errorText);
-        alert(`Failed to create math channel: ${errorText}`);
-      }
-    } catch (error) {
-      console.error('Error creating math channel:', error);
-      alert('Failed to create math channel');
-    }
-  };
-
-  const handleMathChannelUpdate = async (channel: MathTelemetryChannel) => {
-    try {
-      const response = await fetch(`/api/channels/math/${channel.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label: channel.label,
-          unit: channel.unit,
-          expression: channel.expression,
-          inputs: channel.inputs,
-          validated: channel.validated,
-        }),
-      });
-
-      if (response.ok) {
-        const updatedChannel = await response.json();
-        setMathChannels(
-          mathChannels.map((ch) => (ch.id === updatedChannel.id ? updatedChannel : ch))
-        );
-      }
-    } catch (error) {
-      console.error('Error updating math channel:', error);
-      alert('Failed to update math channel');
-    }
-  };
-
-  const handleMathChannelDelete = async (channelId: string) => {
-    try {
-      const response = await fetch(`/api/channels/math/${channelId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setMathChannels(mathChannels.filter((ch) => ch.id !== channelId));
-      }
-    } catch (error) {
-      console.error('Error deleting math channel:', error);
-      alert('Failed to delete math channel');
-    }
-  };
 
   async function fetchLap() {
     try {
@@ -658,7 +584,7 @@ export default function LapPage() {
                   onSaveLayout={() => setIsSaveLayoutDialogOpen(true)}
                   onLoadLayout={() => setIsLoadLayoutDialogOpen(true)}
                   onManageLayouts={() => setIsManageLayoutsDialogOpen(true)}
-                  onManageChannels={() => setShowChannelEditor(true)}
+
                   hasSavedLayout={!!analysisLayoutId}
                   mathChannels={mathChannels}
                 />
@@ -983,40 +909,20 @@ export default function LapPage() {
           </div>
         </div>
 
-        {/* AI Coach Chat - Full Width, Compact */}
-        <div className="mt-6 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Ask the AI Coach</CardTitle>
-              <CardDescription>
-                Get specific advice about your driving technique
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0 h-[300px] overflow-hidden">
-              <ChatInterface
-                lapId={lapId}
-                initialMessages={lap.chatMessages.map(msg => ({
-                  id: msg.id,
-                  role: msg.role as 'user' | 'assistant',
-                  content: msg.content,
-                  createdAt: new Date(msg.createdAt),
-                }))}
-              />
-            </CardContent>
-          </Card>
-        </div>
       </main>
 
       {/* Channel Editor Dialog */}
-      <ChannelEditorDialog
-        open={showChannelEditor}
-        onOpenChange={setShowChannelEditor}
-        mathChannels={mathChannels}
-        onMathChannelCreate={handleMathChannelCreate}
-        onMathChannelUpdate={handleMathChannelUpdate}
-        onMathChannelDelete={handleMathChannelDelete}
-        availableRawChannelIds={new Set(RAW_CHANNELS.map((ch) => ch.id))}
-      />
+      <Dialog open={showChannelEditor} onOpenChange={setShowChannelEditor}>
+        <DialogContent className="max-w-5xl h-[80vh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-4 py-2 border-b bg-muted/40 shrink-0">
+            <DialogTitle className="text-sm font-semibold">Channel Library</DialogTitle>
+            <DialogDescription className="sr-only">View raw telemetry channels and manage math channels</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
+            <ChannelEditorContent onChannelsChange={setMathChannels} />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Analysis Layout Dialogs */}
       <SaveLayoutDialog

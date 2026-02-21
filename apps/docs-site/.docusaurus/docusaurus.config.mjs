@@ -9,7 +9,7 @@ export default {
   "url": "https://chrismarth.github.io",
   "baseUrl": "/PurpleSector/",
   "favicon": "img/favicon.ico",
-  "organizationName": "PurpleSector",
+  "organizationName": "chrismarth",
   "projectName": "PurpleSector",
   "onBrokenLinks": "throw",
   "i18n": {
@@ -45,7 +45,7 @@ export default {
           "position": "left"
         },
         {
-          "href": "https://github.com/<your-user-or-org>/PurpleSector",
+          "href": "https://github.com/chrismarth/PurpleSector",
           "label": "GitHub",
           "position": "right"
         }
@@ -54,7 +54,7 @@ export default {
     },
     "footer": {
       "style": "dark",
-      "copyright": "Copyright \u0000a9 2026 Purple Sector",
+      "copyright": "Copyright © 2026 Purple Sector",
       "links": []
     },
     "colorMode": {

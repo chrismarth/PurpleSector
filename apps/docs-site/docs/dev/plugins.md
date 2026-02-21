@@ -4,227 +4,317 @@ title: Plugin Architecture
 sidebar_label: Plugins
 ---
 
-This document describes the Purple Sector plugin architecture, with a focus on **lap analysis view plugins**. Over time, the same pattern will be used for vehicles, live views, and analysis modules.
+This document describes the Purple Sector plugin architecture — the type system, registration API, client/server split, and how to write a new plugin.
 
 ## Overview
 
-- **Core app** exposes a small runtime and a typed plugin API.
-- **Plugins** are regular TypeScript/React modules that implement interfaces from `@purplesector/plugin-api`.
-- The web app discovers and registers plugins at startup, then calls them to render parts of the UI.
+- **Plugins** are TypeScript/React packages that implement interfaces from `@purplesector/plugin-api`.
+- The **plugin registry** (`@purplesector/plugin-registry`) loads and indexes all registrations at startup.
+- Plugins can provide: analysis panel types, nav tabs, content tabs, toolbar items, global panels, settings tabs, agent tools, and API routes.
+- Each plugin declares a **manifest** with an ID, name, version, capabilities, and optional tier (`free` / `premium`).
 
-Right now, the first pluginized feature is the **lap analysis telemetry plots**.
+## Plugin API Package
 
----
+All shared types live in `packages/plugin-api` (`@purplesector/plugin-api`). Key exports:
 
-## Plugin API package
-
-The shared types live in the workspace package:
-
-- `packages/plugin-api` → published (locally) as `@purplesector/plugin-api`
-
-Key exports for lap views:
+### PluginManifest
 
 ```ts
-// packages/plugin-api/src/lapAnalysis.ts
+type PluginCapability =
+  | 'lapAnalysisView'
+  | 'analysisPanels'
+  | 'agentTools'
+  | 'apiRoutes'
+  | 'settingsTabs'
+  | 'globalUI'
+  | 'navTab'
+  | 'contentTab'
+  | 'toolbarItem';
 
-export type LapAnalysisViewContext = 'singleLap' | 'lapComparison';
-
-export interface LapAnalysisHostAPI {
-  // Reserved for future helpers (navigation, theming, etc.)
-}
-
-export interface PlotConfig { /* trimmed for docs */ }
-export interface PlotLayout { /* trimmed for docs */ }
-
-export interface LapAnalysisViewProps {
-  context: LapAnalysisViewContext;
-  telemetry: TelemetryFrame[];
-  compareTelemetry?: TelemetryFrame[];
-  compareLapId?: string | null;
-  plotConfigs: PlotConfig[];
-  plotLayout: PlotLayout;
-  onPlotConfigsChange: (configs: PlotConfig[]) => void;
-  onPlotLayoutChange: (layout: PlotLayout) => void;
-  host: LapAnalysisHostAPI;
-}
-
-export interface LapAnalysisView {
-  id: string;
-  title: string;
-  context: LapAnalysisViewContext;
-  render: (props: LapAnalysisViewProps) => React.ReactElement;
-}
-```
-
-and the generic plugin contracts:
-
-```ts
-// packages/plugin-api/src/plugin.ts
-
-export interface PluginManifest {
-  id: string;
+interface PluginManifest {
+  id: string;                    // e.g. 'purple-sector.core-lap-views'
   name: string;
   version: string;
   description?: string;
-  capabilities: ('lapAnalysisView')[];
+  capabilities: PluginCapability[];
   entry: string;
+  tier?: 'free' | 'premium';
+  prismaModels?: string;         // Path to plugin.prisma if the plugin has DB models
+  dependencies?: string[];       // Other plugin IDs this plugin depends on
 }
+```
 
-export interface PluginContext {
-  registerLapAnalysisView(view: LapAnalysisView): void;
-}
+### PluginModule
 
-export interface PluginModule {
+```ts
+interface PluginModule {
   manifest: PluginManifest;
-  register: (ctx: PluginContext) => void;
+  register?: (ctx: PluginClientContext) => void;       // Client-side registrations
+  registerServer?: (ctx: PluginServerContext) => void;  // Server-side registrations
+}
+```
+
+### PluginClientContext
+
+The client registration context provides methods for each extension point:
+
+```ts
+interface PluginClientContext {
+  // Lap analysis views (legacy)
+  registerLapAnalysisView(view: LapAnalysisView): void;
+
+  // Analysis panel system
+  registerAnalysisPanelType(type: AnalysisPanelType): void;
+  registerAnalysisPanelProvider(provider: AnalysisPanelProvider): void;
+
+  // App shell extensions
+  registerNavTab(tab: NavTabRegistration): void;
+  registerContentTab(tab: ContentTabRegistration): void;
+  registerToolbarItem(item: ToolbarItemRegistration): void;
+
+  // Global UI
+  registerGlobalPanel(panel: GlobalPanelRegistration): void;
+  registerSettingsTab(tab: SettingsTabRegistration): void;
+
+  // Agent tools (client-side metadata only)
+  registerAgentTool(tool: AgentToolDefinition): void;
+}
+```
+
+### PluginServerContext
+
+The server registration context handles API routes and agent tool handlers:
+
+```ts
+interface PluginServerContext {
+  registerApiRoute(route: PluginApiRoute): void;
+  registerAgentToolHandler(handler: AgentToolHandler): void;
 }
 ```
 
 ---
 
-## Writing a lap analysis view plugin
+## Registration Types Reference
 
-A lap analysis view plugin is any module that exports a `PluginModule` and registers one or more `LapAnalysisView` implementations.
+### Analysis Panels
 
-### 1. Create the module
+```ts
+interface AnalysisPanelType {
+  id: string;      // e.g. 'plot', 'track-map'
+  label: string;   // Human-friendly name
+}
 
-Example (simplified) core plugin (actual code lives in `packages/plugin-core-lap-telemetry/src/plugin.tsx`):
+interface AnalysisPanelProvider {
+  id: string;
+  typeId: string;              // References AnalysisPanelType.id
+  isDefault?: boolean;
+  render: (props: AnalysisPanelProps) => AnalysisPanelRender;
+}
+```
 
-```ts title="packages/plugin-core-lap-telemetry/src/plugin.tsx"
-"use client";
+`AnalysisPanelProps` includes telemetry data, compare data, host API (with `setTitle`, `availableHeight`), panel state, synced hover value, and math channels.
 
-import * as React from 'react';
-import type {
-  PluginModule,
-  PluginContext,
-  LapAnalysisView,
-  LapAnalysisViewProps,
-  PluginManifest,
-} from '@purplesector/plugin-api';
-import { TelemetryPlotPanel } from '@purplesector/web-charts';
+Providers can return either a plain `React.ReactElement` or a structured `AnalysisPanelRenderResult` with `title`, `toolbarActions`, and `content` for host-rendered toolbars.
 
-const lapTelemetryPlotsView: LapAnalysisView = {
-  id: 'core-lap-telemetry-plots',
-  title: 'Telemetry Plots',
-  context: 'singleLap',
-  render: (props: LapAnalysisViewProps) => {
-    const {
-      telemetry,
-      compareTelemetry,
-      compareLapId,
-      plotConfigs,
-      plotLayout,
-      onPlotConfigsChange,
-      onPlotLayoutChange,
-    } = props;
+### Navigation Tabs
 
-    return (
-      <TelemetryPlotPanel
-        data={telemetry}
-        compareData={compareTelemetry}
-        compareLapId={compareLapId ?? undefined}
-        initialPlotConfigs={plotConfigs}
-        initialLayout={plotLayout}
-        onPlotConfigsChange={onPlotConfigsChange}
-        onLayoutChange={onPlotLayoutChange}
-      />
-    );
-  },
-};
+```ts
+interface NavTabRegistration {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  order: number;
+  disabled?: boolean;
+  renderTree: (ctx: NavTreeContext) => React.ReactElement;
+}
+```
+
+### Content Tabs
+
+```ts
+interface ContentTabRegistration {
+  type: string;    // Matches TabDescriptor.type
+  render: (props: {
+    entityId?: string;
+    parentIds?: Record<string, string>;
+  }) => React.ReactElement;
+}
+```
+
+### Toolbar Items
+
+```ts
+interface ToolbarItemRegistration {
+  id: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  position: 'top' | 'bottom';
+  order: number;
+  onClick?: (ctx: { openTab: (tab: TabDescriptor) => void }) => void;
+  renderPanel?: () => React.ReactElement;
+}
+```
+
+### Global Panels
+
+```ts
+interface GlobalPanelRegistration {
+  id: string;
+  position: 'sidebar-right' | 'sidebar-left' | 'drawer-bottom';
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  render: () => React.ReactElement;
+}
+```
+
+### Settings Tabs
+
+```ts
+interface SettingsTabRegistration {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  order?: number;
+  render: () => React.ReactElement;
+}
+```
+
+### Agent Tools
+
+```ts
+interface AgentToolDefinition {
+  name: string;
+  description: string;
+  category: string;
+  parameters: Record<string, unknown>;  // JSON Schema
+}
+
+interface AgentToolHandler {
+  name: string;
+  handler: (params: unknown, ctx: PluginRequestContext) => Promise<unknown>;
+}
+```
+
+---
+
+## Plugin Registry
+
+The registry (`packages/plugin-registry`) manages all registrations:
+
+- **`plugins.config.ts`** — Lists enabled plugin manifest IDs. Remove an ID to disable a plugin.
+- **`loadClientPlugins(modules)`** — Called at app startup. Iterates modules, checks if enabled, calls `register()`.
+- **`loadServerPlugins(modules)`** — Called server-side. Calls `registerServer()`.
+- **Accessor functions** — `getNavTabs()`, `getContentTabs()`, `getAnalysisPanelProviders()`, `getToolbarItems()`, `getAgentToolDefinitions()`, etc.
+
+## Client/Server Split
+
+Some plugins have both client and server code. The agent plugin demonstrates the pattern:
+
+- **Client entry** (`plugin.ts`) — Registers UI components, tool definitions (metadata only).
+- **Server entry** (`plugin.server.ts`) — Registers API routes, tool handlers (with Node.js dependencies).
+- **Subpath export** — `@purplesector/plugin-agent/server` for the server entry.
+
+This split prevents Node.js-only modules (LangGraph, Prisma) from being bundled into the client webpack.
+
+The client loader (`apps/web/src/plugins/index.ts`) imports `plugin.ts`. The server loader (`apps/web/src/lib/plugin-server.ts`) imports `plugin.server.ts`.
+
+## API Route Dispatcher
+
+Plugin API routes are served by a catch-all Next.js route:
+
+```text
+apps/web/src/app/api/plugins/[...path]/route.ts
+```
+
+It matches URLs like `/api/plugins/<pluginId>/<path>` and dispatches to the registered `PluginApiRoute` handler.
+
+## Plugin Database Models
+
+Plugins can define their own Prisma models in `prisma/plugin.prisma` within their package directory. The merge script (`scripts/merge-plugin-schemas.ts`) scans all `packages/plugin-*/prisma/plugin.prisma` files and produces `packages/db-prisma/prisma/schema.generated.prisma`.
+
+Run the merge after adding or modifying plugin schemas:
+
+```bash
+npx ts-node scripts/merge-plugin-schemas.ts
+npm run db:push
+```
+
+---
+
+## Writing a New Plugin
+
+### 1. Create the Package
+
+```bash
+mkdir packages/plugin-my-feature
+cd packages/plugin-my-feature
+npm init -y
+```
+
+Set the package name to `@purplesector/plugin-my-feature`.
+
+### 2. Define the Manifest
+
+```ts
+// src/plugin.tsx
+import type { PluginModule, PluginManifest } from '@purplesector/plugin-api';
 
 const manifest: PluginManifest = {
-  id: 'purple-sector.core-lap-views',
-  name: 'Core Lap Telemetry Views',
+  id: 'purple-sector.my-feature',
+  name: 'My Feature',
   version: '0.1.0',
-  description: 'Built-in lap telemetry plot views',
-  capabilities: ['lapAnalysisView'],
+  description: 'Adds my custom feature',
+  capabilities: ['contentTab', 'navTab'],
   entry: './plugin',
 };
+```
 
+### 3. Implement Registrations
+
+```ts
 const plugin: PluginModule = {
   manifest,
-  register(ctx: PluginContext) {
-    ctx.registerLapAnalysisView(lapTelemetryPlotsView);
+  register(ctx) {
+    ctx.registerNavTab({ /* ... */ });
+    ctx.registerContentTab({ /* ... */ });
   },
 };
 
 export default plugin;
 ```
 
-### 2. Implement `render`
+### 4. Wire Into the App
 
-`render` receives all telemetry and plot configuration data; the plugin is free to:
+Add the import to `apps/web/src/plugins/index.ts`:
 
-- Render any React UI it wants.
-- Respect or ignore the existing `plotConfigs`/`plotLayout` model.
-- Use `context` to switch between single-lap and comparison behaviour.
+```ts
+import myFeaturePlugin from '@purplesector/plugin-my-feature';
 
-Because the host passes data by value, plugins do **not** talk directly to the database or collectors.
-
----
-
-## Host integration (web app)
-
-The web app currently has a very small plugin registry:
-
-```ts title="apps/web/src/plugins/index.ts"
-import type { PluginContext, PluginModule, LapAnalysisView } from '@purplesector/plugin-api';
-import coreLapViewsPlugin from '@purplesector/plugin-core-lap-telemetry';
-
-const lapAnalysisViews: LapAnalysisView[] = [];
-
-const pluginContext: PluginContext = {
-  registerLapAnalysisView(view: LapAnalysisView) {
-    lapAnalysisViews.push(view);
-  },
-};
-
-function loadPlugin(module: PluginModule) {
-  module.register(pluginContext);
-}
-
-// Register built-in plugins here
-[coreLapViewsPlugin].forEach(loadPlugin);
-
-export function getLapAnalysisViews(): LapAnalysisView[] {
-  return lapAnalysisViews.slice();
-}
+const allPlugins: PluginModule[] = [
+  coreLapViewsPlugin,
+  agentPlugin,
+  vehiclesPlugin,
+  myFeaturePlugin,  // ← add here
+];
 ```
 
-The lap page uses the first registered view for now:
+Add the manifest ID to `packages/plugin-registry/src/plugins.config.ts`:
 
-```ts title="apps/web/src/app/lap/[id]/page.tsx"{4-14}
-import { getLapAnalysisViews } from '@/plugins';
-
-// ... inside the component render
-const views = getLapAnalysisViews().filter(v => v.context === 'singleLap');
-const view = views[0];
-
-return view
-  ? view.render({
-      context: compareLapId ? 'lapComparison' : 'singleLap',
-      telemetry: telemetryFrames,
-      compareTelemetry: compareTelemetry.length > 0 ? compareTelemetry : undefined,
-      compareLapId,
-      plotConfigs,
-      plotLayout,
-      onPlotConfigsChange: setPlotConfigs,
-      onPlotLayoutChange: setPlotLayout,
-      host: {},
-    })
-  : null;
+```ts
+export const enabledPlugins = [
+  'purple-sector.core-lap-views',
+  'purple-sector.agent',
+  'purple-sector.vehicles',
+  'purple-sector.my-feature',  // ← add here
+];
 ```
 
-In the future this registry will move into a shared `@purplesector` package and support multiple plugin sources (workspace packages, local folders, npm). For now, plugins are discovered by being statically imported into the web app.
+Add path mappings to **both** `tsconfig.json` (root) and `apps/web/tsconfig.json`.
 
----
+### 5. (Optional) Add Database Models
 
-## Roadmap for other plugin types
+Create `packages/plugin-my-feature/prisma/plugin.prisma` with your models, then run the merge script.
 
-The same pattern will be reused for:
+### 6. Test
 
-- **Vehicle definition providers** – custom vehicle config UI and telemetry mapping.
-- **Live session views** – extra panels in the live dashboard.
-- **Analyzers and reports** – computation plugins that produce structured analysis results.
-
-When those are implemented, the plugin API will grow additional registration methods on `PluginContext` (e.g. `registerVehicleDefinition`, `registerLiveSessionView`, etc.).
+Start the dev server and verify your nav tab, content view, or other registrations appear in the UI.

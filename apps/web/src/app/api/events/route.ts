@@ -3,7 +3,7 @@ import { prisma } from '@purplesector/db-prisma';
 import { requireAuthUserId } from '@/lib/api-auth';
 
 // GET /api/events - List all events
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     let userId: string;
     try {
@@ -12,13 +12,29 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const url = new URL(request.url);
+    const includeParam = url.searchParams.get('include');
+    const deep = includeParam === 'sessions.laps';
+
     const events = await (prisma as any).event.findMany({
       where: { userId },
-      include: {
-        _count: {
-          select: { sessions: true },
-        },
-      },
+      include: deep
+        ? {
+            sessions: {
+              where: { userId },
+              orderBy: { createdAt: 'desc' },
+              include: {
+                laps: {
+                  orderBy: { lapNumber: 'asc' },
+                  select: { id: true, lapNumber: true, lapTime: true },
+                },
+              },
+            },
+            _count: { select: { sessions: true } },
+          }
+        : {
+            _count: { select: { sessions: true } },
+          },
       orderBy: {
         createdAt: 'desc',
       },

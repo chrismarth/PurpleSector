@@ -129,6 +129,29 @@ export function ConfigurableTelemetryChart({
     }
   }, []);
 
+  // Interpolate compare data values onto the primary time axis
+  const interpolateOntoTimeAxis = useCallback(
+    (primaryTimes: number[], compFrames: TelemetryFrame[], channelId: TelemetryChannel): number[] => {
+      if (!compFrames || compFrames.length === 0) return primaryTimes.map(() => 0);
+      const compTimes = compFrames.map((f) => f.lapTime / 1000);
+      const compValues = compFrames.map((f) => getChannelValue(f, channelId));
+
+      return primaryTimes.map((t) => {
+        if (t <= compTimes[0]) return compValues[0];
+        if (t >= compTimes[compTimes.length - 1]) return compValues[compValues.length - 1];
+        // Binary search for surrounding indices
+        let lo = 0, hi = compTimes.length - 1;
+        while (lo < hi - 1) {
+          const mid = (lo + hi) >> 1;
+          if (compTimes[mid] <= t) lo = mid; else hi = mid;
+        }
+        const frac = (t - compTimes[lo]) / (compTimes[hi] - compTimes[lo] || 1);
+        return compValues[lo] + frac * (compValues[hi] - compValues[lo]);
+      });
+    },
+    [getChannelValue],
+  );
+
   const chartData = useMemo(() => {
     if (!data || data.length === 0) {
       return {
@@ -255,8 +278,64 @@ export function ConfigurableTelemetryChart({
       });
     }
 
+    // Add compare data series (dashed, semi-transparent) for each channel
+    if (compareData && compareData.length > 0) {
+      const allChannels = [...primaryChannels, ...secondaryChannels];
+      allChannels.forEach((channelConfig) => {
+        const channelDef = channelDefsById.get(channelConfig.channelId);
+        if (channelDef?.kind === 'math' && !channelDef.validated) return;
+
+        let values: number[];
+        if (!channelDef || channelDef.kind === 'raw') {
+          values = interpolateOntoTimeAxis(timeValues, compareData, channelConfig.channelId as TelemetryChannel);
+        } else {
+          // Math channel on compare data
+          const mathDef = channelDef as MathTelemetryChannel;
+          const inputSeries: Record<string, TimeSeries> = {};
+          for (const input of mathDef.inputs) {
+            const inputDef = channelDefsById.get(input.channelId);
+            if (inputDef && inputDef.kind === 'raw') {
+              inputSeries[input.channelId] = compareData.map((frame) => ({
+                t: frame.lapTime / 1000,
+                v: getChannelValue(frame, input.channelId as TelemetryChannel),
+              }));
+            }
+          }
+          const resultSeries = evaluateMathChannelSeries(mathDef, inputSeries);
+          // Interpolate the math result onto the primary time axis
+          const compTimes = compareData.map((f) => f.lapTime / 1000);
+          const compValues = resultSeries.map((s) => s.v ?? 0);
+          values = timeValues.map((t) => {
+            if (t <= compTimes[0]) return compValues[0];
+            if (t >= compTimes[compTimes.length - 1]) return compValues[compValues.length - 1];
+            let lo = 0, hi = compTimes.length - 1;
+            while (lo < hi - 1) {
+              const mid = (lo + hi) >> 1;
+              if (compTimes[mid] <= t) lo = mid; else hi = mid;
+            }
+            const frac = (t - compTimes[lo]) / (compTimes[hi] - compTimes[lo] || 1);
+            return compValues[lo] + frac * (compValues[hi] - compValues[lo]);
+          });
+        }
+
+        uplotData.push(values);
+        // Make compare series semi-transparent by converting hex color to rgba
+        const baseColor = channelConfig.color ?? channelDef?.defaultColor ?? '#000000';
+        const hex = baseColor.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16) || 0;
+        const g = parseInt(hex.substring(2, 4), 16) || 0;
+        const b = parseInt(hex.substring(4, 6), 16) || 0;
+        series.push({
+          label: `${channelDef?.label ?? channelConfig.channelId} (compare)`,
+          color: `rgba(${r}, ${g}, ${b}, 0.45)`,
+          scale: channelConfig.useSecondaryAxis ? 'y2' : 'y',
+          dash: [6, 3],
+        });
+      });
+    }
+
     return { uplotData, series, axes };
-  }, [data, config, getChannelValue, channelDefsById]);
+  }, [data, compareData, config, getChannelValue, channelDefsById, interpolateOntoTimeAxis]);
 
   useEffect(() => {
     if (syncedHoverValue == null || !data || data.length === 0) {
@@ -334,21 +413,39 @@ export function ConfigurableTelemetryChart({
 
     const currentTime = data[currentIndex].lapTime / 1000;
 
-    const values = chartData.series.map((series, seriesIndex) => {
-      const channelConfig = config.channels[seriesIndex];
-      const channelDef = channelDefsById.get(channelConfig.channelId);
-      
-      // Get value from chartData.uplotData instead of getChannelValue
-      // seriesIndex + 1 because uplotData[0] is the time/x-axis data
-      const value = chartData.uplotData[seriesIndex + 1]?.[currentIndex] ?? 0;
+    const values: { label: string; value: number; unit: string; color: string }[] = [];
 
-      return {
+    // Primary channel legend entries
+    config.channels.forEach((channelConfig, seriesIndex) => {
+      const channelDef = channelDefsById.get(channelConfig.channelId);
+      const seriesEntry = chartData.series[seriesIndex];
+      const value = chartData.uplotData[seriesIndex + 1]?.[currentIndex] ?? 0;
+      values.push({
         label: channelDef?.label ?? channelConfig.channelId,
         value,
         unit: channelDef?.unit ?? '',
-        color: series.color,
-      };
+        color: seriesEntry?.color ?? '#000',
+      });
     });
+
+    // Compare channel legend entries
+    if (compareData && compareData.length > 0) {
+      const compareOffset = config.channels.length;
+      config.channels.forEach((channelConfig, i) => {
+        const channelDef = channelDefsById.get(channelConfig.channelId);
+        if (channelDef?.kind === 'math' && !channelDef.validated) return;
+        const seriesIdx = compareOffset + i;
+        const seriesEntry = chartData.series[seriesIdx];
+        if (!seriesEntry) return;
+        const value = chartData.uplotData[seriesIdx + 1]?.[currentIndex] ?? 0;
+        values.push({
+          label: `${channelDef?.label ?? channelConfig.channelId} (cmp)`,
+          value,
+          unit: channelDef?.unit ?? '',
+          color: seriesEntry.color,
+        });
+      });
+    }
 
     return (
       <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -371,13 +468,7 @@ export function ConfigurableTelemetryChart({
   };
 
   return (
-    <div ref={containerRef} className="bg-card rounded-lg border p-4 space-y-3">
-      {config.title && (
-        <div className="flex items-center justify-between">
-          <span className="font-medium text-sm truncate">{config.title}</span>
-        </div>
-      )}
-
+    <div ref={containerRef} className="p-4 space-y-3">
       {config.channels.length === 0 ? (
           <div
             className="flex items-center justify-center text-muted-foreground"

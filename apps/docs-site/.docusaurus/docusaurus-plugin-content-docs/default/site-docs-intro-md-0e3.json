@@ -1,7 +1,7 @@
 {
   "id": "intro",
   "title": "Purple Sector Documentation",
-  "description": "Purple Sector is an AI-powered telemetry analysis tool for Assetto Corsa and Assetto Corsa Competizione that helps drivers improve their lap times through real-time data visualization and intelligent coaching suggestions.",
+  "description": "Purple Sector is an AI-powered telemetry analysis platform for Assetto Corsa and Assetto Corsa Competizione. It helps sim-racing drivers improve lap times through real-time data visualization, configurable analysis panels, vehicle management, and intelligent AI coaching.",
   "source": "@site/docs/intro.md",
   "sourceDirName": ".",
   "slug": "/intro",

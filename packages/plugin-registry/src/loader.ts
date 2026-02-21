@@ -8,6 +8,9 @@ import type {
   AgentToolHandler,
   GlobalPanelRegistration,
   SettingsTabRegistration,
+  NavTabRegistration,
+  ContentTabRegistration,
+  ToolbarItemRegistration,
   LapAnalysisView,
   AnalysisPanelType,
   AnalysisPanelProvider,
@@ -23,6 +26,9 @@ const analysisPanelProviders: AnalysisPanelProvider[] = [];
 const globalPanels: GlobalPanelRegistration[] = [];
 const settingsTabs: SettingsTabRegistration[] = [];
 const agentToolDefinitions: AgentToolDefinition[] = [];
+const navTabs: NavTabRegistration[] = [];
+const contentTabs: ContentTabRegistration[] = [];
+const toolbarItems: ToolbarItemRegistration[] = [];
 
 // ── Server-side registrations ──
 
@@ -64,6 +70,21 @@ function createClientContext(): PluginClientContext {
     registerAgentTool(tool: AgentToolDefinition) {
       if (!agentToolDefinitions.find((t) => t.name === tool.name)) {
         agentToolDefinitions.push(tool);
+      }
+    },
+    registerNavTab(tab: NavTabRegistration) {
+      if (!navTabs.find((t) => t.id === tab.id)) {
+        navTabs.push(tab);
+      }
+    },
+    registerContentTab(tab: ContentTabRegistration) {
+      if (!contentTabs.find((t) => t.type === tab.type)) {
+        contentTabs.push(tab);
+      }
+    },
+    registerToolbarItem(item: ToolbarItemRegistration) {
+      if (!toolbarItems.find((t) => t.id === item.id)) {
+        toolbarItems.push(item);
       }
     },
   };
@@ -167,4 +188,20 @@ export function getRegisteredRoutes(): RegisteredRoute[] {
 
 export function getEnabledPlugins(): string[] {
   return enabledPlugins.slice();
+}
+
+export function getNavTabs(): NavTabRegistration[] {
+  return navTabs.slice().sort((a, b) => a.order - b.order);
+}
+
+export function getContentTabs(): ContentTabRegistration[] {
+  return contentTabs.slice();
+}
+
+export function getContentTabByType(type: string): ContentTabRegistration | undefined {
+  return contentTabs.find((t) => t.type === type);
+}
+
+export function getToolbarItems(): ToolbarItemRegistration[] {
+  return toolbarItems.slice().sort((a, b) => a.order - b.order);
 }

@@ -1,0 +1,173 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Save } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { useAppShell } from '@/components/app-shell/AppShellContext';
+import { useNav } from '@/components/app-shell/NavContext';
+
+interface EventEditContentProps {
+  entityId: string;
+}
+
+export default function EventEditContent({ entityId }: EventEditContentProps) {
+  const { openTab, closeTab, updateTab } = useAppShell();
+  const { refresh: refreshNav } = useNav();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    location: '',
+    startDate: '',
+    endDate: '',
+  });
+
+  useEffect(() => {
+    fetchEvent();
+  }, [entityId]);
+
+  async function fetchEvent() {
+    try {
+      const response = await fetch(`/api/events/${entityId}`);
+      const data = await response.json();
+      setFormData({
+        name: data.name || '',
+        description: data.description || '',
+        location: data.location || '',
+        startDate: data.startDate || '',
+        endDate: data.endDate || '',
+      });
+    } catch (error) {
+      console.error('Error fetching event:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/events/${entityId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      if (response.ok) {
+        refreshNav();
+        // Update the detail tab label if it's open
+        updateTab(`event-detail:${entityId}`, {
+          label: formData.name,
+          breadcrumbs: [formData.name],
+        });
+        // Close this edit tab and switch to detail
+        closeTab(`event-edit:${entityId}`);
+        openTab({
+          id: `event-detail:${entityId}`,
+          type: 'event-detail',
+          label: formData.name,
+          breadcrumbs: [formData.name],
+          entityId,
+          closable: true,
+        });
+      } else {
+        alert('Failed to update event');
+      }
+    } catch (error) {
+      console.error('Error updating event:', error);
+      alert('Failed to update event');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle>Edit Event</CardTitle>
+          <CardDescription>Update event details</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="name">Event Name *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="e.g., Spa-Francorchamps Weekend"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                placeholder="e.g., Spa-Francorchamps, Belgium"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Add notes about this event..."
+                rows={4}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="endDate">End Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="flex gap-4 pt-4">
+              <Button type="submit" disabled={saving} className="gap-2">
+                <Save className="h-4 w-4" />
+                {saving ? 'Saving...' : 'Save Changes'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => closeTab(`event-edit:${entityId}`)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

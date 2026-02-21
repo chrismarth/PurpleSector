@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Star, StarOff, Pencil, Check, X } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDistanceToNow } from 'date-fns';
 
 interface SavedLayout {
@@ -261,25 +262,35 @@ export function AnalysisManageLayoutsDialog({
                               rows={2}
                             />
                           </div>
+                          <TooltipProvider delayDuration={300}>
                           <div className="flex gap-1 flex-shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={saveEdit}
-                              disabled={!editData.name.trim()}
-                              title="Save edit"
-                            >
-                              <Check className="h-4 w-4 text-green-600" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={cancelEdit}
-                              title="Cancel edit"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={saveEdit}
+                                  disabled={!editData.name.trim()}
+                                >
+                                  <Check className="h-4 w-4 text-green-600" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">Save edit</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={cancelEdit}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">Cancel edit</TooltipContent>
+                            </Tooltip>
                           </div>
+                          </TooltipProvider>
                         </div>
                       </div>
                     ) : (
@@ -328,40 +339,50 @@ export function AnalysisManageLayoutsDialog({
                         </div>
 
                         {!display.isDeleted && (
+                          <TooltipProvider delayDuration={300}>
                           <div className="flex gap-1 flex-shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => toggleDefault(layout.id)}
-                              title={
-                                display.isDefault
-                                  ? 'Remove as default'
-                                  : 'Set as default'
-                              }
-                            >
-                              {display.isDefault ? (
-                                <Star className="h-4 w-4 fill-current text-yellow-500" />
-                              ) : (
-                                <StarOff className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => startEdit(layout)}
-                              title="Edit layout"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => markForDelete(layout.id)}
-                              title="Delete layout"
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => toggleDefault(layout.id)}
+                                >
+                                  {display.isDefault ? (
+                                    <Star className="h-4 w-4 fill-current text-yellow-500" />
+                                  ) : (
+                                    <StarOff className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">{display.isDefault ? 'Remove as default' : 'Set as default'}</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => startEdit(layout)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">Edit layout</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => markForDelete(layout.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">Delete layout</TooltipContent>
+                            </Tooltip>
                           </div>
+                          </TooltipProvider>
                         )}
 
                         {display.isDeleted && (

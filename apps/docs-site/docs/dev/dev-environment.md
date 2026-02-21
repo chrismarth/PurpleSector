@@ -46,6 +46,40 @@ npm run dev:stop
 npm run dev:stop-all
 ```
 
+## PM2 Process Management
+
+The dev environment uses PM2 to manage services. The configuration is in `ecosystem.dev.config.js`.
+
+### Checking Status
+
+```bash
+npx pm2 status
+```
+
+Typical services:
+
+| PM2 Name | Description |
+|----------|-------------|
+| `nextjs-dev` | Next.js dev server (port 3000) |
+| `kafka-bridge-dev` | Kafka → WebSocket bridge |
+| `kafka-db-consumer-dev` | Kafka → DB consumer |
+| `demo-collector-dev` | Demo telemetry publisher |
+
+### Viewing Logs
+
+```bash
+npx pm2 logs                    # All services
+npx pm2 logs nextjs-dev         # Just the Next.js server
+npx pm2 logs kafka-bridge-dev   # Just the bridge
+```
+
+### Restarting Services
+
+```bash
+npx pm2 restart nextjs-dev
+npx pm2 restart all
+```
+
 ## Manual Startup (Per-Service)
 
 You can also start components individually, for example:
@@ -70,4 +104,62 @@ npm run telemetry:demo-kafka
 npm run dev
 ```
 
-PM2 is used in scripts for process management and monitoring; see the original `docs/DEV_ENVIRONMENT.md` for a fully detailed operational guide.
+## Authentication in Dev
+
+The dev environment uses stub authentication with two hardcoded users:
+
+| Username | Role | Cookie Value |
+|----------|------|-------------|
+| `admin` | `ORG_ADMIN` | `ps_user=admin` |
+| `user` | `USER` | `ps_user=user` |
+
+No password is required. The middleware checks the `ps_user` cookie, and the `AuthProvider` fetches `/api/auth/me` to resolve the user object.
+
+## Database
+
+The dev environment uses SQLite by default (`DATABASE_URL="file:./dev.db"`).
+
+### Common Commands
+
+```bash
+npm run db:push     # Push schema changes
+npm run db:reset    # Reset database (destructive)
+npm run db:studio   # Open Prisma Studio
+```
+
+### Starting Fresh
+
+If you need a clean slate:
+
+```bash
+npm run dev:stop-all
+rm -rf .next/
+npm run db:reset
+npm run dev:start
+```
+
+## Plugin Schema Merging
+
+If you modify a plugin's `plugin.prisma` file, regenerate the merged schema:
+
+```bash
+npx ts-node scripts/merge-plugin-schemas.ts
+npm run db:push
+```
+
+## First Load Behavior
+
+On first load after starting the dev server, Next.js compiles pages and API routes on demand. This can take 10–30 seconds. The `AuthProvider` has timeout and retry logic to handle slow initial compilation gracefully. If the app shows a spinner for an extended time, wait a moment and then reload.
+
+## Environment Variables
+
+Key variables in `.env.local`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `file:./dev.db` | Database connection string |
+| `OPENAI_API_KEY` | — | Required for AI analysis and agent |
+| `WS_PORT` | `8080` | WebSocket server port |
+| `TELEMETRY_UDP_PORT` | `9996` | AC telemetry UDP port |
+
+See `.env.example` for the full list.

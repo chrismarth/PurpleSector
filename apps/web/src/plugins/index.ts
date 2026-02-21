@@ -10,14 +10,20 @@ import {
   getGlobalPanels as _getGlobalPanels,
   getSettingsTabs as _getSettingsTabs,
   getAgentToolDefinitions as _getAgentToolDefinitions,
+  getNavTabs as _getNavTabs,
+  getContentTabs as _getContentTabs,
+  getContentTabByType as _getContentTabByType,
+  getToolbarItems as _getToolbarItems,
 } from '@purplesector/plugin-registry';
 import coreLapViewsPlugin from '@purplesector/plugin-core-lap-telemetry';
 import agentPlugin from '@purplesector/plugin-agent';
+import vehiclesPlugin from '@purplesector/plugin-vehicles';
 
 // All available plugin modules — add new plugins here
 const allPlugins: PluginModule[] = [
   coreLapViewsPlugin,
   agentPlugin,
+  vehiclesPlugin,
 ];
 
 // Load client-side registrations for enabled plugins
@@ -33,3 +39,7 @@ export const getDefaultProviderForType = _getDefaultProviderForType;
 export const getGlobalPanels = _getGlobalPanels;
 export const getSettingsTabs = _getSettingsTabs;
 export const getAgentToolDefinitions = _getAgentToolDefinitions;
+export const getNavTabs = _getNavTabs;
+export const getContentTabs = _getContentTabs;
+export const getContentTabByType = _getContentTabByType;
+export const getToolbarItems = _getToolbarItems;

@@ -4,7 +4,10 @@ export type PluginCapability =
   | 'agentTools'
   | 'apiRoutes'
   | 'settingsTabs'
-  | 'globalUI';
+  | 'globalUI'
+  | 'navTab'
+  | 'contentTab'
+  | 'toolbarItem';
 
 export interface PluginManifest {
   id: string;

@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// Card/CardContent removed — panels now render borderless for a cleaner look
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Maximize2, Minimize2, MoreVertical } from 'lucide-react';
 import {
   DropdownMenu,
@@ -28,6 +29,12 @@ interface AnalysisPanelGridProps {
   layout: AnalysisLayoutJSON;
   onLayoutChange?: (layout: AnalysisLayoutJSON) => void;
   mathChannels?: MathTelemetryChannel[];
+  /** When set, only this panel is rendered (used by parent for per-panel fullscreen). */
+  focusPanelId?: string | null;
+  /** Called when a panel requests fullscreen toggle. */
+  onPanelFullscreenToggle?: (panelId: string | null) => void;
+  /** Height hint for the focused panel's chart. */
+  focusPanelHeight?: number;
 }
 
 export function AnalysisPanelGrid({
@@ -38,6 +45,9 @@ export function AnalysisPanelGrid({
   layout,
   onLayoutChange,
   mathChannels,
+  focusPanelId,
+  onPanelFullscreenToggle,
+  focusPanelHeight,
 }: AnalysisPanelGridProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const layoutRef = useRef(layout);
@@ -147,14 +157,24 @@ export function AnalysisPanelGrid({
     [layout.panels],
   );
 
-  const [fullscreenPanelId, setFullscreenPanelId] = useState<string | null>(null);
   const [hoverValue, setHoverValue] = useState<number | null>(null);
   const [panelTitles, setPanelTitles] = useState<Record<string, React.ReactNode | undefined>>({});
+  const panelTitlesRef = useRef(panelTitles);
+  panelTitlesRef.current = panelTitles;
+
+  // Stable setTitle that only triggers a state update when the title actually changes
+  const stableSetTitle = useCallback((panelId: string, title: React.ReactNode) => {
+    const prev = panelTitlesRef.current[panelId];
+    if (prev === title) return;
+    // For string titles, compare by value; for ReactNodes, always update
+    if (typeof prev === 'string' && typeof title === 'string' && prev === title) return;
+    setPanelTitles((p) => ({ ...p, [panelId]: title }));
+  }, []);
 
   return (
     <div
       ref={containerRef}
-      className="gap-4"
+      className="gap-2"
       style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
@@ -164,6 +184,8 @@ export function AnalysisPanelGrid({
         const hasType = !!panel.typeId;
         const provider = hasType ? getDefaultProviderForType(panel.typeId!) : undefined;
 
+        const isFocused = focusPanelId === panel.id;
+
         const provided = hasType && provider
           ? provider.render({
               context,
@@ -171,12 +193,8 @@ export function AnalysisPanelGrid({
               compareTelemetry,
               compareLapId,
               host: {
-                setTitle: (title) => {
-                  setPanelTitles((prev) => ({
-                    ...prev,
-                    [panel.id]: title,
-                  }));
-                },
+                setTitle: (title) => stableSetTitle(panel.id, title),
+                availableHeight: isFocused ? focusPanelHeight : undefined,
               },
               panelId: panel.id,
               panelState: panel.state,
@@ -195,11 +213,10 @@ export function AnalysisPanelGrid({
               }
             : null;
 
-        const isFullscreen = fullscreenPanelId === panel.id;
         const panelTitle = panelTitles[panel.id] ?? renderResult?.title;
 
-        const minHeight = isFullscreen ? undefined : panel.minHeight ?? 200;
-        const maxHeight = isFullscreen ? undefined : panel.maxHeight;
+        const minHeight = isFocused ? undefined : panel.minHeight ?? 200;
+        const maxHeight = isFocused ? undefined : panel.maxHeight;
 
         const rightNeighbor = layout.panels.find(
           (p) =>
@@ -208,14 +225,17 @@ export function AnalysisPanelGrid({
             p.x === panel.x + panel.colSpan,
         );
 
+        // When a panel is focused (parent is fullscreen), hide others
+        if (focusPanelId && !isFocused) {
+          return <div key={panel.id} className="hidden" />;
+        }
+
         return (
-          <Card
+          <div
             key={panel.id}
-            className={`relative ${
-              isFullscreen ? 'fixed inset-0 z-50 rounded-none' : ''
-            }`}
+            className="relative rounded-md border bg-card overflow-hidden"
             style={
-              isFullscreen
+              focusPanelId
                 ? {}
                 : {
                     gridColumn: `${panel.x + 1} / span ${panel.colSpan}`,
@@ -225,106 +245,108 @@ export function AnalysisPanelGrid({
                   }
             }
           >
-            <CardContent
-              className={`pt-4 ${
-                isFullscreen ? 'h-[calc(100vh-4rem)] overflow-y-auto' : ''
-              }`}
-            >
-              {onLayoutChange && (
-                <div className="flex justify-between items-center gap-2 mb-2 text-xs">
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    {panelTitle && (
-                      <span className="font-medium truncate">
-                        {panelTitle}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {renderResult?.toolbarActions}
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setFullscreenPanelId((current) =>
-                          current === panel.id ? null : panel.id,
-                        );
-                      }}
-                      title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                    >
-                      {isFullscreen ? (
-                        <Minimize2 className="h-3 w-3" />
-                      ) : (
-                        <Maximize2 className="h-3 w-3" />
-                      )}
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreVertical className="h-3 w-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const next = splitColumn(layout, panel.id);
-                            if (next !== layout) {
-                              onLayoutChange(next);
-                            }
-                          }}
-                        >
-                          Split horizontally
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const next = splitRow(layout, panel.id);
-                            if (next !== layout) {
-                              onLayoutChange(next);
-                            }
-                          }}
-                        >
-                          Split vertically
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const next = addRowBelowPanel(layout, panel.id);
-                            if (next !== layout) {
-                              onLayoutChange(next);
-                            }
-                          }}
-                        >
-                          Add row below
-                        </DropdownMenuItem>
-                        {layout.panels.length > 1 && (
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const next = deletePanelAndCompact(layout, panel.id);
-                              if (next !== layout) {
-                                onLayoutChange(next);
-                              }
-                            }}
-                          >
-                            Delete panel
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+            {onLayoutChange && (
+              <TooltipProvider delayDuration={300}>
+              <div className="flex justify-between items-center gap-2 px-3 py-1.5 border-b bg-muted/40 text-xs">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  {panelTitle && (
+                    <span className="font-semibold truncate">
+                      {panelTitle}
+                    </span>
+                  )}
                 </div>
-              )}
+                <div className="flex items-center gap-1">
+                  {renderResult?.toolbarActions}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPanelFullscreenToggle?.(isFocused ? null : panel.id);
+                        }}
+                      >
+                        {isFocused ? (
+                          <Minimize2 className="h-3 w-3" />
+                        ) : (
+                          <Maximize2 className="h-3 w-3" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{isFocused ? 'Exit fullscreen' : 'Fullscreen'}</TooltipContent>
+                  </Tooltip>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreVertical className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = splitColumn(layout, panel.id);
+                          if (next !== layout) {
+                            onLayoutChange(next);
+                          }
+                        }}
+                      >
+                        Split horizontally
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = splitRow(layout, panel.id);
+                          if (next !== layout) {
+                            onLayoutChange(next);
+                          }
+                        }}
+                      >
+                        Split vertically
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = addRowBelowPanel(layout, panel.id);
+                          if (next !== layout) {
+                            onLayoutChange(next);
+                          }
+                        }}
+                      >
+                        Add row below
+                      </DropdownMenuItem>
+                      {layout.panels.length > 1 && (
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const next = deletePanelAndCompact(layout, panel.id);
+                            if (next !== layout) {
+                              onLayoutChange(next);
+                            }
+                          }}
+                        >
+                          Delete panel
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+              </TooltipProvider>
+            )}
+            <div
+              className={`px-3 pt-2 pb-1 ${focusPanelId ? 'flex-1 min-h-0 overflow-auto' : ''}`}
+            >
               {onLayoutChange && rightNeighbor && (
                 <div
                   className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 z-10"
@@ -377,8 +399,8 @@ export function AnalysisPanelGrid({
                   </Button>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         );
       })}
     </div>

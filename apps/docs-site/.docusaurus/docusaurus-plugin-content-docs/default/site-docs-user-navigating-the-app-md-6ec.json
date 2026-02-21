@@ -1,0 +1,23 @@
+{
+  "id": "user/navigating-the-app",
+  "title": "Navigating the App",
+  "description": "Purple Sector uses a tab-based app shell layout inspired by desktop IDEs. This page explains each region of the interface and how to navigate between views.",
+  "source": "@site/docs/user/navigating-the-app.md",
+  "sourceDirName": "user",
+  "slug": "/user/navigating-the-app",
+  "permalink": "/PurpleSector/user/navigating-the-app",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Getting Started",
+    "permalink": "/PurpleSector/user/getting-started"
+  },
+  "next": {
+    "title": "Events & Sessions",
+    "permalink": "/PurpleSector/user/events-and-sessions"
+  }
+}

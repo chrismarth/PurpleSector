@@ -1,0 +1,23 @@
+{
+  "id": "dev/analysis-panels",
+  "title": "Analysis Panels",
+  "description": "The analysis panel system powers the lap analysis view. It provides a configurable grid of panels where each panel is rendered by a plugin-provided AnalysisPanelProvider. This page covers the grid component, panel lifecycle, and how to create custom panel types.",
+  "source": "@site/docs/dev/analysis-panels.md",
+  "sourceDirName": "dev",
+  "slug": "/dev/analysis-panels",
+  "permalink": "/PurpleSector/dev/analysis-panels",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Plugins",
+    "permalink": "/PurpleSector/dev/plugins"
+  },
+  "next": {
+    "title": "Database and Telemetry",
+    "permalink": "/PurpleSector/dev/database-and-telemetry"
+  }
+}

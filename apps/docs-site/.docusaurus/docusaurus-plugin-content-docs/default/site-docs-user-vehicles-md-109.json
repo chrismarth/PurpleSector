@@ -1,0 +1,23 @@
+{
+  "id": "user/vehicles",
+  "title": "Vehicles",
+  "description": "Purple Sector lets you manage your racing vehicles along with their configurations (parts lists) and setups (tuning parameters). This page explains how to create and work with vehicle data.",
+  "source": "@site/docs/user/vehicles.md",
+  "sourceDirName": "user",
+  "slug": "/user/vehicles",
+  "permalink": "/PurpleSector/user/vehicles",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Lap Analysis",
+    "permalink": "/PurpleSector/user/lap-analysis"
+  },
+  "next": {
+    "title": "AI Agent",
+    "permalink": "/PurpleSector/user/ai-agent"
+  }
+}

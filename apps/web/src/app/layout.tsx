@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Header } from "@/components/Header";
 import { AuthProvider } from "@/components/AuthProvider";
-import { PluginGlobalPanels } from "@/components/PluginGlobalPanels";
+import { AppShellRoot } from "@/components/app-shell/AppShellRoot";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
   title: "Purple Sector - Racing Telemetry Analysis",
@@ -36,9 +35,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <AuthProvider>
-          <Header />
-          {children}
-          <PluginGlobalPanels />
+          <AppShellRoot>{children}</AppShellRoot>
         </AuthProvider>
       </body>
     </html>

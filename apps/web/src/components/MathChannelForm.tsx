@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -442,14 +443,20 @@ export function MathChannelForm({
                 Cancel
               </Button>
             )}
-            <Button
-              variant="outline"
-              onClick={() => handleSave(true)}
-              disabled={isExpressionValid}
-              title={isExpressionValid ? "Expression is valid - use Create/Update button" : "Save without validation (work in progress)"}
-            >
-              Save as Draft
-            </Button>
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleSave(true)}
+                    disabled={isExpressionValid}
+                  >
+                    Save as Draft
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{isExpressionValid ? "Expression is valid - use Create/Update button" : "Save without validation (work in progress)"}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <Button onClick={() => handleSave(false)}>
               {channel ? 'Update' : 'Create'} Channel
             </Button>

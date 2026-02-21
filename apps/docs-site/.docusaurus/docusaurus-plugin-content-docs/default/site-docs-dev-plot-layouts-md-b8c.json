@@ -13,8 +13,8 @@
   "frontMatter": {},
   "sidebar": "userGuide",
   "previous": {
-    "title": "Plugins",
-    "permalink": "/PurpleSector/dev/plugins"
+    "title": "LangGraph Analyzer",
+    "permalink": "/PurpleSector/dev/langgraph-analyzer"
   },
   "next": {
     "title": "Design Notes",

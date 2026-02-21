@@ -1,0 +1,23 @@
+{
+  "id": "user/lap-analysis",
+  "title": "Lap Analysis",
+  "description": "When you open a lap from the nav tree or a session's lap list, the Lap Analysis view opens in the content pane. This is where you visualize telemetry data, compare laps, and fine-tune your driving.",
+  "source": "@site/docs/user/lap-analysis.md",
+  "sourceDirName": "user",
+  "slug": "/user/lap-analysis",
+  "permalink": "/PurpleSector/user/lap-analysis",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Events & Sessions",
+    "permalink": "/PurpleSector/user/events-and-sessions"
+  },
+  "next": {
+    "title": "Vehicles",
+    "permalink": "/PurpleSector/user/vehicles"
+  }
+}

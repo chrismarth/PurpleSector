@@ -1,0 +1,23 @@
+{
+  "id": "dev/app-shell",
+  "title": "App Shell Architecture",
+  "description": "The Purple Sector app shell is a tab-based IDE-style layout built with React. This page covers the component hierarchy, state management, and how plugins extend the shell.",
+  "source": "@site/docs/dev/app-shell.md",
+  "sourceDirName": "dev",
+  "slug": "/dev/app-shell",
+  "permalink": "/PurpleSector/dev/app-shell",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Development Environment",
+    "permalink": "/PurpleSector/dev/dev-environment"
+  },
+  "next": {
+    "title": "Plugins",
+    "permalink": "/PurpleSector/dev/plugins"
+  }
+}

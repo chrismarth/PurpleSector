@@ -26,7 +26,8 @@
       "@purplesector/plugin-agent/server": ["packages/plugin-agent/src/plugin.server"],
       "@purplesector/plugin-registry": ["packages/plugin-registry/src"],
       "@purplesector/web-charts": ["packages/web-charts/src"],
-      "@purplesector/plugin-core-lap-telemetry": ["packages/plugin-core-lap-telemetry/src"]
+      "@purplesector/plugin-core-lap-telemetry": ["packages/plugin-core-lap-telemetry/src"],
+      "@purplesector/plugin-vehicles": ["packages/plugin-vehicles/src"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

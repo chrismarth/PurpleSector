@@ -1,113 +1,145 @@
 # Architecture
 
-This page describes the high-level architecture of Purple Sector: how telemetry flows from the simulator to the browser and AI analysis, and how the Kafka-based pipeline is structured.
+This page describes the high-level architecture of Purple Sector: how telemetry flows from the simulator to the browser and AI analysis, how the plugin system works, and how the app shell is structured.
 
 ## System Overview
 
-At a high level:
-
 ```text
-[Assetto Corsa / ACC Telemetry]
-          ↓
-[Telemetry Collector]
-          ↓
-[Kafka] → [Kafka-WebSocket Bridge] → [WebSocket]
-          ↓                          ↓
-   [DB Consumer] → [PostgreSQL/TimescaleDB]
-          ↓
-      [Next.js / React Frontend]
-          ↓
-      [OpenAI GPT-4 Analysis]
+┌─────────────────────────────────────────────────────────────┐
+│                    Browser (Next.js App)                     │
+│                                                             │
+│  AuthProvider → AppShellRoot → AppShell                     │
+│  ┌──────────┐  ┌────────────┐  ┌──────────────────────────┐│
+│  │ Toolbar   │  │  Nav Pane   │  │     Content Pane         ││
+│  │ (plugins) │  │ (Events /   │  │  (Session / Lap / Vehicle││
+│  │           │  │  Vehicles)  │  │   detail tabs)           ││
+│  └──────────┘  └────────────┘  └──────────────────────────┘│
+│                                  ┌──────────────────────────┐│
+│                                  │  Agent Panel (slide-over) ││
+│                                  └──────────────────────────┘│
+└──────────────────────┬──────────────────────────────────────┘
+                       │  REST API + WebSocket
+┌──────────────────────▼──────────────────────────────────────┐
+│                  Next.js Backend (API Routes)                │
+│  /api/auth/*  /api/events/*  /api/sessions/*  /api/laps/*    │
+│  /api/vehicles/*  /api/plot-layouts/*  /api/analysis-layouts/*│
+│  /api/channels/math/*  /api/plugins/[...path]  /api/chat     │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+          ┌────────────┼────────────┐
+          ▼            ▼            ▼
+   ┌────────────┐ ┌─────────┐ ┌──────────────┐
+   │  SQLite /   │ │  Kafka  │ │  OpenAI API  │
+   │  PostgreSQL │ │ Cluster │ │  (GPT-4)     │
+   └────────────┘ └────┬────┘ └──────────────┘
+                       │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+  ┌───────────┐ ┌────────────┐ ┌────────────┐
+  │ WS Bridge │ │ DB Consumer│ │ Collectors  │
+  │ (Kafka →  │ │ (Kafka →   │ │ (AC / ACC / │
+  │  Browser) │ │  Database) │ │  Demo)      │
+  └───────────┘ └────────────┘ └────────────┘
 ```
 
-Key components:
+## Key Components
 
-- **Collectors** – Read telemetry from AC/ACC (UDP + shared memory) and publish to Kafka.
-- **Kafka cluster** – Durable transport for telemetry and commands.
-- **Kafka–WebSocket bridge** – Consumes telemetry and exposes it over WebSockets to the frontend.
-- **Database consumer** – Persists telemetry and lap data into PostgreSQL/TimescaleDB via Prisma.
-- **Next.js app** – Frontend and API routes for managing sessions, laps, and AI analysis.
-- **AI analysis service** – Uses GPT-4 to generate coaching suggestions from telemetry.
+### Authentication
 
-## Kafka-Based Telemetry Architecture
+- **Middleware** (`apps/web/middleware.ts`) — Checks the `ps_user` cookie on every non-public request. Redirects to `/login` if missing.
+- **AuthProvider** (`apps/web/src/components/AuthProvider.tsx`) — Client-side React context that fetches `/api/auth/me` on mount with timeout and retry logic. Gates the entire app shell behind a loading spinner until auth resolves.
+- **Stub auth** — In development, two hardcoded users (`admin`, `user`) are available. The cookie value is the username string.
 
-The Kafka-based pipeline provides:
+### App Shell
 
-- **Guaranteed delivery** and **durability**.
-- **Per-session ordering** via partitioning.
-- **Horizontal scalability** across many concurrent sessions/users.
-- **Efficient binary encoding** via Protobuf.
+The app shell (`AppShell.tsx`) is a tab-based IDE-style layout with four regions:
+
+- **Toolbar Pane** — Narrow icon strip on the left. Plugin-provided toolbar items (settings, agent, etc.).
+- **Navigation Pane** — Collapsible tree sidebar. Tabs at the top switch between data trees (Events, Vehicles). Each tree is provided by a plugin via `NavTabRegistration`.
+- **Content Pane** — Tabbed workspace. Each nav tree item opens a content tab. Tab types are provided by plugins via `ContentTabRegistration`.
+- **Status Bar** — Bottom strip with contextual info.
+
+State is managed by `AppShellContext` which tracks open tabs, the active tab, and provides `openTab()` / `closeTab()` actions.
+
+For implementation details, see **App Shell Architecture**.
+
+### Plugin System
+
+Purple Sector uses a plugin architecture where features are delivered as `PluginModule` packages:
+
+- **Plugin API** (`@purplesector/plugin-api`) — TypeScript interfaces for all registration types.
+- **Plugin Registry** (`@purplesector/plugin-registry`) — Central loader that manages client and server registrations. Configuration in `plugins.config.ts`.
+- **Client loader** (`apps/web/src/plugins/index.ts`) — Imports plugin modules and calls `loadClientPlugins()`.
+- **Server loader** (`apps/web/src/lib/plugin-server.ts`) — Loads server-side registrations (API routes, agent tool handlers).
+- **API route dispatcher** (`/api/plugins/[...path]`) — Catch-all route that dispatches to plugin-registered API handlers.
+
+For the full plugin API reference, see **Plugin Architecture**.
+
+### Kafka-Based Telemetry Pipeline
+
+The Kafka pipeline provides durable, ordered telemetry transport:
 
 ```text
 Game Clients (AC/ACC)
    ↓
 Collectors (Producers) ── Protobuf + LZ4 ──▶ Kafka Topics
-   ↓                                          (telemetry-user-*)
+                                              (telemetry-user-*)
 Kafka-WebSocket Bridge (Consumers) ──▶ WebSocket Clients
    ↓
-Database Consumer ──▶ TimescaleDB / PostgreSQL
+Database Consumer ──▶ SQLite / PostgreSQL
 ```
 
-### Collectors
+- **Collectors** — Parse game telemetry (UDP / shared memory), serialize as Protobuf, publish to Kafka.
+- **Kafka cluster** — Topics like `telemetry`, `commands`, `telemetry-user-<userId>`. LZ4 compression, per-session ordering.
+- **Kafka–WebSocket Bridge** (`services/kafka-websocket-bridge.js`) — Consumes telemetry, broadcasts decoded frames to connected browser clients.
+- **Database Consumer** (`services/kafka-database-consumer.js`) — Batch-inserts telemetry frames, detects lap completions, persists sessions and laps.
 
-- Live under `collectors/` (Kafka and WebSocket variants).
-- Responsibilities:
-  - Parse game telemetry (UDP / shared memory).
-  - Map raw data into `TelemetryFrame` structures.
-  - Serialize frames using Protobuf.
-  - Publish to Kafka with appropriate keys for ordering.
+### Analysis Panel Grid
 
-### Kafka Cluster
+The lap analysis view uses a configurable grid of panels (`AnalysisPanelGrid`):
 
-- Topics such as:
-  - `telemetry` – main telemetry stream.
-  - `commands` – control commands.
-  - `telemetry-user-<userId>` – per-user streams in the user isolation model.
-- Tuned with compression (LZ4), retention, and replication appropriate to the environment (dev vs prod).
+- Each panel is rendered by an `AnalysisPanelProvider` registered by a plugin.
+- Panels support fullscreen, split horizontal/vertical, remove, and resize.
+- Cross-panel hover synchronization highlights the same time/position across all panels.
+- Plot layouts (panel arrangement + configuration) can be saved, loaded, and managed.
 
-### Kafka–WebSocket Bridge
+For details, see **Analysis Panels**.
 
-- File: `services/kafka-websocket-bridge.js`.
-- Responsibilities:
-  - Consume telemetry from Kafka.
-  - Maintain per-user or per-session consumers.
-  - Broadcast decoded Protobuf frames to connected WebSocket clients.
-  - Support demo playback.
+### AI Agent
 
-### Database Consumer
+The agent plugin (`@purplesector/plugin-agent`) provides:
 
-- File: `services/kafka-database-consumer.js`.
-- Responsibilities:
-  - Subscribe to user telemetry topics.
-  - Batch-insert telemetry frames for performance.
-  - Detect lap completions and persist laps.
-  - Maintain session metadata.
+- **Frontend** — Chat panel, conversation list, run plan approval UI, settings tab.
+- **Backend** — LangGraph `StateGraph` runtime with ~28 tools. Auto-detects mutating tools and generates run plans for user approval.
+- **API routes** — `/api/plugins/purple-sector.agent/chat`, `/conversations`, `/plan/approve`, `/plan/reject`.
+- **Database models** — `AgentConversation`, `AgentMessage`, `RunPlan`, `RunPlanItem` (in plugin's `plugin.prisma`).
 
-### Frontend and AI
+### Lap Analysis Engine
 
-- Next.js app (under `apps/web`) connects to the WebSocket bridge and renders telemetry views.
-- API routes trigger AI analysis on laps using GPT-4 and return coaching suggestions to the UI.
+Multiple analyzer implementations behind a factory:
 
-## User Isolation Architecture
+- **Simple Analyzer** (`@purplesector/lap-analysis-simple`) — Single OpenAI call.
+- **LangGraph Analyzer** (`@purplesector/lap-analysis-langgraph`) — Multi-step agentic DAG with fetch, compare, analyze, and parse nodes.
+- **Factory** (`@purplesector/lap-analysis-factory`) — `createAnalyzer()` selects the appropriate implementation.
 
-Purple Sector implements **user-scoped Kafka topics** to ensure user data isolation (multi-tenancy):
+### User Isolation
 
-- Each user gets a dedicated topic:
+Purple Sector implements user-scoped Kafka topics for multi-tenancy:
 
-  ```text
-  telemetry-user-alice
-  telemetry-user-bob
-  telemetry-user-...
-  ```
+- Each user gets a dedicated topic: `telemetry-user-alice`, `telemetry-user-bob`, etc.
+- Collectors publish to the user's topic.
+- The bridge creates a consumer per user and only forwards frames to that user's WebSocket clients.
+- In production, Kafka ACLs can restrict topic access.
 
-- Collectors publish to the users topic (e.g., `telemetry-user-alice`).
-- The bridge creates a consumer per user and only forwards frames to WebSocket clients for that user.
-- Frontend connections include `userId` (or equivalent identity) so the bridge can wire the right consumer.
+### Database
 
-This model provides:
+Managed via Prisma (`@purplesector/db-prisma`). Key models:
 
-- **Strong isolation** – User As data never appears on User Bs topic.
-- **Scalability** – Kafka handles many topics; consumers are created/destroyed per active user.
-- **Security** – In production, Kafka ACLs can restrict topic access by user and consumer group.
+- **User data** — Event, Session, Lap, TelemetryFrame
+- **Vehicles** — Vehicle, VehicleConfiguration, VehicleSetup
+- **Analysis** — SavedPlotLayout, AnalysisLayout, MathTelemetryChannel
+- **Agent** — AgentConversation, AgentMessage, RunPlan, RunPlanItem (plugin schema)
 
-For the full rationale and implementation details, see the original `docs/USER_ISOLATION_ARCHITECTURE.md` (being migrated into this section).
+Plugin schemas are merged via `scripts/merge-plugin-schemas.ts` which scans `packages/plugin-*/prisma/plugin.prisma` files.
+
+SQLite is used in development; PostgreSQL/TimescaleDB is recommended for production.

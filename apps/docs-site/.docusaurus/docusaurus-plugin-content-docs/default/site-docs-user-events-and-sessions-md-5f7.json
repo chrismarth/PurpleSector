@@ -1,0 +1,23 @@
+{
+  "id": "user/events-and-sessions",
+  "title": "Events & Sessions",
+  "description": "Purple Sector organizes your driving data into a hierarchy: Events → Sessions → Laps. This page explains how to create and manage them.",
+  "source": "@site/docs/user/events-and-sessions.md",
+  "sourceDirName": "user",
+  "slug": "/user/events-and-sessions",
+  "permalink": "/PurpleSector/user/events-and-sessions",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Navigating the App",
+    "permalink": "/PurpleSector/user/navigating-the-app"
+  },
+  "next": {
+    "title": "Lap Analysis",
+    "permalink": "/PurpleSector/user/lap-analysis"
+  }
+}

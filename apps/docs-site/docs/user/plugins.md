@@ -4,84 +4,66 @@ title: Using Plugins
 sidebar_label: Plugins
 ---
 
-Purple Sector is being refactored to support a **plugin-based architecture**. This page explains what that means for you as a user and how plugins are discovered and enabled today.
+Purple Sector uses a **plugin architecture** to deliver most of its features. This page explains what plugins are, which ones ship with the app, and how they extend the interface.
 
-> **Note**
-> The first pluginized feature is the **Lap Analysis Telemetry Plots**. More plugin types (vehicles, live views, reports) will come later.
+## What Is a Plugin?
 
----
+A plugin is a self-contained module that extends Purple Sector without modifying the core application. Plugins can provide:
 
-## What is a plugin?
+- **Analysis panel types** — Telemetry chart panels for the lap analysis grid.
+- **Navigation tabs** — Additional trees in the nav pane (e.g., Vehicles).
+- **Content tab types** — New views that open in the content pane (e.g., Vehicle Detail, Configuration Detail).
+- **Toolbar items** — Icon buttons in the toolbar pane.
+- **Global panels** — Slide-over or drawer panels (e.g., the AI Agent chat).
+- **Settings tabs** — Additional tabs in the settings dialog.
+- **Agent tools** — Capabilities the AI agent can use (e.g., create events, analyze laps).
+- **API routes** — Server-side endpoints for plugin-specific data.
 
-A plugin is a piece of code that extends Purple Sector without modifying the core application.
+## Built-In Plugins
 
-Examples of what plugins can provide:
+Purple Sector ships with three built-in plugins:
 
-- **Lap analysis views** – alternate telemetry visualizations.
-- **Vehicle definitions** – custom vehicle configuration UI and telemetry mapping.
-- **Live session views** – additional widgets on the live dashboard (video, chat, overlays, etc.).
-- **Analyzers & reports** – extra summaries or coaching insights.
+### Core Lap Telemetry (`plugin-core-lap-telemetry`)
 
-Right now, only **lap analysis views** are wired through the plugin system.
+The default telemetry visualization plugin. It provides:
 
----
+- The **plot** analysis panel type used in the lap analysis grid.
+- Configurable telemetry charts with channel selection, axis options, and compare-lap overlay.
+- Math channel support.
 
-## How lap-analysis plugins behave today
+### Vehicles (`plugin-vehicles`)
 
-When you open a **Lap Analysis** page:
+Provides the vehicle management feature:
 
-1. The app loads registered plugins.
-2. Each plugin can register one or more **lap analysis views**.
-3. The app picks the first view for the `singleLap` context and asks it to render the telemetry plots.
+- **Vehicles** nav tab and tree in the nav pane.
+- Content tab types for Vehicle Detail, Configuration Detail, and Setup Detail views.
+- Create/edit/delete dialogs for vehicles, configurations, and setups.
 
-From a user perspective:
+### AI Agent (`plugin-agent`)
 
-- The plots still live in the left-hand column of the Lap page.
-- Layout saving, comparison lap overlays, and other controls work as before.
-- The difference is **how** they are provided (via a plugin), not **what** you see.
+Provides the AI coaching agent (premium tier):
 
----
+- **Agent** toolbar button and slide-over chat panel.
+- **Agent Settings** tab in the settings dialog.
+- ~28 agent tools across events, sessions, laps, vehicles, analysis layouts, and more.
+- Server-side API routes for chat, conversations, and run plan management.
+- Database models for conversations, messages, and run plans.
 
-## Where plugins live right now
+## How Plugins Are Loaded
 
-In the current monorepo setup, plugins are:
+Plugins are registered at app startup. The current setup:
 
-- Implemented as **workspace packages** under `packages/`.
-- For example, the built-in lap telemetry views live in `packages/plugin-core-lap-telemetry` and are published (locally) as `@purplesector/plugin-core-lap-telemetry`.
-- Registered via a small internal registry in `apps/web/src/plugins/index.ts`, which imports the core plugin from `@purplesector/plugin-core-lap-telemetry`.
+1. All plugin modules are listed in `apps/web/src/plugins/index.ts`.
+2. The **plugin registry** (`@purplesector/plugin-registry`) loads each plugin's client-side registrations.
+3. Enabled plugins are controlled by `plugins.config.ts` in the registry package — this lists plugin manifest IDs.
+4. Server-side registrations (API routes, agent tool handlers) are loaded separately via `apps/web/src/lib/plugin-server.ts`.
 
-There is **no separate install/enable UI yet**. Plugins are effectively enabled by:
+There is **no install/enable UI yet**. Plugins are enabled by being listed in the configuration file and imported into the web app.
 
-- Adding them to the codebase as workspace packages, and
-- Importing them into the web app's plugin registry.
+## Plugin Tiers
 
-This is intentional for early development: it keeps the system simple while the plugin contracts stabilize.
+Plugins can declare a **tier** (`free` or `premium`). The AI Agent plugin is marked as `premium`. To build a free-tier version of the app, remove the agent plugin's manifest ID from `plugins.config.ts`.
 
----
+## For Developers
 
-## How plugins will be registered in the future
-
-The long-term goal is to make plugins more self-contained and discoverable. The plan includes:
-
-- **Workspace plugins** – packages under `packages/` (e.g. `@purplesector/core-lap-views`) that export a plugin module.
-- **Automatic discovery** – scanning workspace packages or a configuration file for modules that declare themselves as Purple Sector plugins.
-- **Optional user-level configuration** – a UI or config file where you can:
-  - Enable/disable specific plugins.
-  - Choose which lap analysis view is the default.
-  - Configure plugin-specific settings (e.g. preferred units or visual style).
-
-Those features are not wired yet, but the current design of the plugin API and registry is built with this in mind.
-
----
-
-## What you can do today
-
-As of now, if you want to:
-
-- **Use plugins that ship with Purple Sector**: nothing special to do — they are included and enabled by default when you run the app.
-- **Experiment with custom plugins** (for development):
-  - You or your team can implement new views inside the monorepo.
-  - A developer can wire them into `apps/web/src/plugins/index.ts`.
-  - Once registered, they will run as part of the normal Lap Analysis UI.
-
-When a more user-facing plugin management story (install/enable/disable) is added, this page will be updated with concrete steps and screenshots.
+If you want to create a custom plugin, see **Developer Guide → Plugin Architecture** for the full API reference and step-by-step guide.

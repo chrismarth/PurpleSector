@@ -1,7 +1,7 @@
 {
   "id": "user/troubleshooting",
   "title": "Troubleshooting",
-  "description": "Common issues and quick checks when running Purple Sector.",
+  "description": "Common issues and quick fixes when running Purple Sector.",
   "source": "@site/docs/user/troubleshooting.md",
   "sourceDirName": "user",
   "slug": "/user/troubleshooting",

@@ -1,0 +1,23 @@
+{
+  "id": "user/ai-agent",
+  "title": "AI Agent",
+  "description": "Purple Sector includes an AI-powered coaching agent that can chat with you about your driving, analyze laps, query your data, and even create or modify events, sessions, and vehicles on your behalf.",
+  "source": "@site/docs/user/ai-agent.md",
+  "sourceDirName": "user",
+  "slug": "/user/ai-agent",
+  "permalink": "/PurpleSector/user/ai-agent",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Vehicles",
+    "permalink": "/PurpleSector/user/vehicles"
+  },
+  "next": {
+    "title": "Telemetry Collectors",
+    "permalink": "/PurpleSector/user/telemetry-collectors"
+  }
+}

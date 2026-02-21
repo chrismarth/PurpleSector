@@ -27,19 +27,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Internal fetch that throws on failure so the retry loop can catch.
+  const fetchMe = useCallback(async (signal?: AbortSignal) => {
+    const res = await fetch('/api/auth/me', { cache: 'no-store', signal });
+    if (!res.ok) {
+      setUser(null);
+      return;
+    }
+    const data = (await res.json()) as { user: AuthUser };
+    setUser(data.user);
+  }, []);
+
+  // Safe wrapper for external callers (login page, user menu, etc.)
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me', { cache: 'no-store' });
-      if (!res.ok) {
-        setUser(null);
-        return;
-      }
-      const data = (await res.json()) as { user: AuthUser };
-      setUser(data.user);
+      await fetchMe();
     } catch {
       setUser(null);
     }
-  }, []);
+  }, [fetchMe]);
 
   const logout = useCallback(async () => {
     try {
@@ -53,10 +59,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let activeController: AbortController | null = null;
+
+    const AUTH_TIMEOUT_MS = 5000;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 2000;
 
     (async () => {
       setLoading(true);
-      await refresh();
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        if (cancelled) return;
+        const controller = new AbortController();
+        activeController = controller;
+        const timer = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
+        try {
+          await fetchMe(controller.signal);
+          clearTimeout(timer);
+          break; // success
+        } catch {
+          clearTimeout(timer);
+          if (cancelled) return;
+          // On final attempt, ensure user is null so the app redirects to login
+          if (attempt === MAX_RETRIES) {
+            setUser(null);
+          } else {
+            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+          }
+        }
+      }
       if (!cancelled) {
         setLoading(false);
       }
@@ -64,8 +94,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       cancelled = true;
+      activeController?.abort();
     };
-  }, [refresh]);
+  }, [fetchMe]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ user, loading, refresh, logout }),

@@ -15,4 +15,8 @@ export {
   getAgentToolHandlers,
   getRegisteredRoutes,
   getEnabledPlugins,
+  getNavTabs,
+  getContentTabs,
+  getContentTabByType,
+  getToolbarItems,
 } from './loader';

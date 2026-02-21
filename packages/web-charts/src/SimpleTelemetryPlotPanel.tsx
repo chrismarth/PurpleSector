@@ -42,6 +42,7 @@ interface SimpleTelemetryPlotPanelProps {
     openConfig: () => void;
   }) => void;
   mathChannels?: MathTelemetryChannel[];
+  height?: number;
 }
 
 export function SimpleTelemetryPlotPanel({
@@ -53,6 +54,7 @@ export function SimpleTelemetryPlotPanel({
   onTitleChange,
   onRegisterActions,
   mathChannels = [],
+  height,
 }: SimpleTelemetryPlotPanelProps) {
   const [config, setConfig] = useState<PlotConfig>(
     initialConfig ?? { ...DEFAULT_CONFIG, id: `plot_${Date.now()}` },
@@ -99,6 +101,14 @@ export function SimpleTelemetryPlotPanel({
     openConfig: () => setOpenConfigToken((prev) => prev + 1),
   }), []);
 
+  // Push the initial title to the host on mount
+  useEffect(() => {
+    if (onTitleChange && config.title) {
+      onTitleChange(config.title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only on mount
+
   useEffect(() => {
     if (!onRegisterActions) return;
     onRegisterActions(actions());
@@ -116,6 +126,7 @@ export function SimpleTelemetryPlotPanel({
       externalResetZoomToken={resetZoomToken}
       externalOpenConfigToken={openConfigToken}
       mathChannels={mathChannels}
+      height={height}
     />
   );
 }

@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { getLoadedPlugins, getSettingsTabs } from '@/plugins';
 import { AvatarCropDialog } from '@/components/settings/AvatarCropDialog';
@@ -165,7 +166,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   const isFullNameValid = fullName.trim().length > 0;
   const hasProfileChanges =
-    user && (fullName !== user.fullName || selectedAvatar !== user.avatarUrl);
+    user && (fullName !== (user.fullName || '') || selectedAvatar !== (user.avatarUrl ?? null));
 
   return (
     <>
@@ -178,12 +179,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       />
     )}
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
+      <DialogContent className="max-w-4xl p-0">
+        <DialogHeader className="px-4 py-2 border-b bg-muted/40">
+          <DialogTitle className="text-sm font-semibold">Settings</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-12 gap-4">
+        <div className="grid grid-cols-12 gap-4 p-6 pt-4">
           <Tabs defaultValue="profile" className="col-span-12">
             <div className="grid grid-cols-12 gap-4">
               <TabsList className="col-span-4 h-auto flex flex-col items-stretch justify-start bg-transparent p-0">
@@ -262,34 +263,39 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                         </div>
 
                         {/* Default avatar grid */}
+                        <TooltipProvider delayDuration={300}>
                         <div className="grid grid-cols-4 gap-2">
                           {DEFAULT_AVATARS.map((avatar) => (
-                            <button
-                              key={avatar.id}
-                              type="button"
-                              onClick={() => setSelectedAvatar(avatar.src)}
-                              className={`relative rounded-lg border-2 p-1 transition-colors hover:border-primary ${
-                                selectedAvatar === avatar.src
-                                  ? 'border-primary bg-primary/10'
-                                  : 'border-transparent'
-                              }`}
-                              title={avatar.label}
-                            >
-                              <Image
-                                src={avatar.src}
-                                alt={avatar.label}
-                                width={64}
-                                height={64}
-                                className="rounded-md"
-                              />
-                              {selectedAvatar === avatar.src && (
-                                <div className="absolute top-0 right-0 rounded-full bg-primary p-0.5">
-                                  <Check className="h-3 w-3 text-primary-foreground" />
-                                </div>
-                              )}
-                            </button>
+                            <Tooltip key={avatar.id}>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedAvatar(avatar.src)}
+                                  className={`relative rounded-lg border-2 p-1 transition-colors hover:border-primary ${
+                                    selectedAvatar === avatar.src
+                                      ? 'border-primary bg-primary/10'
+                                      : 'border-transparent'
+                                  }`}
+                                >
+                                  <Image
+                                    src={avatar.src}
+                                    alt={avatar.label}
+                                    width={64}
+                                    height={64}
+                                    className="rounded-md"
+                                  />
+                                  {selectedAvatar === avatar.src && (
+                                    <div className="absolute top-0 right-0 rounded-full bg-primary p-0.5">
+                                      <Check className="h-3 w-3 text-primary-foreground" />
+                                    </div>
+                                  )}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">{avatar.label}</TooltipContent>
+                            </Tooltip>
                           ))}
                         </div>
+                        </TooltipProvider>
 
                         {/* Upload custom */}
                         <div className="flex items-center gap-2">

@@ -1,7 +1,7 @@
 {
   "id": "user/plugins",
   "title": "Using Plugins",
-  "description": "Purple Sector is being refactored to support a plugin-based architecture. This page explains what that means for you as a user and how plugins are discovered and enabled today.",
+  "description": "Purple Sector uses a plugin architecture to deliver most of its features. This page explains what plugins are, which ones ship with the app, and how they extend the interface.",
   "source": "@site/docs/user/plugins.md",
   "sourceDirName": "user",
   "slug": "/user/plugins",

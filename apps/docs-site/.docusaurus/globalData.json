@@ -21,6 +21,16 @@
               "sidebar": "userGuide"
             },
             {
+              "id": "dev/analysis-panels",
+              "path": "/PurpleSector/dev/analysis-panels",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "dev/app-shell",
+              "path": "/PurpleSector/dev/app-shell",
+              "sidebar": "userGuide"
+            },
+            {
               "id": "dev/architecture",
               "path": "/PurpleSector/dev/architecture",
               "sidebar": "userGuide"
@@ -81,8 +91,28 @@
               "sidebar": "userGuide"
             },
             {
+              "id": "user/ai-agent",
+              "path": "/PurpleSector/user/ai-agent",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "user/events-and-sessions",
+              "path": "/PurpleSector/user/events-and-sessions",
+              "sidebar": "userGuide"
+            },
+            {
               "id": "user/getting-started",
               "path": "/PurpleSector/user/getting-started",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "user/lap-analysis",
+              "path": "/PurpleSector/user/lap-analysis",
+              "sidebar": "userGuide"
+            },
+            {
+              "id": "user/navigating-the-app",
+              "path": "/PurpleSector/user/navigating-the-app",
               "sidebar": "userGuide"
             },
             {
@@ -101,8 +131,8 @@
               "sidebar": "userGuide"
             },
             {
-              "id": "user/using-sessions",
-              "path": "/PurpleSector/user/using-sessions",
+              "id": "user/vehicles",
+              "path": "/PurpleSector/user/vehicles",
               "sidebar": "userGuide"
             }
           ],

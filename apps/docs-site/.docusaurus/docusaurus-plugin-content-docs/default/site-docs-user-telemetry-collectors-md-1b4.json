@@ -1,7 +1,7 @@
 {
   "id": "user/telemetry-collectors",
   "title": "Telemetry Collectors",
-  "description": "This page will describe the different telemetry collectors (AC, ACC, demo) and how to use them.",
+  "description": "Telemetry collectors are the bridge between your racing simulator and Purple Sector. They read live data from the game and feed it into the telemetry pipeline.",
   "source": "@site/docs/user/telemetry-collectors.md",
   "sourceDirName": "user",
   "slug": "/user/telemetry-collectors",
@@ -13,8 +13,8 @@
   "frontMatter": {},
   "sidebar": "userGuide",
   "previous": {
-    "title": "Using Sessions",
-    "permalink": "/PurpleSector/user/using-sessions"
+    "title": "AI Agent",
+    "permalink": "/PurpleSector/user/ai-agent"
   },
   "next": {
     "title": "Plugins",

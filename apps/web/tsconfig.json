@@ -23,6 +23,9 @@
       ],
       "@purplesector/plugin-core-lap-telemetry": [
         "../../packages/plugin-core-lap-telemetry/src"
+      ],
+      "@purplesector/plugin-vehicles": [
+        "../../packages/plugin-vehicles/src"
       ]
     }
   },

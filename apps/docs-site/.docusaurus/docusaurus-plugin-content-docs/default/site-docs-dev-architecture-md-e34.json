@@ -1,7 +1,7 @@
 {
   "id": "dev/architecture",
   "title": "Architecture",
-  "description": "This page describes the high-level architecture of Purple Sector: how telemetry flows from the simulator to the browser and AI analysis, and how the Kafka-based pipeline is structured.",
+  "description": "This page describes the high-level architecture of Purple Sector: how telemetry flows from the simulator to the browser and AI analysis, how the plugin system works, and how the app shell is structured.",
   "source": "@site/docs/dev/architecture.md",
   "sourceDirName": "dev",
   "slug": "/dev/architecture",

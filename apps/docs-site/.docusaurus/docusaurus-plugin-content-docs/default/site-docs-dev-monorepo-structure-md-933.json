@@ -1,7 +1,7 @@
 {
   "id": "dev/monorepo-structure",
   "title": "Monorepo Structure",
-  "description": "Purple Sector uses an Nx monorepo to organize the web app, desktop app, collectors, services, and shared libraries.",
+  "description": "Purple Sector uses an Nx monorepo to organize the web app, desktop app, documentation site, collectors, services, and shared libraries.",
   "source": "@site/docs/dev/monorepo-structure.md",
   "sourceDirName": "dev",
   "slug": "/dev/monorepo-structure",

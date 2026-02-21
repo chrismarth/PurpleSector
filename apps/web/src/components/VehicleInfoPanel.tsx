@@ -1,5 +1,5 @@
 import { Car, Settings, Wrench, Eye } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -34,15 +34,12 @@ export function VehicleInfoPanel({ vehicle, configuration, setup }: VehicleInfoP
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Car className="h-5 w-5" />
+      <div className="flex items-center px-4 py-2 border-b bg-muted/40">
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <Car className="h-4 w-4" />
           Vehicle Information
-        </CardTitle>
-        <CardDescription>
-          Vehicle, configuration, and setup used in this session
-        </CardDescription>
-      </CardHeader>
+        </span>
+      </div>
       <CardContent className="space-y-4">
         {/* Vehicle */}
         <div>

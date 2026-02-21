@@ -8,7 +8,9 @@ export interface AnalysisHostAPI {
   // Optional hook for a panel to publish a dynamic title that the host can
   // render in the panel toolbar.
   setTitle?: (title: React.ReactNode) => void;
-  // Reserved for future helpers (navigation, theming, commands, etc.)
+  // Available height in pixels for the panel content area.
+  // Set by the host when the panel is fullscreen so charts can size correctly.
+  availableHeight?: number;
 }
 
 export interface AnalysisPanelProps {

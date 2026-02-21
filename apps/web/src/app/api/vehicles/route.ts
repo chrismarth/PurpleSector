@@ -15,6 +15,16 @@ export async function GET() {
     const vehicles = await (prisma as any).vehicle.findMany({
       where: { userId },
       include: {
+        configurations: {
+          where: { userId },
+          select: { id: true, name: true },
+          orderBy: { createdAt: 'desc' },
+        },
+        setups: {
+          where: { userId },
+          select: { id: true, name: true },
+          orderBy: { createdAt: 'desc' },
+        },
         _count: {
           select: { 
             configurations: true,

@@ -25,6 +25,8 @@ After startup, open:
 http://localhost:3000
 ```
 
+Log in with `admin` or `user` (no password in dev mode).
+
 See **Developer Guide → Development Environment** for a deeper explanation of this script.
 
 ## Manual Startup (Services)
@@ -85,6 +87,12 @@ For real gameplay telemetry, use collectors such as:
   npm run telemetry:acc-kafka
   ```
 
+- ACC Hybrid (Windows only):
+
+  ```bash
+  npm run telemetry:acc-hybrid
+  ```
+
 ### 6. Start the Frontend
 
 ```bash
@@ -95,6 +103,18 @@ The app will be available at:
 
 ```text
 http://localhost:3000
+```
+
+## PM2 Process Management
+
+The dev environment uses PM2 (`ecosystem.dev.config.js`) to manage services. Common commands:
+
+```bash
+npx pm2 status                  # Check all services
+npx pm2 logs                    # Combined logs
+npx pm2 logs nextjs-dev         # Specific service logs
+npx pm2 restart all             # Restart everything
+npx pm2 restart kafka-bridge-dev  # Restart one service
 ```
 
 ## Quick Pipeline Test
@@ -137,6 +157,14 @@ To verify the Kafka pipeline end-to-end with the demo collector (no game needed)
    npm run dev
    ```
 
-7. Open `http://localhost:3000` and confirm that telemetry is streaming and laps are being recorded.
+7. Open `http://localhost:3000`, log in, and confirm that telemetry is streaming and laps are being recorded in the events tree.
 
-For scripted and CI-friendly tests, see the original `docs/TESTING_KAFKA_PIPELINE.md` content (which can be migrated into a dedicated testing page if desired).
+## Stopping the Environment
+
+```bash
+# Stop services, keep Kafka running
+npm run dev:stop
+
+# Stop services AND Kafka
+npm run dev:stop-all
+```

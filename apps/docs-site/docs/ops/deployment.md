@@ -24,9 +24,10 @@ pm2 start ecosystem.config.js
 
 Typical services include:
 
-- `kafka-bridge` – Kafka→WebSocket bridge.
-- `kafka-db-consumer` – Kafka→DB consumer.
+- `kafka-bridge` — Kafka→WebSocket bridge.
+- `kafka-db-consumer` — Kafka→DB consumer.
 - Collectors such as `acc-collector` or demo collectors.
+- `nextjs` — The Next.js production server.
 
 ### Monitor and Logs
 
@@ -81,6 +82,24 @@ docker run -d \
 
 You can define additional containers for collectors and the DB consumer, or orchestrate them with Docker Compose or Kubernetes.
 
+## Next.js Production Build
+
+For the web app:
+
+```bash
+# Build
+npm run build
+
+# Start production server
+npm run start
+```
+
+In production, use PostgreSQL instead of SQLite:
+
+```env
+DATABASE_URL="postgresql://user:password@host:5432/purplesector"
+```
+
 ## Environment Configuration
 
 Regardless of deployment method, key environment variables include:
@@ -92,8 +111,12 @@ Regardless of deployment method, key environment variables include:
 - **WebSocket Bridge**
   - `WS_PORT`
   - `WS_HOST`
-- **Database Consumer**
+- **Database**
   - `DATABASE_URL`
+- **Authentication**
+  - In production, replace the stub auth with a proper authentication provider.
+- **AI Agent**
+  - `OPENAI_API_KEY`
 - **Logging**
   - `LOG_LEVEL`
   - `LOG_FORMAT`
