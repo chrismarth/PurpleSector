@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useDrag } from '@use-gesture/react';
 import { useAppShell } from './AppShellContext';
 import { getGlobalPanels } from '@/plugins';
 
@@ -35,9 +36,9 @@ function saveWidth(w: number): void {
 export function AgentSlidePanel() {
   const { state } = useAppShell();
   const [width, setWidth] = useState(loadWidth);
-  const dragging = useRef(false);
-  const startX = useRef(0);
-  const startWidth = useRef(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const widthRef = useRef(width);
+  widthRef.current = width;
 
   // Find the sidebar-right global panel (typically the agent)
   const panels = getGlobalPanels();
@@ -48,41 +49,26 @@ export function AgentSlidePanel() {
     saveWidth(width);
   }, [width]);
 
-  const onMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      dragging.current = true;
-      startX.current = e.clientX;
-      startWidth.current = width;
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-    },
-    [width]
-  );
-
-  useEffect(() => {
-    function onMouseMove(e: MouseEvent) {
-      if (!dragging.current) return;
+  const bindDrag = useDrag(
+    ({ movement: [mx], first, last, memo }) => {
+      if (first) {
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        setIsDragging(true);
+        memo = widthRef.current;
+      }
       // Dragging left increases width (panel is on the right side)
-      const delta = startX.current - e.clientX;
-      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta));
-      setWidth(newWidth);
-    }
-
-    function onMouseUp() {
-      if (!dragging.current) return;
-      dragging.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-  }, []);
+      const base = memo as number;
+      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, base - mx)));
+      if (last) {
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        setIsDragging(false);
+      }
+      return memo;
+    },
+    { pointer: { touch: true }, filterTaps: true },
+  );
 
   if (!state.agentPanelOpen || !sidebarPanel) {
     return null;
@@ -90,13 +76,14 @@ export function AgentSlidePanel() {
 
   return (
     <div
-      className="relative border-l bg-background shrink-0 overflow-hidden flex flex-col transition-[width] duration-200 ease-in-out"
+      className={`relative border-l bg-background shrink-0 overflow-hidden flex flex-col ${isDragging ? '' : 'transition-[width] duration-200 ease-in-out'}`}
       style={{ width }}
     >
       {/* Drag handle */}
       <div
-        onMouseDown={onMouseDown}
-        className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-purple-500/30 active:bg-purple-500/50 transition-colors z-10"
+        {...bindDrag()}
+        className="absolute top-0 left-0 w-3 h-full cursor-col-resize hover:bg-purple-500/30 active:bg-purple-500/50 transition-colors z-10"
+        style={{ touchAction: 'none' }}
       />
       {sidebarPanel.render()}
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useDrag } from '@use-gesture/react';
 import { useAppShell } from './AppShellContext';
 import { NavTabBar } from './NavTabBar';
 import { EventsTree } from './EventsTree';
@@ -39,9 +40,9 @@ export function NavPane() {
   const { state, openTab } = useAppShell();
   const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
   const [width, setWidth] = useState(loadWidth);
-  const dragging = useRef(false);
-  const startX = useRef(0);
-  const startWidth = useRef(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const widthRef = useRef(width);
+  widthRef.current = width;
 
   const pluginNavTabs = getNavTabs();
 
@@ -50,40 +51,25 @@ export function NavPane() {
     saveWidth(width);
   }, [width]);
 
-  const onMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      dragging.current = true;
-      startX.current = e.clientX;
-      startWidth.current = width;
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
+  const bindDrag = useDrag(
+    ({ movement: [mx], first, last, memo }) => {
+      if (first) {
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        setIsDragging(true);
+        memo = widthRef.current;
+      }
+      const base = memo as number;
+      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, base + mx)));
+      if (last) {
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        setIsDragging(false);
+      }
+      return memo;
     },
-    [width]
+    { pointer: { touch: true }, filterTaps: true },
   );
-
-  useEffect(() => {
-    function onMouseMove(e: MouseEvent) {
-      if (!dragging.current) return;
-      const delta = e.clientX - startX.current;
-      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta));
-      setWidth(newWidth);
-    }
-
-    function onMouseUp() {
-      if (!dragging.current) return;
-      dragging.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-  }, []);
 
   // Listen for plugin create-entity requests
   useEffect(() => {
@@ -138,7 +124,7 @@ export function NavPane() {
 
       {/* Tree panel (collapsible) */}
       <div
-        className="relative overflow-hidden border-r transition-[width] duration-200 ease-in-out"
+        className={`relative overflow-hidden border-r ${isDragging ? '' : 'transition-[width] duration-200 ease-in-out'}`}
         style={{ width: state.navCollapsed ? 0 : width }}
       >
         {!state.navCollapsed && (
@@ -150,8 +136,9 @@ export function NavPane() {
         {/* Drag handle */}
         {!state.navCollapsed && (
           <div
-            onMouseDown={onMouseDown}
-            className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-purple-500/30 active:bg-purple-500/50 transition-colors z-10"
+            {...bindDrag()}
+            className="absolute top-0 right-0 w-3 h-full cursor-col-resize hover:bg-purple-500/30 active:bg-purple-500/50 transition-colors z-10"
+            style={{ touchAction: 'none' }}
           />
         )}
       </div>

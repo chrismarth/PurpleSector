@@ -6,7 +6,7 @@
   "tags": ["type:app", "scope:web"],
   "targets": {
     "serve": {
-      "command": "next dev apps/web"
+      "command": "next dev apps/web -H 192.168.8.195"
     },
     "build": {
       "command": "next build apps/web"

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDrag } from '@use-gesture/react';
 // Card/CardContent removed — panels now render borderless for a cleaner look
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -20,6 +21,129 @@ import type {
 } from '@purplesector/plugin-api';
 import type { AnalysisLayoutJSON } from '@/lib/analysisLayout';
 import { splitColumn, splitRow, addRowBelowPanel, deletePanelAndCompact } from '@/lib/analysisLayout';
+
+/** Lightweight overrides applied during drag (before committing to parent). */
+interface DragOverride {
+  panelId: string;
+  /** Column resize: override colSpan for left/right panels */
+  colSpan?: number;
+  rightPanelId?: string;
+  rightColSpan?: number;
+  rightX?: number;
+  /** Height resize: override height */
+  height?: number;
+}
+
+function ColumnResizeHandle({
+  leftPanelId,
+  rightPanelId,
+  leftStartX,
+  startLeftSpan,
+  startRightSpan,
+  containerRef,
+  layoutRef,
+  onLayoutChange,
+  onDragOverride,
+}: {
+  leftPanelId: string;
+  rightPanelId: string;
+  leftStartX: number;
+  startLeftSpan: number;
+  startRightSpan: number;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  layoutRef: React.RefObject<AnalysisLayoutJSON>;
+  onLayoutChange: (layout: AnalysisLayoutJSON) => void;
+  onDragOverride: (override: DragOverride | null) => void;
+}) {
+  const bind = useDrag(
+    ({ movement: [mx], last, event }) => {
+      event?.preventDefault();
+      const currentLayout = layoutRef.current;
+      if (!currentLayout || !containerRef.current) return;
+      const containerWidth = containerRef.current.offsetWidth;
+      if (containerWidth === 0) return;
+
+      const deltaCols = Math.round((mx / containerWidth) * currentLayout.cols);
+      const totalSpan = startLeftSpan + startRightSpan;
+      let newLeftSpan = startLeftSpan + deltaCols;
+      newLeftSpan = Math.max(1, Math.min(totalSpan - 1, newLeftSpan));
+      const newRightSpan = totalSpan - newLeftSpan;
+
+      if (last) {
+        onDragOverride(null);
+        const panels = currentLayout.panels.map((p) => {
+          if (p.id === leftPanelId) return { ...p, colSpan: newLeftSpan };
+          if (p.id === rightPanelId) {
+            return { ...p, x: leftStartX + newLeftSpan, colSpan: newRightSpan };
+          }
+          return p;
+        });
+        onLayoutChange({ ...currentLayout, panels } as AnalysisLayoutJSON);
+      } else {
+        onDragOverride({
+          panelId: leftPanelId,
+          colSpan: newLeftSpan,
+          rightPanelId,
+          rightColSpan: newRightSpan,
+          rightX: leftStartX + newLeftSpan,
+        });
+      }
+    },
+    { pointer: { touch: true }, filterTaps: true },
+  );
+
+  return (
+    <div
+      {...bind()}
+      className="absolute top-0 right-0 w-3 h-full cursor-col-resize hover:bg-primary/20 z-10"
+      style={{ touchAction: 'none' }}
+    />
+  );
+}
+
+function HeightResizeHandle({
+  panelId,
+  startHeight,
+  layoutRef,
+  onLayoutChange,
+  onDragOverride,
+}: {
+  panelId: string;
+  startHeight: number;
+  layoutRef: React.RefObject<AnalysisLayoutJSON>;
+  onLayoutChange: (layout: AnalysisLayoutJSON) => void;
+  onDragOverride: (override: DragOverride | null) => void;
+}) {
+  const bind = useDrag(
+    ({ movement: [, my], last, event }) => {
+      event?.preventDefault();
+      const currentLayout = layoutRef.current;
+      if (!currentLayout) return;
+      const newHeight = Math.max(120, startHeight + my);
+
+      if (last) {
+        onDragOverride(null);
+        const panels = currentLayout.panels.map((p) =>
+          p.id === panelId
+            ? { ...p, minHeight: newHeight, maxHeight: newHeight }
+            : p,
+        );
+        onLayoutChange({ ...currentLayout, panels } as AnalysisLayoutJSON);
+      } else {
+        onDragOverride({ panelId, height: newHeight });
+      }
+    },
+    { pointer: { touch: true }, filterTaps: true },
+  );
+
+  return (
+    <div
+      {...bind()}
+      className="absolute bottom-0 left-0 w-full h-3 cursor-row-resize hover:bg-primary/20 z-10"
+      style={{ touchAction: 'none' }}
+    />
+  );
+}
 
 interface AnalysisPanelGridProps {
   context: AnalysisPanelContext;
@@ -51,94 +175,11 @@ export function AnalysisPanelGrid({
 }: AnalysisPanelGridProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const layoutRef = useRef(layout);
-  const [resizing, setResizing] = useState<
-    | {
-        type: 'column';
-        leftPanelId: string;
-        rightPanelId: string;
-        startX: number;
-        leftStartX: number;
-        startLeftSpan: number;
-        startRightSpan: number;
-      }
-    | {
-        type: 'height';
-        panelId: string;
-        startY: number;
-        startHeight: number;
-      }
-    | null
-  >(null);
+  const [dragOverride, setDragOverride] = useState<DragOverride | null>(null);
 
   useEffect(() => {
     layoutRef.current = layout;
   }, [layout]);
-
-  useEffect(() => {
-    if (!resizing || !onLayoutChange) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const currentLayout = layoutRef.current;
-
-      if (resizing.type === 'column') {
-        if (!containerRef.current) return;
-        const containerWidth = containerRef.current.offsetWidth;
-        if (containerWidth === 0) return;
-
-        const deltaX = e.clientX - resizing.startX;
-        const deltaCols = Math.round((deltaX / containerWidth) * currentLayout.cols);
-
-        const totalSpan = resizing.startLeftSpan + resizing.startRightSpan;
-        let newLeftSpan = resizing.startLeftSpan + deltaCols;
-        newLeftSpan = Math.max(1, Math.min(totalSpan - 1, newLeftSpan));
-        const newRightSpan = totalSpan - newLeftSpan;
-
-        const panels = currentLayout.panels.map((p) => {
-          if (p.id === resizing.leftPanelId) {
-            return { ...p, colSpan: newLeftSpan };
-          }
-          if (p.id === resizing.rightPanelId) {
-            // Base the right panel's x on the original left panel position so we don't
-            // accumulate drift as the user drags.
-            const newRightX = resizing.leftStartX + newLeftSpan;
-            return { ...p, x: newRightX, colSpan: newRightSpan };
-          }
-          return p;
-        });
-
-        const next = { ...currentLayout, panels };
-        if (next !== currentLayout) {
-          onLayoutChange(next);
-        }
-      } else if (resizing.type === 'height') {
-        const deltaY = e.clientY - resizing.startY;
-        const newHeight = Math.max(120, resizing.startHeight + deltaY);
-
-        const panels = currentLayout.panels.map((p) =>
-          p.id === resizing.panelId
-            ? { ...p, minHeight: newHeight, maxHeight: newHeight }
-            : p,
-        );
-
-        const next = { ...currentLayout, panels };
-        if (next !== currentLayout) {
-          onLayoutChange(next);
-        }
-      }
-    };
-
-    const handleMouseUp = () => {
-      setResizing(null);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [resizing, onLayoutChange]);
   const handleSetPanelType = (panelId: string, typeId: string) => {
     if (!onLayoutChange) return;
     const nextPanels = layout.panels.map((p) =>
@@ -215,8 +256,26 @@ export function AnalysisPanelGrid({
 
         const panelTitle = panelTitles[panel.id] ?? renderResult?.title;
 
-        const minHeight = isFocused ? undefined : panel.minHeight ?? 200;
-        const maxHeight = isFocused ? undefined : panel.maxHeight;
+        // Apply drag overrides for instant visual feedback without re-rendering parent
+        let effectiveColSpan = panel.colSpan;
+        let effectiveX = panel.x;
+        let effectiveMinHeight: number | undefined = panel.minHeight ?? 200;
+        let effectiveMaxHeight: number | undefined = panel.maxHeight;
+        if (dragOverride) {
+          if (dragOverride.panelId === panel.id && dragOverride.colSpan !== undefined) {
+            effectiveColSpan = dragOverride.colSpan;
+          }
+          if (dragOverride.rightPanelId === panel.id && dragOverride.rightColSpan !== undefined) {
+            effectiveColSpan = dragOverride.rightColSpan;
+            effectiveX = dragOverride.rightX ?? effectiveX;
+          }
+          if (dragOverride.panelId === panel.id && dragOverride.height !== undefined) {
+            effectiveMinHeight = dragOverride.height;
+            effectiveMaxHeight = dragOverride.height;
+          }
+        }
+        const minHeight = isFocused ? undefined : effectiveMinHeight;
+        const maxHeight = isFocused ? undefined : effectiveMaxHeight;
 
         const rightNeighbor = layout.panels.find(
           (p) =>
@@ -238,7 +297,7 @@ export function AnalysisPanelGrid({
               focusPanelId
                 ? {}
                 : {
-                    gridColumn: `${panel.x + 1} / span ${panel.colSpan}`,
+                    gridColumn: `${effectiveX + 1} / span ${effectiveColSpan}`,
                     gridRow: `${panel.y + 1} / span ${panel.rowSpan}`,
                     minHeight,
                     maxHeight,
@@ -348,35 +407,25 @@ export function AnalysisPanelGrid({
               className={`px-3 pt-2 pb-1 ${focusPanelId ? 'flex-1 min-h-0 overflow-auto' : ''}`}
             >
               {onLayoutChange && rightNeighbor && (
-                <div
-                  className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 z-10"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    setResizing({
-                      type: 'column',
-                      leftPanelId: panel.id,
-                      rightPanelId: rightNeighbor.id,
-                      startX: e.clientX,
-                      leftStartX: panel.x,
-                      startLeftSpan: panel.colSpan,
-                      startRightSpan: rightNeighbor.colSpan,
-                    });
-                  }}
+                <ColumnResizeHandle
+                  leftPanelId={panel.id}
+                  rightPanelId={rightNeighbor.id}
+                  leftStartX={panel.x}
+                  startLeftSpan={panel.colSpan}
+                  startRightSpan={rightNeighbor.colSpan}
+                  containerRef={containerRef}
+                  layoutRef={layoutRef}
+                  onLayoutChange={onLayoutChange}
+                  onDragOverride={setDragOverride}
                 />
               )}
               {onLayoutChange && (
-                <div
-                  className="absolute bottom-0 left-0 w-full h-1 cursor-row-resize hover:bg-primary/20 z-10"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    const startHeight = panel.minHeight ?? 200;
-                    setResizing({
-                      type: 'height',
-                      panelId: panel.id,
-                      startY: e.clientY,
-                      startHeight,
-                    });
-                  }}
+                <HeightResizeHandle
+                  panelId={panel.id}
+                  startHeight={panel.minHeight ?? 200}
+                  layoutRef={layoutRef}
+                  onLayoutChange={onLayoutChange}
+                  onDragOverride={setDragOverride}
                 />
               )}
               {renderResult ? (
