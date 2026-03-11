@@ -2,9 +2,11 @@
 
 use eframe::egui;
 use std::sync::{Arc, Mutex};
+use tracing::info;
 
 use crate::config::{AppConfig, SimType};
 use crate::pipeline::PipelineCommand;
+use crate::platform;
 use crate::stats::PipelineStats;
 
 /// Shared state between the tray menu and the GUI.
@@ -14,11 +16,15 @@ pub struct GuiState {
     pub stats: PipelineStats,
     pub pipeline_running: Arc<std::sync::atomic::AtomicBool>,
     pub command_tx: tokio::sync::mpsc::Sender<PipelineCommand>,
+    pub app_quit_flag: Arc<std::sync::atomic::AtomicBool>,
+    /// Holds the egui context once the window is open, so external threads
+    /// can call request_repaint() to wake the event loop immediately.
+    pub egui_ctx: Arc<std::sync::OnceLock<egui::Context>>,
 }
 
-/// Which tab is active in the main window.
+/// Which view is active in the main window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Tab {
+enum View {
     Stats,
     Settings,
 }
@@ -26,7 +32,7 @@ enum Tab {
 /// Main application window combining stats and settings.
 pub struct AppWindow {
     state: GuiState,
-    active_tab: Tab,
+    active_view: View,
     // Editable settings (buffered until Save)
     edit_sim: SimType,
     edit_endpoint: String,
@@ -43,7 +49,7 @@ impl AppWindow {
         let config = state.config.lock().unwrap().clone();
         Self {
             state,
-            active_tab: Tab::Stats,
+            active_view: View::Stats,
             edit_sim: config.sim_type,
             edit_endpoint: config.grpc_endpoint.clone(),
             edit_username: config.username.clone(),
@@ -53,6 +59,11 @@ impl AppWindow {
             edit_batch_interval: config.batch_interval_ms.to_string(),
             status_message: None,
         }
+    }
+
+    fn open_settings(&mut self) {
+        self.reload_from_config();
+        self.active_view = View::Settings;
     }
 
     fn render_stats(&self, ui: &mut egui::Ui) {
@@ -225,8 +236,9 @@ impl AppWindow {
             if ui.button("💾  Save & Apply").clicked() {
                 self.save_settings();
             }
-            if ui.button("↩  Revert").clicked() {
+            if ui.button("Cancel").clicked() {
                 self.reload_from_config();
+                self.active_view = View::Stats;
             }
         });
 
@@ -267,6 +279,7 @@ impl AppWindow {
                     .state
                     .command_tx
                     .try_send(PipelineCommand::ReloadConfig);
+                self.active_view = View::Stats;
             }
             Err(e) => {
                 self.status_message = Some((
@@ -291,13 +304,43 @@ impl AppWindow {
 
 impl eframe::App for AppWindow {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Auto-refresh stats at ~10Hz
+        // Check close_requested FIRST, before scheduling any repaints.
+        // Cancel the OS close, then hide the window via Win32 while the event
+        // loop keeps running. This is the correct "minimize to tray" sequence.
+        let close_requested = ctx.input(|i| i.viewport().close_requested());
+        if close_requested {
+            info!("AppWindow: close_requested, hiding to tray");
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            #[cfg(windows)]
+            platform::hide_to_tray();
+            return;
+        }
+
+        // Check quit flag FIRST - exit the process cleanly
+        if self.state.app_quit_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            info!("AppWindow: quit flag set, exiting process");
+            std::process::exit(0);
+        }
+
+        // Auto-refresh stats at ~10Hz (only when not closing)
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
 
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.active_tab, Tab::Stats, "📊  Stats");
-                ui.selectable_value(&mut self.active_tab, Tab::Settings, "⚙  Settings");
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    if ui.button("Settings").clicked() {
+                        self.open_settings();
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+
+                    if ui.button("Quit").clicked() {
+                        let _ = self.state.command_tx.try_send(PipelineCommand::Quit);
+                        std::process::exit(0);
+                    }
+                });
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
                         egui::RichText::new(format!("PurpleSector v{}", env!("CARGO_PKG_VERSION")))
@@ -308,28 +351,35 @@ impl eframe::App for AppWindow {
             });
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| match self.active_tab {
-            Tab::Stats => self.render_stats(ui),
-            Tab::Settings => self.render_settings(ui),
+        egui::CentralPanel::default().show(ctx, |ui| match self.active_view {
+            View::Stats => self.render_stats(ui),
+            View::Settings => self.render_settings(ui),
         });
+
     }
 }
 
+// ... (rest of the code remains the same)
 /// Launch the egui window (blocking on the current thread).
 pub fn open_window(state: GuiState) {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([420.0, 520.0])
             .with_min_inner_size([360.0, 400.0])
-            .with_title("PurpleSector — Tray App"),
+            .with_title(platform::WINDOW_TITLE),
+        run_and_return: true,
         ..Default::default()
     };
 
     let _ = eframe::run_native(
         "PurpleSector Tray App",
         options,
-        Box::new(move |_cc| Ok(Box::new(AppWindow::new(state)))),
+        Box::new(move |cc| {
+            let _ = state.egui_ctx.set(cc.egui_ctx.clone());
+            Ok(Box::new(AppWindow::new(state)))
+        }),
     );
+    info!("open_window: eframe::run_native returned");
 }
 
 // ── Formatting helpers ───────────────────────────────────────────────

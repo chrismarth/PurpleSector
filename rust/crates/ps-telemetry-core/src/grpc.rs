@@ -6,6 +6,8 @@
 //! Only available with the `cloud-transport` feature.
 
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use anyhow::{Context, Result};
 use tokio::sync::mpsc;
@@ -34,6 +36,12 @@ pub struct GrpcConfig {
 
     /// Optional bearer token for authentication (set by OIDC flow).
     pub auth_token: Option<String>,
+
+    /// If set, `run_transport` writes the current WAL depth into this atomic
+    /// each poll cycle so external code (e.g. the tray-app stats view) can
+    /// read it without modifying the WAL internals.
+    #[serde(skip)]
+    pub wal_depth_reporter: Option<Arc<AtomicU64>>,
 }
 
 fn default_retry_delay() -> Duration {
@@ -48,6 +56,7 @@ impl Default for GrpcConfig {
             drain_batch_size: 32,
             retry_delay: default_retry_delay(),
             auth_token: None,
+            wal_depth_reporter: None,
         }
     }
 }
@@ -159,6 +168,10 @@ pub async fn run_transport(
         let (depth_tx, depth_rx) = tokio::sync::oneshot::channel();
         wal_tx.send(WalCmd::Depth(depth_tx)).await.ok();
         let pending = depth_rx.await.unwrap_or(Ok(0)).unwrap_or(0);
+
+        if let Some(reporter) = &config.wal_depth_reporter {
+            reporter.store(pending as u64, Ordering::Relaxed);
+        }
 
         if pending > 0 {
             match drain_wal(&config, &wal_tx).await {
