@@ -264,7 +264,6 @@ services:
       POSTGRES_PASSWORD: devpassword
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./infra/postgres/init-metastore.sql:/docker-entrypoint-initdb.d/01-init-metastore.sql:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "purplesector"]
       interval: 10s
