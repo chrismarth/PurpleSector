@@ -19,7 +19,7 @@ If the app shows a loading spinner that never resolves:
 
    ```bash
    rm -rf .next/
-   npm run dev
+   ./scripts/start-dev.sh
    ```
 
 ## Login Issues
@@ -43,10 +43,10 @@ If the app shows a loading spinner that never resolves:
    ```
 
 3. Ensure UDP port `9996` is not blocked by a firewall.
-4. Verify the telemetry collector service is running:
+4. Verify a telemetry source is running:
 
    ```bash
-   npx pm2 logs demo-collector-dev
+   npx pm2 status
    ```
 
 ### Assetto Corsa Competizione (ACC)
@@ -65,53 +65,45 @@ If the app shows a loading spinner that never resolves:
 3. Ensure UDP port `9000` is not blocked by a firewall.
 4. Check that the collector successfully registered with ACC (look for a "Successfully registered" message in the collector logs).
 
-### Demo Collector
+### Demo Replay
 
-If using the demo collector and no data appears:
+If using demo replay and no data appears:
 
 1. Verify the collector is running:
 
    ```bash
    npx pm2 status
-   npx pm2 logs demo-collector-dev
+   npx pm2 logs demo-replay
    ```
 
-2. Verify Kafka is running:
+2. Verify the Docker infrastructure is running:
 
    ```bash
-   docker ps | grep kafka
+   docker ps
    ```
 
-3. Verify the Kafka–WebSocket bridge is running:
+3. Verify the Next.js app is running and that RisingWave is receiving data:
 
    ```bash
-   npx pm2 logs kafka-bridge-dev
+   npx pm2 logs nextjs-dev
+   docker logs ps-risingwave --tail 100
    ```
 
-## Kafka Pipeline Issues
+## Pipeline Issues
 
 ### Services Keep Crashing
 
 Check PM2 logs for the specific service:
 
 ```bash
-npx pm2 logs kafka-bridge-dev
-npx pm2 logs kafka-db-consumer-dev
-npx pm2 logs demo-collector-dev
+npx pm2 logs nextjs-dev
+npx pm2 logs demo-replay
 ```
 
 Common causes:
-- Kafka not running or not ready yet (wait 30 seconds after starting Docker).
-- Topics not created — run `npm run kafka:setup`.
+- Docker infrastructure not running or not ready yet (wait 30 seconds after starting Docker).
+- RisingWave, Trino, or Redis unavailable.
 - Port conflicts.
-
-### Database Consumer Errors
-
-The `kafka-db-consumer-dev` service may error if:
-
-- The database file is locked (another process has it open).
-- The schema is out of date — run `npm run db:push`.
-- The database file is corrupted — reset with `npm run db:reset` (destructive).
 
 ## AI Agent Not Working
 
@@ -149,10 +141,10 @@ If telemetry plots show as blank boxes:
 - **Reset everything** — For a clean start:
 
   ```bash
-  npm run dev:stop-all
+  ./scripts/stop-dev.sh
   rm -rf .next/
   npm run db:reset
-  npm run dev:start
+  ./scripts/start-dev.sh
   ```
 
 - **Browser console** — Open DevTools (F12) and check the Console tab for client-side errors.

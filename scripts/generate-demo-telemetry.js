@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /**
- * Generate realistic demo telemetry JSON for the demo-kafka collector.
+ * Generate realistic demo telemetry JSON for the Rust demo replay tool
+ * and the DemoSource in ps-telemetry-core.
  *
- * Uses the same correlated physics model as DemoCollector.generateFallbackDemoData()
- * so the file-based and generated paths produce equivalent quality data.
+ * Uses a correlated physics model (speed follows throttle/brake/aero/corner
+ * drag) with 5 distinct lap profiles that vary braking aggression, throttle
+ * smoothness, and overall pace — producing natural-looking lap-to-lap
+ * variation.
  *
  * Usage:
  *   node scripts/generate-demo-telemetry.js [output-path]
@@ -32,6 +35,17 @@ const TRACK_PROFILE = [
   { from: 0.90, to: 1.01, targetKmh: 220, curvature: -0.08 },
 ];
 
+// Lap profiles: each profile adjusts the physics model to simulate different
+// driving styles. The variation values are applied as multipliers/offsets to
+// the base physics model.
+const LAP_PROFILES = [
+  { name: 'Optimal',      durationMs: 30000, speedScale: 1.0,   brakingGain: 1.0,  throttleSmooth: 1.0,  noiseScale: 1.0  },
+  { name: 'Conservative', durationMs: 30800, speedScale: 0.96,  brakingGain: 1.15, throttleSmooth: 0.85, noiseScale: 0.7  },
+  { name: 'Aggressive',   durationMs: 29800, speedScale: 1.04,  brakingGain: 0.85, throttleSmooth: 0.75, noiseScale: 1.3  },
+  { name: 'Mistake',      durationMs: 31500, speedScale: 0.93,  brakingGain: 1.25, throttleSmooth: 0.70, noiseScale: 1.6  },
+  { name: 'Learning',     durationMs: 31000, speedScale: 0.95,  brakingGain: 1.10, throttleSmooth: 0.80, noiseScale: 1.2  },
+];
+
 // Gear ratios for RPM computation; tuned for plausible RPM bands.
 const GEAR_RATIOS = [0, 14.2, 10.4, 7.7, 6.0, 5.0, 4.2];
 const FINAL_DRIVE = 1.0;
@@ -56,13 +70,12 @@ const jitter = (lapIndex, i) => {
   return x - Math.floor(x);
 };
 
-function generateLap(lapIndex, durationMs) {
-  const totalFrames = Math.round((durationMs / 1000) * FRAME_RATE);
+function generateLap(lapIndex, profile) {
+  const totalFrames = Math.round((profile.durationMs / 1000) * FRAME_RATE);
   const lapNumber = lapIndex + 1;
-  const variation = 1 + (lapIndex - 1) * 0.012;
   const dt = 1 / FRAME_RATE;
 
-  let speedKmh = 110 * variation;
+  let speedKmh = 110 * profile.speedScale;
   let gear = 3;
   const frames = [];
 
@@ -71,14 +84,14 @@ function generateLap(lapIndex, durationMs) {
     const lapTime = (i / FRAME_RATE) * 1000;
     const seg = getSegment(t);
 
-    const noise = (jitter(lapIndex, i) - 0.5) * 0.08;
-    const targetKmh = seg.targetKmh * variation * (1 + noise * 0.35);
+    const noise = (jitter(lapIndex, i) - 0.5) * 0.08 * profile.noiseScale;
+    const targetKmh = seg.targetKmh * profile.speedScale * (1 + noise * 0.35);
     const curvature = seg.curvature * (1 + noise * 0.2);
 
     const error = targetKmh - speedKmh;
 
-    let throttle = clamp(error / 55, 0, 1);
-    let brake = clamp(-error / 40, 0, 1);
+    let throttle = clamp(error / 55, 0, 1) * profile.throttleSmooth;
+    let brake = clamp(-error / 40, 0, 1) * profile.brakingGain;
 
     const cornerLift = clamp(Math.abs(curvature) - 0.35, 0, 1);
     throttle = clamp(throttle * (1 - 0.55 * cornerLift), 0, 1);
@@ -118,7 +131,7 @@ function generateLap(lapIndex, durationMs) {
     }
 
     frames.push({
-      timestamp: 0, // placeholder — collector sets real timestamps at playback
+      timestamp: 0, // placeholder — DemoSource stamps real time at playback
       throttle: +clamp(throttle, 0, 1).toFixed(4),
       brake: +clamp(brake, 0, 1).toFixed(4),
       steering: +clamp(steering, -1, 1).toFixed(4),
@@ -131,19 +144,17 @@ function generateLap(lapIndex, durationMs) {
     });
   }
 
-  return { lapNumber, lapTime: durationMs, frames };
+  return { lapNumber, lapTime: profile.durationMs, frames };
 }
 
 // ---------------------------------------------------------------------------
 
-const LAP_DURATIONS_MS = [30000, 30500, 31000];
-
 const output = {
-  description: 'Generated demo telemetry — correlated physics model (~30 s laps)',
+  description: 'Generated demo telemetry — correlated physics model with lap variations',
   track: 'Demo Circuit',
   car: 'Demo Car',
   frameRate: FRAME_RATE,
-  laps: LAP_DURATIONS_MS.map((dur, idx) => generateLap(idx, dur)),
+  laps: LAP_PROFILES.map((profile, idx) => generateLap(idx, profile)),
 };
 
 const totalFrames = output.laps.reduce((s, l) => s + l.frames.length, 0);
@@ -156,5 +167,9 @@ fs.writeFileSync(dest, JSON.stringify(output, null, 2) + '\n');
 
 console.log(`Wrote ${dest}`);
 console.log(`  Laps: ${output.laps.length}`);
+LAP_PROFILES.forEach((p, i) => {
+  const lap = output.laps[i];
+  console.log(`    Lap ${i + 1} (${p.name}): ${(p.durationMs / 1000).toFixed(1)}s, ${lap.frames.length} frames`);
+});
 console.log(`  Total frames: ${totalFrames}`);
 console.log(`  Frame rate: ${FRAME_RATE} Hz`);

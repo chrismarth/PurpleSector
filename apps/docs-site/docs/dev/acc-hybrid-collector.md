@@ -41,10 +41,10 @@ Compared to broadcasting-only collectors, the hybrid collector adds full input c
 
 3. Start services:
 
-   - WebSocket server (legacy path):
+   - Infrastructure (includes WebSocket server):
 
      ```bash
-     npm run ws-server
+     docker compose -f docker-compose.dev.yml up -d
      ```
 
    - Next.js frontend:
@@ -56,7 +56,8 @@ Compared to broadcasting-only collectors, the hybrid collector adds full input c
    - Hybrid collector:
 
      ```bash
-     npm run telemetry:acc-hybrid
+     # Via Rust tray app — select "ACC" as sim type
+     cd rust && cargo run -p ps-tray-app
      ```
 
 4. Launch ACC, start a session, and drive. The collector will register with ACC and begin streaming full telemetry.

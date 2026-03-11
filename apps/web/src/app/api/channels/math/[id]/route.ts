@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { MathTelemetryChannel, MathChannelInput } from '@purplesector/telemetry';
 import { requireAuthUserId } from '@/lib/api-auth';
+import { upsertMathChannelRule, deleteMathChannelRule } from '@/lib/risingwave';
 
 // PUT /api/channels/math/[id] - Update a math channel
 export async function PUT(
@@ -42,6 +43,15 @@ export async function PUT(
     if (!updateResult.count) {
       return NextResponse.json({ error: 'Math channel not found' }, { status: 404 });
     }
+
+    // Dual-write to RisingWave (non-blocking, best-effort)
+    await upsertMathChannelRule({
+      userId,
+      channelId: id,
+      channelLabel: label,
+      expression,
+      inputs: JSON.stringify(inputs),
+    });
 
     const mathChannel = await (prisma as any).mathChannel.findFirst({ where: { id, userId } });
 
@@ -104,6 +114,9 @@ export async function DELETE(
     if (!result.count) {
       return NextResponse.json({ error: 'Math channel not found' }, { status: 404 });
     }
+
+    // Dual-write to RisingWave (non-blocking, best-effort)
+    await deleteMathChannelRule(userId, id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

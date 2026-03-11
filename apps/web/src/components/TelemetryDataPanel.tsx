@@ -115,34 +115,25 @@ export function TelemetryDataPanel({
             {onSelectCompareLap && (
               compareLapId ? (
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={onRemoveCompareLap}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
+                  <TooltipTrigger
+                    type="button"
+                    className="inline-flex items-center justify-center h-7 w-7 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                    onClick={onRemoveCompareLap}
+                    aria-label="Remove comparison"
+                  >
+                    <X className="h-3.5 w-3.5" />
                   </TooltipTrigger>
                   <TooltipContent side="bottom">Remove comparison</TooltipContent>
                 </Tooltip>
               ) : (
                 <Popover open={comparePopoverOpen} onOpenChange={setComparePopoverOpen}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                        >
-                          <GitCompare className="h-3.5 w-3.5" />
-                        </Button>
-                      </PopoverTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">Compare lap</TooltipContent>
-                  </Tooltip>
+                  <PopoverTrigger
+                    type="button"
+                    className="inline-flex items-center justify-center h-7 w-7 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                    aria-label="Compare lap"
+                  >
+                    <GitCompare className="h-3.5 w-3.5" />
+                  </PopoverTrigger>
                   <PopoverContent align="end" className="w-64 p-2">
                     <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Select lap to compare</p>
                     <div className="space-y-1 max-h-48 overflow-auto">
@@ -166,41 +157,32 @@ export function TelemetryDataPanel({
               )
             )}
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => {
-                    setIsFullscreen((v) => !v);
-                    if (isFullscreen) setFocusPanelId(null);
-                  }}
-                >
-                  {isFullscreen ? (
-                    <Minimize2 className="h-3.5 w-3.5" />
-                  ) : (
-                    <Maximize2 className="h-3.5 w-3.5" />
-                  )}
-                </Button>
+              <TooltipTrigger
+                type="button"
+                className="inline-flex items-center justify-center h-7 w-7 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                onClick={() => {
+                  setIsFullscreen((v) => !v);
+                  if (isFullscreen) setFocusPanelId(null);
+                }}
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Maximize2 className="h-3.5 w-3.5" />
+                )}
               </TooltipTrigger>
               <TooltipContent side="bottom">{isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}</TooltipContent>
             </Tooltip>
             {(onSaveLayout || onLoadLayout || onManageLayouts) && (
               <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                      >
-                        <MoreVertical className="h-3.5 w-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Layout options</TooltipContent>
-                </Tooltip>
+                <DropdownMenuTrigger
+                  type="button"
+                  className="inline-flex items-center justify-center h-7 w-7 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                  aria-label="Layout options"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {onSaveLayout && (
                     <DropdownMenuItem onClick={onSaveLayout}>

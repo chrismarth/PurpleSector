@@ -1,0 +1,36 @@
+[package]
+name = "ps-grpc-gateway"
+description = "PurpleSector gRPC gateway — cloud ingress service with OIDC auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ps-grpc-gateway"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true }
+tonic = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# OIDC / JWT validation
+jsonwebtoken = "10"
+reqwest = { version = "0.12", features = ["json"] }
+
+# Kafka-compatible producer (for Redpanda)
+rdkafka = { version = "0.36", features = ["cmake-build"] }
+
+# Redis for live telemetry streams
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+
+[build-dependencies]
+tonic-build = { workspace = true }
+prost-build = "0.13"

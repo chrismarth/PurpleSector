@@ -75,7 +75,7 @@ rm -rf .next/
 
 # 3. Start servers
 npm run dev          # Terminal 1
-npm run ws-server    # Terminal 2
+# WebSocket server runs via Docker Compose
 
 # 4. Open browser and create new event/session
 ```
@@ -150,7 +150,7 @@ npm run dev
 2. **Start Services:**
    ```bash
    npm run dev          # Terminal 1
-   npm run ws-server    # Terminal 2
+   # WebSocket server runs via Docker Compose
    ```
 
 3. **Create Data:**
@@ -205,8 +205,8 @@ npm run db:studio     # Open Prisma Studio
 
 # Development
 npm run dev           # Start Next.js
-npm run ws-server     # Start WebSocket server
-npm run telemetry     # Start telemetry collector (for real AC data)
+# WebSocket server runs via Docker Compose (ps-ws-server container)
+cd rust && cargo run -p ps-tray-app  # Start telemetry capture (select sim type)
 
 # Cleanup
 rm -rf .next/         # Clear Next.js cache

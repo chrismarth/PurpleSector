@@ -1,170 +1,102 @@
 # Running the Stack
 
-This page describes how to start the full Purple Sector stack: Kafka, services, collectors, and the web app.
+This page describes how to start the full Purple Sector stack: Docker infrastructure, Node.js services, and the web app.
 
 ## One-Command Dev Environment
 
-For day-to-day development, the easiest way to run everything is:
-
 ```bash
-npm run dev:start
+./scripts/start-dev.sh
 ```
 
 This will:
 
-1. Start the Kafka cluster via Docker.
-2. Ensure Kafka topics exist.
-3. Start the Kafka–WebSocket bridge.
-4. Start the Kafka→DB consumer.
-5. Start the demo collector (publishes telemetry).
-6. Start the Next.js frontend.
+1. Start Docker infrastructure (Redpanda, gRPC Gateway, RisingWave, Redis, MinIO, Trino, Postgres).
+2. Wait for Redpanda and Postgres health checks.
+3. Check database readiness.
+4. Start PM2 services (Redis WebSocket Server, Next.js).
 
-After startup, open:
+After startup, open: http://localhost:3000
 
-```text
-http://localhost:3000
-```
+See **Developer Guide → Development Environment** for details.
 
-Log in with `admin` or `user` (no password in dev mode).
+## Manual Startup
 
-See **Developer Guide → Development Environment** for a deeper explanation of this script.
-
-## Manual Startup (Services)
-
-If you prefer more control or are debugging a specific component, you can run services individually.
-
-### 1. Start Kafka
+### 1. Start Docker Infrastructure
 
 ```bash
-docker-compose -f docker-compose.kafka.yml up -d
+docker compose -f docker-compose.dev.yml up -d
 ```
 
-Wait ~30 seconds for Kafka to be fully ready.
-
-### 2. Setup Topics
+### 2. Start PM2 Services
 
 ```bash
-npm run kafka:setup
+npx pm2 start ecosystem.dev.config.js
 ```
 
-This ensures topics like `telemetry` and `commands` exist with the desired partitioning and configuration.
-
-### 3. Start the Kafka–WebSocket Bridge
+### 3. Inject Test Data (No Game Required)
 
 ```bash
-npm run kafka:bridge
+cd rust && cargo run -p ps-demo-replay -- --file ../public/demo-telemetry.json
 ```
 
-The bridge consumes telemetry from Kafka and exposes it over WebSockets to the frontend.
-
-### 4. Start the Database Consumer
+### 4. Start a Live Collector (With Game)
 
 ```bash
-npm run kafka:db-consumer
+# Rust tray app (captures AC/ACC/Demo, streams via gRPC)
+cd rust && cargo run -p ps-tray-app
+
+# Or replay demo data through the pipeline
+cd rust && cargo run -p ps-demo-replay -- ../collectors/demo-data/demo-telemetry.json
 ```
 
-This service subscribes to telemetry topics, performs batch inserts into the database, and persists sessions and laps.
-
-### 5. Start a Collector
-
-For demo/testing, use the demo collector:
-
-```bash
-npm run telemetry:demo-kafka
-```
-
-For real gameplay telemetry, use collectors such as:
-
-- Assetto Corsa (Kafka):
-
-  ```bash
-  npm run telemetry:ac-kafka
-  ```
-
-- Assetto Corsa Competizione (Kafka):
-
-  ```bash
-  npm run telemetry:acc-kafka
-  ```
-
-- ACC Hybrid (Windows only):
-
-  ```bash
-  npm run telemetry:acc-hybrid
-  ```
-
-### 6. Start the Frontend
+### 5. Start the Frontend (if not using PM2)
 
 ```bash
 npm run dev
 ```
 
-The app will be available at:
-
-```text
-http://localhost:3000
-```
-
 ## PM2 Process Management
 
-The dev environment uses PM2 (`ecosystem.dev.config.js`) to manage services. Common commands:
-
 ```bash
-npx pm2 status                  # Check all services
-npx pm2 logs                    # Combined logs
-npx pm2 logs nextjs-dev         # Specific service logs
-npx pm2 restart all             # Restart everything
-npx pm2 restart kafka-bridge-dev  # Restart one service
+# PM2 (Next.js only)
+npx pm2 status                       # Check service status
+npx pm2 logs nextjs-dev              # Next.js logs
+npx pm2 restart all                  # Restart Next.js
+
+# Docker services (including WS server)
+docker compose -f docker-compose.dev.yml logs -f ws-server  # WS server logs
+docker compose -f docker-compose.dev.yml restart ws-server  # Restart WS server
 ```
 
 ## Quick Pipeline Test
 
-To verify the Kafka pipeline end-to-end with the demo collector (no game needed):
+Verify the full pipeline end-to-end (no game needed):
 
-1. Start Kafka:
-
+1. Start Docker infrastructure:
    ```bash
-   docker-compose -f docker-compose.kafka.yml up -d
+   docker compose -f docker-compose.dev.yml up -d
    ```
 
-2. Setup topics:
-
+2. Start the Redis WebSocket server:
    ```bash
-   npm run kafka:setup
+   node services/redis-websocket-server.js
    ```
 
-3. Start the bridge:
-
-   ```bash
-   npm run kafka:bridge
-   ```
-
-4. Start the DB consumer:
-
-   ```bash
-   npm run kafka:db-consumer
-   ```
-
-5. Start the demo collector:
-
-   ```bash
-   npm run telemetry:demo-kafka
-   ```
-
-6. Start the frontend:
-
+3. Start the frontend:
    ```bash
    npm run dev
    ```
 
-7. Open `http://localhost:3000`, log in, and confirm that telemetry is streaming and laps are being recorded in the events tree.
+4. Replay demo data:
+   ```bash
+   cd rust && cargo run -p ps-demo-replay -- --file ../public/demo-telemetry.json
+   ```
+
+5. Open http://localhost:3000 and confirm telemetry is streaming.
 
 ## Stopping the Environment
 
 ```bash
-# Stop services, keep Kafka running
-npm run dev:stop
-
-# Stop services AND Kafka
-npm run dev:stop-all
+./scripts/stop-dev.sh              # Stop PM2 + Docker
+./scripts/stop-dev.sh --keep-docker  # Stop PM2 only
 ```

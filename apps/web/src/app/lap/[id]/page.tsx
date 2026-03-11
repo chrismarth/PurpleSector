@@ -195,9 +195,15 @@ export default function LapPage() {
       const data = await response.json();
       setLap(data);
 
-      // Parse telemetry data
-      const frames = JSON.parse(data.telemetryData);
-      setTelemetryFrames(frames);
+      // Fetch telemetry frames from Iceberg via Trino
+      const framesResponse = await fetch(`/api/laps/${lapId}/frames`);
+      if (framesResponse.ok) {
+        const framesData = await framesResponse.json();
+        setTelemetryFrames(framesData.frames);
+      } else {
+        console.warn('No telemetry data available for this lap');
+        setTelemetryFrames([]);
+      }
 
       // Parse suggestions if available
       if (data.suggestions) {
@@ -468,10 +474,14 @@ export default function LapPage() {
 
   async function selectCompareLap(selectedLapId: string) {
     try {
-      const response = await fetch(`/api/laps/${selectedLapId}`);
-      const data = await response.json();
-      const frames = JSON.parse(data.telemetryData);
-      setCompareTelemetry(frames);
+      const framesResponse = await fetch(`/api/laps/${selectedLapId}/frames`);
+      if (framesResponse.ok) {
+        const framesData = await framesResponse.json();
+        setCompareTelemetry(framesData.frames);
+      } else {
+        console.warn('No telemetry data available for comparison lap');
+        setCompareTelemetry([]);
+      }
       setCompareLapId(selectedLapId);
       setShowLapSelector(false);
     } catch (error) {

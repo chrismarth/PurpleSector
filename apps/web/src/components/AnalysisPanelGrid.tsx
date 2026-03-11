@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDrag } from '@use-gesture/react';
 // Card/CardContent removed — panels now render borderless for a cleaner look
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Maximize2, Minimize2, MoreVertical } from 'lucide-react';
 import {
   DropdownMenu,
@@ -305,7 +304,6 @@ export function AnalysisPanelGrid({
             }
           >
             {onLayoutChange && (
-              <TooltipProvider delayDuration={300}>
               <div className="flex justify-between items-center gap-2 px-3 py-1.5 border-b bg-muted/40 text-xs">
                 <div className="flex items-center gap-2 overflow-hidden">
                   {panelTitle && (
@@ -316,38 +314,29 @@ export function AnalysisPanelGrid({
                 </div>
                 <div className="flex items-center gap-1">
                   {renderResult?.toolbarActions}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onPanelFullscreenToggle?.(isFocused ? null : panel.id);
-                        }}
-                      >
-                        {isFocused ? (
-                          <Minimize2 className="h-3 w-3" />
-                        ) : (
-                          <Maximize2 className="h-3 w-3" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">{isFocused ? 'Exit fullscreen' : 'Fullscreen'}</TooltipContent>
-                  </Tooltip>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center h-6 w-6 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPanelFullscreenToggle?.(isFocused ? null : panel.id);
+                    }}
+                    title={isFocused ? 'Exit fullscreen' : 'Fullscreen'}
+                  >
+                    {isFocused ? (
+                      <Minimize2 className="h-3 w-3" />
+                    ) : (
+                      <Maximize2 className="h-3 w-3" />
+                    )}
+                  </button>
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <MoreVertical className="h-3 w-3" />
-                      </Button>
+                    <DropdownMenuTrigger
+                      type="button"
+                      className="inline-flex items-center justify-center h-6 w-6 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Panel options"
+                    >
+                      <MoreVertical className="h-4 w-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
@@ -401,7 +390,6 @@ export function AnalysisPanelGrid({
                   </DropdownMenu>
                 </div>
               </div>
-              </TooltipProvider>
             )}
             <div
               className={`px-3 pt-2 pb-1 ${focusPanelId ? 'flex-1 min-h-0 overflow-auto' : ''}`}

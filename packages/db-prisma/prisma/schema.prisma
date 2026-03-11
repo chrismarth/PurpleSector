@@ -25,7 +25,7 @@ model Event {
   sessions        Session[]
 
   // Plugin: agent
-  runPlans        RunPlan[]
+  // runPlans        RunPlan[]
   
   @@index([createdAt])
   @@index([userId])
@@ -55,7 +55,7 @@ model Session {
   laps                    Lap[]
 
   // Plugin: agent
-  runPlanItem             RunPlanItem?
+  // runPlanItem             RunPlanItem?
   
   @@index([eventId])
   @@index([userId])
@@ -69,7 +69,7 @@ model Lap {
   sessionId       String
   lapNumber       Int
   lapTime         Float?   // in seconds
-  telemetryData   String   // JSON string of telemetry frames
+  // telemetryData removed - now stored in Iceberg and queried via Trino
   analyzed        Boolean  @default(false)
   suggestions     String?  // JSON array of AI suggestions
   driverComments  String?  // Driver's notes about the lap
@@ -157,7 +157,7 @@ model Vehicle {
   sessions              Session[]
 
   // Plugin: agent
-  runPlanItems          RunPlanItem[]
+  // runPlanItems          RunPlanItem[]
   
   @@index([createdAt])
   @@index([userId])
@@ -179,7 +179,7 @@ model VehicleConfiguration {
   sessions        Session[]
 
   // Plugin: agent
-  runPlanItems    RunPlanItem[]
+  // runPlanItems    RunPlanItem[]
   
   @@index([vehicleId])
   @@index([createdAt])
@@ -203,7 +203,7 @@ model VehicleSetup {
   sessions                Session[]
 
   // Plugin: agent
-  runPlanItems            RunPlanItem[]
+  // runPlanItems            RunPlanItem[]
   
   @@index([vehicleId])
   @@index([vehicleConfigurationId])
@@ -254,8 +254,8 @@ model User {
   groupMemberships GroupMember[]
 
   // Plugin: agent
-  agentConversations AgentConversation[]
-  runPlans           RunPlan[]
+  // agentConversations AgentConversation[]
+  // runPlans           RunPlan[]
 }
 
 model UserSettings {

@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package purplesector;
+
+// A single telemetry frame at one point in time.
+// Field numbers are stable — do not renumber.
+message TelemetryFrame {
+  int64  timestamp           = 1;
+  float  speed               = 2;
+  float  throttle            = 3;
+  float  brake               = 4;
+  float  steering            = 5;
+  int32  gear                = 6;
+  int32  rpm                 = 7;
+  float  normalized_position = 8;
+  int32  lap_number          = 9;
+  int32  lap_time            = 10;
+  // Optional ACC-specific fields
+  optional float session_time    = 11;
+  optional int32 session_type    = 12;
+  optional int32 track_position  = 13;
+  optional int32 delta           = 14;
+}
+
+// ── WebSocket envelope (used by Node.js services + browser) ──────────
+
+// WebSocket message wrapper
+message WebSocketMessage {
+  enum MessageType {
+    UNKNOWN = 0;
+    CONNECTED = 1;
+    TELEMETRY = 2;
+    START_DEMO = 3;
+    STOP_DEMO = 4;
+    DEMO_COMPLETE = 5;
+    PING = 6;
+    PONG = 7;
+  }
+
+  MessageType type = 1;
+
+  // Optional message payload
+  optional TelemetryFrame telemetry = 2;
+  optional StatusMessage status = 3;
+}
+
+// Status/control messages
+message StatusMessage {
+  string message = 1;
+  int64 timestamp = 2;
+}
+
+// Demo data structure with multiple laps
+message DemoData {
+  repeated LapData laps = 1;
+}
+
+message LapData {
+  int32 lap_number = 1;
+  repeated TelemetryFrame frames = 2;
+}
+
+// ── Cloud transport (used by Rust gRPC pipeline) ─────────────────────
+
+// A single telemetry frame with metadata for pipeline processing.
+// Published to Redpanda by the gRPC gateway after unnesting batches.
+// Session assignment happens in RisingWave, not at the collector level.
+message TelemetryEnvelope {
+  string user_id              = 1;
+  string source               = 2;  // Data source identifier: "demo", "ac-rig-1", "acc-rig-2", etc.
+  uint32 source_rate_hz       = 3;  // Capture rate at the source (e.g., 60, 100, 300)
+  TelemetryFrame frame        = 4;  // The actual telemetry data
+}
+
+// A batch of telemetry frames sent from the sim rig to the cloud.
+// No batch sizing is assumed anywhere in the pipeline — `batch_size` is the
+// authoritative count, and `source_rate_hz` describes the capture rate but
+// does not constrain the batch.
+// Session assignment happens in RisingWave, not at the collector level.
+message TelemetryBatch {
+  string user_id              = 1;
+  string source               = 2;  // Data source identifier: "demo", "ac-rig-1", "acc-rig-2", etc.
+  int64  batch_start_ts       = 3;  // Timestamp of first sample in this batch
+  int64  batch_end_ts         = 4;  // Timestamp of last sample in this batch
+  uint32 batch_size           = 5;  // Actual number of samples in this batch
+  uint32 source_rate_hz       = 6;  // Capture rate at the source (e.g., 60, 100, 300)
+  repeated TelemetryFrame samples = 7;
+  // Zstd-compressed payload option for bandwidth savings
+  optional bytes compressed_samples = 8;
+}
+
+// gRPC service for ingesting telemetry batches into the cloud pipeline.
+service TelemetryIngress {
+  // Client-streaming RPC: the sim rig streams batches to the gateway.
+  rpc StreamTelemetry (stream TelemetryBatch) returns (IngressAck);
+}
+
+// Server acknowledgement after receiving a batch or stream segment.
+message IngressAck {
+  uint64 batches_received = 1;
+  uint64 samples_received = 2;
+}

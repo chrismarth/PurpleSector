@@ -53,6 +53,14 @@ export function ConfigurableTelemetryChart({
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [syncedHoverIndex, setSyncedHoverIndex] = useState<number | null>(null);
+  const lastSyncedHoverValueRef = useRef<number | null>(null);
+  const lastSyncedHoverIndexRef = useRef<number | null>(null);
+  const dataRef = useRef<TelemetryFrame[]>(data || []);
+
+  // Update dataRef when data changes
+  useEffect(() => {
+    dataRef.current = data || [];
+  }, [data]);
 
   useEffect(() => {
     if (config.channels.length > 0) return;
@@ -154,11 +162,7 @@ export function ConfigurableTelemetryChart({
 
   const chartData = useMemo(() => {
     if (!data || data.length === 0) {
-      return {
-        uplotData: [[0], [0]] as uPlot.AlignedData,
-        series: [] as UPlotSeries[],
-        axes: [] as UPlotAxis[],
-      };
+      return { uplotData: [[], []], series: [], axes: [] };
     }
 
     const timeValues = data.map((frame) => frame.lapTime / 1000);
@@ -337,25 +341,40 @@ export function ConfigurableTelemetryChart({
     return { uplotData, series, axes };
   }, [data, compareData, config, getChannelValue, channelDefsById, interpolateOntoTimeAxis]);
 
-  useEffect(() => {
-    if (syncedHoverValue == null || !data || data.length === 0) {
-      setSyncedHoverIndex(null);
-      return;
-    }
+  // Disable synced hover during high-frequency updates to prevent performance issues
+  // useEffect(() => {
+  //   // Only recalculate when syncedHoverValue actually changes, not on every data update
+  //   if (syncedHoverValue === lastSyncedHoverValueRef.current) {
+  //     return;
+  //   }
+  //   
+  //   lastSyncedHoverValueRef.current = syncedHoverValue;
 
-    let bestIndex = 0;
-    let bestDiff = Math.abs(data[0].lapTime / 1000 - syncedHoverValue);
+  //   const currentData = dataRef.current;
+  //   if (syncedHoverValue == null || !currentData || currentData.length === 0) {
+  //     if (lastSyncedHoverIndexRef.current !== null) {
+  //       lastSyncedHoverIndexRef.current = null;
+  //       setSyncedHoverIndex(null);
+  //     }
+  //     return;
+  //   }
 
-    for (let i = 1; i < data.length; i++) {
-      const diff = Math.abs(data[i].lapTime / 1000 - syncedHoverValue);
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestIndex = i;
-      }
-    }
+  //   let bestIndex = 0;
+  //   let bestDiff = Math.abs(currentData[0].lapTime / 1000 - syncedHoverValue);
 
-    setSyncedHoverIndex(bestIndex);
-  }, [syncedHoverValue, data]);
+  //   for (let i = 1; i < currentData.length; i++) {
+  //     const diff = Math.abs(currentData[i].lapTime / 1000 - syncedHoverValue);
+  //     if (diff < bestDiff) {
+  //       bestDiff = diff;
+  //       bestIndex = i;
+  //     }
+  //   }
+
+  //   if (lastSyncedHoverIndexRef.current !== bestIndex) {
+  //     lastSyncedHoverIndexRef.current = bestIndex;
+  //     setSyncedHoverIndex(bestIndex);
+  //   }
+  // }, [syncedHoverValue]);
 
   const handleHover = useCallback(
     (index: number | null) => {
@@ -370,10 +389,16 @@ export function ConfigurableTelemetryChart({
     [data, onHoverChange]
   );
 
+  const chartDataRef = useRef(chartData);
+  
+  useEffect(() => {
+    chartDataRef.current = chartData;
+  }, [chartData]);
+
   const resetZoom = useCallback(() => {
     if (!chartRef.current) return;
 
-    const xVals = chartData.uplotData[0];
+    const xVals = chartDataRef.current.uplotData[0];
     if (!xVals || xVals.length === 0) return;
 
     const min = xVals[0] as number;
@@ -381,7 +406,7 @@ export function ConfigurableTelemetryChart({
 
     chartRef.current.setScale('x', { min, max });
     chartRef.current.setSelect({ left: 0, top: 0, width: 0, height: 0 });
-  }, [chartData.uplotData]);
+  }, []);
 
   useEffect(() => {
     if (externalResetZoomToken !== undefined) {

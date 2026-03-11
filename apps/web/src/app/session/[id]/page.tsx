@@ -52,6 +52,8 @@ interface Lap {
 }
 
 export default function SessionPage() {
+  console.log('🔵 SessionPage component loaded');
+  
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
@@ -139,6 +141,13 @@ export default function SessionPage() {
 
   // Connect WebSocket when session becomes active and started
   useEffect(() => {
+    console.log('WebSocket connection check:', {
+      hasSession: !!session,
+      status: session?.status,
+      started: session?.started,
+      hasWsRef: !!wsRef.current
+    });
+    
     if (session && session.status === 'active' && session.started && !wsRef.current) {
       console.log('Session is active and started, connecting WebSocket...');
       // Initialize isPausedRef to match isPaused state
@@ -162,7 +171,7 @@ export default function SessionPage() {
         heartbeatIntervalRef.current = null;
       }
     };
-  }, [session?.status, session?.started]); // Depend on both status and started flag
+  }, [session?.status, session?.started, session?.source]); // Depend on status, started flag, and source
 
   async function fetchSession() {
     try {
@@ -291,41 +300,21 @@ export default function SessionPage() {
   // Persist analysis layout changes to backend for this session
   useEffect(() => {
     if (!session || !analysisLayout) return;
+    
+    // Only save if we have an ID (layout already exists)
+    // Creating new layouts is handled by the load effect above
+    if (!analysisLayoutId) return;
 
     const controller = new AbortController();
 
     const saveLayout = async () => {
-      const contextKey = `session:${sessionId}`;
-
       try {
-        if (!analysisLayoutId) {
-          const response = await fetch('/api/analysis-layouts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: `${session.name} Live Layout`,
-              description: null,
-              context: contextKey,
-              layout: analysisLayout,
-              isDefault: true,
-            }),
-            signal: controller.signal,
-          });
-
-          if (response.ok) {
-            const created = await response.json();
-            if (created?.id) {
-              setAnalysisLayoutId(created.id as string);
-            }
-          }
-        } else {
-          await fetch(`/api/analysis-layouts/${analysisLayoutId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ layout: analysisLayout }),
-            signal: controller.signal,
-          });
-        }
+        await fetch(`/api/analysis-layouts/${analysisLayoutId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ layout: analysisLayout }),
+          signal: controller.signal,
+        });
       } catch (error) {
         if ((error as any).name !== 'AbortError') {
           console.error('Error saving analysis layout for session:', error);
@@ -352,13 +341,23 @@ export default function SessionPage() {
     }
 
     console.log('Connecting to WebSocket...');
-    // Include userId in connection (for Kafka user-scoped topics)
+    console.log('Session source:', session?.source);
+    
+    // All sessions (demo and live) use the actual session ID for WebSocket connection
+    // RisingWave publishes to session-specific channels: telemetry:live:{user_id}:{session_id}
     const userId = user?.id;
+    const effectiveSessionId = session?.id;
+    console.log('WebSocket params:', { userId, sessionId: effectiveSessionId, source: session?.source });
+    
     if (!userId) {
       console.error('Cannot connect WebSocket: no authenticated user');
       return;
     }
-    const ws = new WebSocket(`ws://localhost:8080?userId=${userId}`);
+    if (!effectiveSessionId) {
+      console.error('Cannot connect WebSocket: no session ID');
+      return;
+    }
+    const ws = new WebSocket(`ws://localhost:8080?userId=${userId}&sessionId=${effectiveSessionId}`);
     ws.binaryType = 'arraybuffer'; // Receive binary data as ArrayBuffer for protobuf
     wsRef.current = ws;
 

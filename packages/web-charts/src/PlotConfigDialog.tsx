@@ -222,16 +222,18 @@ export function PlotConfigDialog({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={handleAutoGenerate}
-                      disabled={editedConfig.channels.length === 0}
-                    >
-                      <Sparkles className="h-4 w-4" />
-                    </Button>
+                    <span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={handleAutoGenerate}
+                        disabled={editedConfig.channels.length === 0}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                      </Button>
+                    </span>
                   </TooltipTrigger>
                   <TooltipContent side="left" sideOffset={5}>
                     <p>Auto-Generate Labels</p>

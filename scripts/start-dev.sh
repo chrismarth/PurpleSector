@@ -1,12 +1,13 @@
 #!/bin/bash
 
 # Purple Sector - Development Environment Startup Script
-# 
-# This script starts the complete development environment including:
-# - Kafka cluster (Docker)
-# - All telemetry services (PM2)
-# - Demo collector for testing
-# - Frontend application
+#
+# This script starts the complete development environment:
+#   1. Docker infrastructure (Redpanda, gRPC Gateway, RisingWave, UDF,
+#      Redis, MinIO, Trino, Postgres) via docker-compose.dev.yml
+#   2. RisingWave schema initialization
+#   3. Demo replay binary build (if needed)
+#   4. PM2 services (Next.js frontend + demo replay)
 #
 # Usage: ./scripts/start-dev.sh
 
@@ -21,30 +22,82 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Check if Docker is running
+# ── Step 1: Docker infrastructure ──────────────────────────────────────
+
 if ! docker info > /dev/null 2>&1; then
   echo -e "${RED}❌ Docker is not running. Please start Docker first.${NC}"
   exit 1
 fi
 
-# Check if Kafka is already running
-if docker ps | grep -q purple-sector-kafka; then
-  echo -e "${GREEN}✓ Kafka is already running${NC}"
+# Check if the stack is already running (use Redpanda container as canary)
+if docker ps --format '{{.Names}}' | grep -q ps-redpanda; then
+  echo -e "${GREEN}✓ Docker infrastructure already running${NC}"
 else
-  echo -e "${YELLOW}⏳ Starting Kafka cluster...${NC}"
-  docker compose -f docker-compose.kafka.yml up -d
+  echo -e "${YELLOW}⏳ Starting Docker infrastructure...${NC}"
+  docker compose -f docker-compose.dev.yml up -d
+
+  echo -e "${YELLOW}⏳ Waiting for services to be healthy...${NC}"
+  # Wait for Redpanda (Kafka API) — everything else depends on it
+  for i in $(seq 1 30); do
+    if docker exec ps-redpanda rpk cluster health > /dev/null 2>&1; then
+      echo -e "${GREEN}✓ Redpanda is healthy${NC}"
+      break
+    fi
+    [ "$i" -eq 30 ] && echo -e "${RED}⚠ Redpanda health check timed out${NC}"
+    sleep 2
+  done
+
+  # Wait for Postgres
+  for i in $(seq 1 15); do
+    if docker exec ps-postgres pg_isready -U purplesector > /dev/null 2>&1; then
+      echo -e "${GREEN}✓ Postgres is healthy${NC}"
+      break
+    fi
+    [ "$i" -eq 15 ] && echo -e "${RED}⚠ Postgres health check timed out${NC}"
+    sleep 2
+  done
+
+  # Wait for WebSocket server
+  for i in $(seq 1 15); do
+    if docker exec ps-ws-server node -e "const s=require('net').connect(8080,'localhost',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))" > /dev/null 2>&1; then
+      echo -e "${GREEN}✓ WebSocket server is healthy${NC}"
+      break
+    fi
+    [ "$i" -eq 15 ] && echo -e "${RED}⚠ WebSocket server health check timed out${NC}"
+    sleep 2
+  done
+
+  # Wait for Time Ticker
+  for i in $(seq 1 15); do
+    if docker exec ps-time-ticker pgrep -f time-ticker.py > /dev/null 2>&1; then
+      echo -e "${GREEN}✓ Time Ticker is healthy${NC}"
+      break
+    fi
+    [ "$i" -eq 15 ] && echo -e "${RED}⚠ Time Ticker health check timed out${NC}"
+    sleep 2
+  done
+
+  echo -e "${GREEN}✓ Docker infrastructure started${NC}"
   
-  echo -e "${YELLOW}⏳ Waiting for Kafka to be ready (30 seconds)...${NC}"
-  sleep 30
-  echo -e "${GREEN}✓ Kafka cluster started${NC}"
+  # Create Redpanda topics before RisingWave initialization
+  echo -e "${YELLOW}⏳ Creating Redpanda topics...${NC}"
+  docker exec ps-redpanda rpk topic create telemetry-batches --partitions 3 --replicas 1 || true
+  docker exec ps-redpanda rpk topic create time-heartbeat --partitions 1 --replicas 1 || true
+  echo -e "${GREEN}✓ Redpanda topics ready${NC}"
+  
+  # Initialize Iceberg tables before RisingWave initialization
+  echo -e "${YELLOW}⏳ Initializing Iceberg tables...${NC}"
+  ./scripts/init-iceberg.sh
+  echo -e "${GREEN}✓ Iceberg tables initialized${NC}"
+  
+  # Initialize RisingWave schema after first startup
+  echo -e "${YELLOW}⏳ Initializing RisingWave schema...${NC}"
+  ./scripts/init-risingwave.sh
+  echo -e "${GREEN}✓ RisingWave schema initialized${NC}"
 fi
 
-# Setup Kafka topics
-echo -e "${YELLOW}⏳ Setting up Kafka topics...${NC}"
-npm run kafka:setup
-echo -e "${GREEN}✓ Kafka topics created${NC}"
+# ── Step 2: Database check ─────────────────────────────────────────────
 
-# Check if database is ready
 echo -e "${YELLOW}⏳ Checking database...${NC}"
 if npm run db:check > /dev/null 2>&1; then
   echo -e "${GREEN}✓ Database is ready${NC}"
@@ -52,16 +105,33 @@ else
   echo -e "${YELLOW}⚠ Database check failed. You may need to run: npm run db:push${NC}"
 fi
 
-# Create logs directory if it doesn't exist
+# ── Step 3: Build demo replay binary ───────────────────────────────────
+
+if [ ! -f "rust/target/release/ps-demo-replay" ]; then
+  echo -e "${YELLOW}⏳ Building demo replay binary (first time only)...${NC}"
+  cd rust && cargo build --release -p ps-demo-replay && cd ..
+  echo -e "${GREEN}✓ Demo replay binary built${NC}"
+else
+  echo -e "${GREEN}✓ Demo replay binary exists${NC}"
+fi
+
+# ── Step 4: PM2 services ──────────────────────────────────────────────
+
 mkdir -p logs
 
-# Stop any existing PM2 processes
 echo -e "${YELLOW}⏳ Cleaning up existing PM2 processes...${NC}"
 npx pm2 delete all > /dev/null 2>&1 || true
 
-# Start all services with PM2
-echo -e "${YELLOW}⏳ Starting services with PM2...${NC}"
+# Clean up WAL to prevent replaying old telemetry data
+if [ -f "telemetry-wal.db" ]; then
+  rm -f telemetry-wal.db telemetry-wal.db-shm telemetry-wal.db-wal
+  echo -e "${GREEN}✓ WAL files cleaned${NC}"
+fi
+
+echo -e "${YELLOW}⏳ Starting PM2 services...${NC}"
 npx pm2 start ecosystem.dev.config.js
+
+# ── Done ──────────────────────────────────────────────────────────────
 
 echo ""
 echo -e "${GREEN}✅ Development environment started successfully!${NC}"
@@ -70,17 +140,29 @@ echo "📊 Service Status:"
 npx pm2 status
 echo ""
 echo "📝 Useful Commands:"
-echo "  npx pm2 logs              - View all logs"
-echo "  npx pm2 logs kafka-bridge-dev - View bridge logs"
-echo "  npx pm2 logs demo-collector-dev - View demo collector logs"
-echo "  npx pm2 monit             - Monitor all services"
-echo "  npx pm2 restart all       - Restart all services"
-echo "  npx pm2 stop all          - Stop all services"
-echo "  npx pm2 delete all        - Stop and remove all services"
+echo "  npx pm2 logs                     - View all PM2 logs"
+echo "  npx pm2 logs demo-replay         - View demo replay logs"
+echo "  npx pm2 monit                    - Monitor PM2 services"
+echo "  docker compose -f docker-compose.dev.yml logs -f  - Docker logs"
+echo "  npx pm2 restart all              - Restart PM2 services"
+echo "  ./scripts/stop-dev.sh            - Stop everything"
+echo "  ./scripts/stop-dev.sh --keep-docker  - Stop PM2 only"
 echo ""
 echo "🌐 Access Points:"
-echo "  Frontend:    http://localhost:3000"
-echo "  Kafka UI:    http://localhost:8090"
-echo "  WebSocket:   ws://localhost:8080"
+echo "  Frontend:           http://localhost:3000"
+echo "  gRPC Gateway:       localhost:50051"
+echo "  Redpanda Console:   http://localhost:8090"
+echo "  RisingWave SQL:     localhost:4566"
+echo "  RisingWave UI:      http://localhost:5691"
+echo "  MinIO Console:      http://localhost:9001"
+echo "  Trino:              http://localhost:8083"
+echo "  Postgres:           localhost:5432"
+echo "  Redis:              localhost:6379"
+echo "  WebSocket:          ws://localhost:8080"
+echo ""
+echo "🎯 Demo Telemetry:"
+echo "  Demo replay is running and streaming shared telemetry data"
+echo "  Create a demo session in the UI to see live data"
+echo "  All users share the same demo telemetry stream"
 echo ""
 echo -e "${GREEN}🎉 Happy coding!${NC}"

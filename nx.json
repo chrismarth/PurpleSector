@@ -10,13 +10,7 @@
   },
   "implicitDependencies": {
     "web": ["core", "telemetry"],
-    "desktop": ["web", "embedded-collector"],
-    "ac-websocket": ["web"],
-    "acc-websocket": ["web"],
-    "acc-hybrid-websocket": ["web"],
-    "ac-kafka": ["web"],
-    "acc-kafka": ["web"],
-    "demo-kafka": ["web"]
+    "desktop": ["web"]
   },
   "targetDefaults": {
     "build": {

@@ -232,9 +232,11 @@ export default function NewSetupPage() {
                     </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="outline" size="sm">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
+                        <span>
+                          <Button type="button" variant="outline" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </span>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => handleImportClick('csv')} className="gap-2">

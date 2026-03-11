@@ -33,11 +33,9 @@ UDP_ADDRESS=127.0.0.1
 ### Running the Collector
 
 ```bash
-# Kafka transport (recommended for full pipeline)
-npm run telemetry:ac-kafka
-
-# WebSocket transport (direct to browser)
-npm run telemetry
+# Via Rust tray app (recommended)
+cd rust && cargo run -p ps-tray-app
+# Select "Assetto Corsa" as sim type in settings
 ```
 
 ### Available Channels
@@ -53,7 +51,8 @@ ACC provides two collector options. See **Developer Guide → ACC Telemetry Coll
 Cross-platform, uses ACC's UDP broadcasting protocol. Provides session context, car position, lap times, and speed — but **not** throttle, brake, or steering inputs.
 
 ```bash
-npm run telemetry:acc-kafka
+# Via Rust tray app — select "ACC" as sim type
+cd rust && cargo run -p ps-tray-app
 ```
 
 ### Hybrid Collector (Recommended)
@@ -61,7 +60,8 @@ npm run telemetry:acc-kafka
 Windows-only. Combines broadcasting with shared memory to provide **full telemetry** including throttle, brake, steering, and RPM.
 
 ```bash
-npm run telemetry:acc-hybrid
+# Via Rust tray app — select "ACC" as sim type (auto-detects SHM on Windows)
+cd rust && cargo run -p ps-tray-app
 ```
 
 ### Game Configuration
@@ -81,21 +81,22 @@ Edit `Documents/Assetto Corsa Competizione/Config/broadcasting.json`:
 The demo collector publishes pre-recorded telemetry data — no game required. It is started automatically by `npm run dev:start`, or you can run it manually:
 
 ```bash
-# Kafka transport
-npm run telemetry:demo-kafka
+# Rust demo replayer (streams through gRPC gateway)
+cd rust && cargo run -p ps-demo-replay -- collectors/demo-data/demo-telemetry.json
 
-# WebSocket transport
-npm run telemetry:demo
+# Or use the Rust tray app with "Demo / Replay" sim type
+cd rust && cargo run -p ps-tray-app
 ```
 
 This is useful for development, testing, and demos.
 
-## Choosing a Transport
+## Transport Architecture
 
-- **Kafka** — Recommended for the full pipeline. Provides durable delivery, per-session ordering, and feeds both the WebSocket bridge and the database consumer.
-- **WebSocket** — Direct connection to the browser. Simpler setup but no persistence or replay.
+All telemetry flows through a single pipeline:
 
-When using `npm run dev:start`, the Kafka transport is used by default with the demo collector.
+1. **Capture** — Rust `ps-telemetry-core` reads UDP/SHM/JSON
+2. **Cloud path** — Batched, compressed, sent via gRPC → Redpanda → RisingWave → Redis → WebSocket → Frontend
+3. **Desktop path** — Tauri events → embedded Next.js UI (no cloud infrastructure needed)
 
 ## Verifying Telemetry
 
@@ -104,12 +105,7 @@ After starting a collector:
 1. Open `http://localhost:3000` and log in.
 2. Check the nav tree — a new session should appear under an event.
 3. Click the session to see live telemetry (if streaming) or click a lap for analysis.
-4. Check collector logs for errors:
-
-```bash
-# If using PM2
-npx pm2 logs demo-collector-dev
-```
+4. Check Redpanda Console at http://localhost:8090 for messages on the `telemetry-batches` topic.
 
 ## Troubleshooting
 

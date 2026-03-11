@@ -37,17 +37,13 @@ npm run dev
 ```
 Wait for: `✓ Ready in X.Xs`
 
-**Terminal 2: WebSocket Server**
-```bash
-npm run ws-server
-```
-Wait for: `✓ Server listening on ws://localhost:8080`
+**Terminal 2: (WebSocket server starts automatically via Docker Compose)**
 
 **Terminal 3: Telemetry (optional - only for live AC)**
 ```bash
-npm run telemetry
+cd rust && cargo run -p ps-tray-app
 ```
-Wait for: `✓ UDP server listening on 0.0.0.0:9996`
+Select "Assetto Corsa" as sim type in settings.
 
 ### Step 4: Open the App
 Open your browser to: **http://localhost:3000**
@@ -122,9 +118,8 @@ UDP_ADDRESS=127.0.0.1
 # Regenerate demo data
 npm run generate-demo
 
-# Restart WebSocket server
-# Ctrl+C in Terminal 2, then:
-npm run ws-server
+# Restart WebSocket server container
+docker compose -f docker-compose.dev.yml restart ws-server
 ```
 
 ### Problem: "Analyze Lap" doesn't work
@@ -152,12 +147,11 @@ cat .env.local | grep OPENAI_API_KEY
 
 **Fix:**
 ```bash
-# Restart telemetry collector
+# Restart telemetry capture
 # Ctrl+C in Terminal 3, then:
-npm run telemetry
+cd rust && cargo run -p ps-tray-app
 
-# Verify AC is sending data:
-# You should see "✓ Receiving telemetry data from Assetto Corsa"
+# Verify AC is sending data via the tray app stats panel
 ```
 
 ### Problem: Port already in use

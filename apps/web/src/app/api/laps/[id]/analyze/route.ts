@@ -49,8 +49,20 @@ export async function POST(
       // If it's a fallback error, allow re-analysis
     }
 
-    // Parse telemetry data
-    const telemetryFrames = JSON.parse(lap.telemetryData);
+    // Fetch telemetry data from Iceberg
+    const { getLapFramesFromIceberg } = await import('@/lib/trino');
+    const telemetryFrames = await getLapFramesFromIceberg(
+      lap.userId,
+      lap.sessionId,
+      lap.lapNumber
+    );
+
+    if (telemetryFrames.length === 0) {
+      return NextResponse.json(
+        { error: 'No telemetry data available for this lap' },
+        { status: 404 }
+      );
+    }
 
     // Determine which reference lap to use
     let referenceLap = undefined;
@@ -62,11 +74,17 @@ export async function POST(
       });
       
       if (selectedReferenceLap && selectedReferenceLap.id !== lap.id) {
-        const referenceTelemetry = JSON.parse(selectedReferenceLap.telemetryData);
-        referenceLap = {
-          lapTime: selectedReferenceLap.lapTime || 0,
-          summary: analyzeTelemetryData(referenceTelemetry),
-        };
+        const referenceTelemetry = await getLapFramesFromIceberg(
+          selectedReferenceLap.userId,
+          selectedReferenceLap.sessionId,
+          selectedReferenceLap.lapNumber
+        );
+        if (referenceTelemetry.length > 0) {
+          referenceLap = {
+            lapTime: selectedReferenceLap.lapTime || 0,
+            summary: analyzeTelemetryData(referenceTelemetry),
+          };
+        }
       }
     } else {
       // Auto-find fastest lap in the same session
@@ -82,11 +100,17 @@ export async function POST(
       });
 
       if (fastestLap && fastestLap.id !== lap.id) {
-        const referenceTelemetry = JSON.parse(fastestLap.telemetryData);
-        referenceLap = {
-          lapTime: fastestLap.lapTime || 0,
-          summary: analyzeTelemetryData(referenceTelemetry),
-        };
+        const referenceTelemetry = await getLapFramesFromIceberg(
+          fastestLap.userId,
+          fastestLap.sessionId,
+          fastestLap.lapNumber
+        );
+        if (referenceTelemetry.length > 0) {
+          referenceLap = {
+            lapTime: fastestLap.lapTime || 0,
+            summary: analyzeTelemetryData(referenceTelemetry),
+          };
+        }
       }
     }
 

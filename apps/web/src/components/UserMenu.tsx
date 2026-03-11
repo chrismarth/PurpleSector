@@ -30,39 +30,41 @@ export function UserMenu({ compact }: UserMenuProps = {}) {
   return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          {compact ? (
-            <button
-              className="flex items-center justify-center h-7 w-7 rounded-full overflow-hidden bg-muted hover:ring-2 hover:ring-purple-500 transition-all"
-              disabled={loading}
-            >
-              {user.avatarUrl ? (
-                <Image
-                  src={user.avatarUrl}
-                  alt=""
-                  width={28}
-                  height={28}
-                  className="h-7 w-7 rounded-full object-cover"
-                />
-              ) : (
-                <UserIcon className="h-4 w-4 text-muted-foreground" />
-              )}
-            </button>
-          ) : (
-            <Button variant="outline" className="gap-2" disabled={loading}>
-              {user.avatarUrl ? (
-                <Image
-                  src={user.avatarUrl}
-                  alt=""
-                  width={20}
-                  height={20}
-                  className="h-5 w-5 rounded-full object-cover"
-                />
-              ) : (
-                <UserIcon className="h-4 w-4" />
-              )}
-              <span className="max-w-[12rem] truncate">{label}</span>
-            </Button>
-          )}
+          <span>
+            {compact ? (
+              <button
+                className="flex items-center justify-center h-7 w-7 rounded-full overflow-hidden bg-muted hover:ring-2 hover:ring-purple-500 transition-all"
+                disabled={loading}
+              >
+                {user.avatarUrl ? (
+                  <Image
+                    src={user.avatarUrl}
+                    alt=""
+                    width={28}
+                    height={28}
+                    className="h-7 w-7 rounded-full object-cover"
+                  />
+                ) : (
+                  <UserIcon className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
+            ) : (
+              <Button variant="outline" className="gap-2" disabled={loading}>
+                {user.avatarUrl ? (
+                  <Image
+                    src={user.avatarUrl}
+                    alt=""
+                    width={20}
+                    height={20}
+                    className="h-5 w-5 rounded-full object-cover"
+                  />
+                ) : (
+                  <UserIcon className="h-4 w-4" />
+                )}
+                <span className="max-w-[12rem] truncate">{label}</span>
+              </Button>
+            )}
+          </span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>

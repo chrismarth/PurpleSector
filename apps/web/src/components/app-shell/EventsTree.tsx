@@ -32,6 +32,21 @@ export function EventsTree() {
     });
   }
 
+  function handleCurrentLapClick(
+    session: { id: string; name: string },
+    eventName: string
+  ) {
+    setSelectedNode(`session-current:${session.id}`);
+    openTab({
+      id: makeTabId('session-detail', session.id),
+      type: 'session-detail',
+      label: session.name,
+      breadcrumbs: [eventName, session.name, 'Current Lap'],
+      entityId: session.id,
+      closable: true,
+    });
+  }
+
   function handleEventClick(event: { id: string; name: string }) {
     setSelectedNode(`event:${event.id}`);
     openTab({
@@ -265,14 +280,13 @@ export function EventsTree() {
                           {/* Expanded session: laps */}
                           {sessionExpanded && (
                             <div className="ml-4">
-                              {session.laps.length === 0 ? (
+                              {session.laps.length === 0 && !isLive ? (
                                 <div className="px-2 py-1 text-xs text-muted-foreground">
                                   No laps
                                 </div>
                               ) : (
-                                session.laps.map((lap, idx) => {
+                                session.laps.map((lap) => {
                                   const isLapSelected = selectedNodeId === `lap:${lap.id}`;
-                                  const isCurrentLap = isLive && idx === session.laps.length - 1;
 
                                   return (
                                     <button
@@ -289,19 +303,24 @@ export function EventsTree() {
                                           {formatLapTime(lap.lapTime)}
                                         </span>
                                       )}
-                                      {isCurrentLap && (
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Badge variant="default" className="ml-auto h-3.5 text-[9px] px-1 bg-purple-600">
-                                              Current
-                                            </Badge>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="right">Currently recording lap</TooltipContent>
-                                        </Tooltip>
-                                      )}
                                     </button>
                                   );
                                 })
+                              )}
+
+                              {isLive && (
+                                <button
+                                  onClick={() => handleCurrentLapClick(session, event.name)}
+                                  className={`flex items-center gap-1 w-full px-2 py-0.5 hover:bg-accent transition-colors text-left text-xs ${
+                                    selectedNodeId === `session-current:${session.id}` ? 'bg-accent text-accent-foreground' : ''
+                                  }`}
+                                >
+                                  <span className="h-2.5 w-2.5 rounded-full bg-green-500 shrink-0" />
+                                  <span>Current Lap</span>
+                                  <Badge variant="default" className="ml-auto h-3.5 text-[9px] px-1 bg-green-600">
+                                    Live
+                                  </Badge>
+                                </button>
                               )}
                             </div>
                           )}

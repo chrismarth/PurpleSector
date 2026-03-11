@@ -1,0 +1,136 @@
+name: Build Tray App Installer
+
+on:
+  push:
+    tags:
+      - 'tray-v*'
+  workflow_dispatch:
+    inputs:
+      build_msi:
+        description: 'Build MSI installer'
+        type: boolean
+        default: true
+      build_msix:
+        description: 'Build MSIX package'
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action/setup@v1
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: '25.x'
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-tray-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-tray-
+
+      - name: Build release binary
+        working-directory: rust
+        run: cargo build --release -p ps-tray-app
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps-tray-app-windows-x64
+          path: rust/target/release/ps-tray-app.exe
+
+      # ── MSI Installer (cargo-wix) ──
+      - name: Install cargo-wix
+        if: ${{ github.event_name == 'push' || inputs.build_msi }}
+        run: cargo install cargo-wix
+
+      - name: Build MSI installer
+        if: ${{ github.event_name == 'push' || inputs.build_msi }}
+        working-directory: rust
+        run: cargo wix -p ps-tray-app --no-build --nocapture
+
+      - name: Upload MSI artifact
+        if: ${{ github.event_name == 'push' || inputs.build_msi }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps-tray-app-installer-msi
+          path: rust/target/wix/*.msi
+
+      # ── MSIX Package (for Windows Store) ──
+      - name: Build MSIX package
+        if: ${{ inputs.build_msix }}
+        shell: pwsh
+        run: |
+          # Create MSIX layout directory
+          $layout = "rust/target/msix-layout"
+          New-Item -ItemType Directory -Force -Path $layout
+          Copy-Item "rust/target/release/ps-tray-app.exe" "$layout/"
+          Copy-Item "rust/crates/ps-tray-app/msix/AppxManifest.xml" "$layout/"
+          Copy-Item "rust/crates/ps-tray-app/msix/Assets/*" "$layout/Assets/" -Recurse -Force
+
+          # Pack MSIX (requires Windows SDK makeappx)
+          & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\makeappx.exe" `
+            pack /d "$layout" /p "rust/target/PurpleSector.msix" /o
+
+      - name: Upload MSIX artifact
+        if: ${{ inputs.build_msix }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps-tray-app-msix
+          path: rust/target/PurpleSector.msix
+
+  # ── GitHub Release (on tag push) ──
+  release:
+    name: Create Release
+    needs: build-windows
+    if: startsWith(github.ref, 'refs/tags/tray-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "PurpleSector Tray App ${{ github.ref_name }}"
+          body: |
+            ## PurpleSector Tray App ${{ github.ref_name }}
+
+            ### Installation
+            1. Download the `.msi` installer below
+            2. Run the installer — it installs to `%LocalAppData%\PurpleSector`
+            3. Optionally enable "Start with Windows" during install
+            4. Right-click the tray icon to configure settings
+
+            ### What's included
+            - System tray icon with Start/Stop capture
+            - Settings window (sim type, gRPC endpoint, credentials)
+            - Live stats dashboard (samples/sec, batches, WAL depth)
+          files: |
+            artifacts/ps-tray-app-installer-msi/*.msi
+            artifacts/ps-tray-app-windows-x64/ps-tray-app.exe
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}

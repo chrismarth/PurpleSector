@@ -44,13 +44,13 @@ Create or edit the broadcasting configuration file:
 
 You need **3 terminal windows**:
 
-#### Terminal 1: WebSocket Server
+#### Docker Infrastructure (includes WebSocket server)
 
 ```bash
-npm run ws-server
+docker compose -f docker-compose.dev.yml up -d
 ```
 
-Wait for: `✓ Server listening on ws://localhost:8080`
+Wait for the WS server container to be healthy.
 
 #### Terminal 2: Next.js Frontend
 
@@ -63,7 +63,8 @@ Wait for: `Ready on http://localhost:3000`
 #### Terminal 3: ACC Hybrid Telemetry Collector
 
 ```bash
-npm run telemetry:acc-hybrid
+# Via Rust tray app — select "ACC" as sim type
+cd rust && cargo run -p ps-tray-app
 ```
 
 **Expected startup sequence:**
@@ -245,10 +246,8 @@ If ACC is on a different machine:
    set ACC_HOST=192.168.1.100
    ```
 
-2. Use Broadcasting-only collector (no shared memory):
-   ```bash
-   npm run telemetry:acc
-   ```
+2. Use Broadcasting-only mode (no shared memory):
+   The Rust tray app automatically falls back to broadcasting-only on non-Windows platforms.
 
 Note: You won't get throttle/brake/steering data remotely.
 
@@ -256,9 +255,10 @@ Note: You won't get throttle/brake/steering data remotely.
 
 If you set passwords in `broadcasting.json`:
 
-```bash
-set ACC_PASSWORD=your_connection_password
-npm run telemetry:acc-hybrid
+Set the ACC connection password in the Rust tray app settings panel, or via the config file:
+```toml
+# ~/.config/purplesector/ps-tray-app/config.toml
+acc_connection_password = "your_connection_password"
 ```
 
 ## Next Steps

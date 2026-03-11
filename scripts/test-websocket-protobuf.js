@@ -2,7 +2,7 @@
  * Test WebSocket server with protobuf messages
  * 
  * Usage: 
- * 1. Start WebSocket server: npm run ws-server
+ * 1. Start Docker infrastructure: docker compose -f docker-compose.dev.yml up -d
  * 2. Run this test: node scripts/test-websocket-protobuf.js
  */
 

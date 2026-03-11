@@ -23,11 +23,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse and normalize telemetry data
+    // Parse and normalize telemetry data to calculate lap time
+    // Note: Telemetry data is NOT stored in PostgreSQL
+    // It flows through Redpanda → RisingWave → Iceberg and is queried via Trino
     const frames = JSON.parse(telemetryData);
     const normalizedFrames = normalizeTelemetryFrames(frames);
     const lapTime = calculateLapTime(normalizedFrames);
-    const normalizedTelemetryData = JSON.stringify(normalizedFrames);
 
     // Check if lap already exists (prevent duplicates)
     const existingLap = await (prisma as any).lap.findFirst({
@@ -56,13 +57,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Create lap metadata only - telemetry data is stored in Iceberg
     const lap = await (prisma as any).lap.create({
       data: {
         userId,
         sessionId,
         lapNumber,
         lapTime,
-        telemetryData: normalizedTelemetryData,
         analyzed: false,
       },
     });

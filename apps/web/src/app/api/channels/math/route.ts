@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { MathTelemetryChannel, MathChannelInput } from '@purplesector/telemetry';
 import { requireAuthUserId } from '@/lib/api-auth';
+import { upsertMathChannelRule } from '@/lib/risingwave';
 
 // Color palette for math channels (visible on dark themes)
 const MATH_CHANNEL_COLORS = [
@@ -88,6 +89,15 @@ export async function POST(request: NextRequest) {
         validated: validated ?? false,
         comment: comment || null,
       },
+    });
+
+    // Dual-write to RisingWave (non-blocking, best-effort)
+    await upsertMathChannelRule({
+      userId,
+      channelId: mathChannel.id,
+      channelLabel: label,
+      expression,
+      inputs: JSON.stringify(inputs),
     });
 
     // Get the count of existing channels to determine color

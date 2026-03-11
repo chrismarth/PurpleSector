@@ -61,8 +61,6 @@ export function ContentPane() {
     }
   }, [state.activeTabId, state.tabs, setSelectedNode, setActiveNavTab]);
 
-  const activeTab = state.tabs.find((t) => t.id === state.activeTabId);
-
   return (
     <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
       {/* Tab bar */}
@@ -95,10 +93,8 @@ export function ContentPane() {
               >
                 {TabIcon && <TabIcon className="h-3 w-3 shrink-0" />}
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="truncate max-w-[200px]">
-                      {breadcrumbLabel}
-                    </span>
+                  <TooltipTrigger className="truncate max-w-[200px]">
+                    {breadcrumbLabel}
                   </TooltipTrigger>
                   <TooltipContent side="bottom">{breadcrumbLabel}</TooltipContent>
                 </Tooltip>
@@ -121,17 +117,27 @@ export function ContentPane() {
         </TooltipProvider>
       )}
 
-      {/* Tab content */}
-      <div className="flex-1 overflow-auto">
-        {activeTab ? (
-          <div className="mx-auto w-full max-w-7xl h-full">
-            <TabContentRouter tab={activeTab} />
-          </div>
-        ) : (
+      {/* Tab content — render ALL tabs, hide inactive ones so they stay mounted.
+           This keeps WebSocket connections and telemetry buffers alive when
+           the user switches to view an archived lap and back. */}
+      <div className="flex-1 overflow-hidden relative">
+        {state.tabs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
             <Inbox className="h-12 w-12 opacity-30" />
             <p className="text-sm">Select an item from the navigation pane</p>
           </div>
+        ) : (
+          state.tabs.map((tab) => (
+            <div
+              key={tab.id}
+              className="absolute inset-0 overflow-auto"
+              style={{ display: tab.id === state.activeTabId ? 'block' : 'none' }}
+            >
+              <div className="mx-auto w-full max-w-7xl h-full">
+                <TabContentRouter tab={tab} />
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>

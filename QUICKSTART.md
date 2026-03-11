@@ -43,14 +43,12 @@ Open **3 terminal windows** and run:
 npm run dev
 ```
 
-### Terminal 2: WebSocket Server
-```bash
-npm run ws-server
-```
+### WebSocket Server
+The WebSocket server starts automatically as part of `docker compose -f docker-compose.dev.yml up -d`.
 
-### Terminal 3: Telemetry Collector (optional - only for live AC telemetry)
+### Terminal 2: Telemetry Capture (optional - only for live AC telemetry)
 ```bash
-npm run telemetry
+cd rust && cargo run -p ps-tray-app
 ```
 
 ## First Session

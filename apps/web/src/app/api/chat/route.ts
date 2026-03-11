@@ -50,8 +50,21 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Parse telemetry and suggestions
-    const telemetryFrames = JSON.parse(lap.telemetryData);
+    // Fetch telemetry frames from Iceberg
+    const { getLapFramesFromIceberg } = await import('@/lib/trino');
+    const telemetryFrames = await getLapFramesFromIceberg(
+      lap.userId,
+      lap.sessionId,
+      lap.lapNumber
+    );
+    
+    if (telemetryFrames.length === 0) {
+      return NextResponse.json(
+        { error: 'No telemetry data available for this lap' },
+        { status: 404 }
+      );
+    }
+
     const telemetrySummary = analyzeTelemetryData(telemetryFrames);
     const suggestions = lap.suggestions ? JSON.parse(lap.suggestions) : [];
 
@@ -70,11 +83,17 @@ export async function POST(request: NextRequest) {
     // Prepare reference lap data if available and it's not the current lap
     let referenceLap = undefined;
     if (fastestLap && fastestLap.id !== lap.id) {
-      const referenceTelemetry = JSON.parse(fastestLap.telemetryData);
-      referenceLap = {
-        lapTime: fastestLap.lapTime || 0,
-        summary: analyzeTelemetryData(referenceTelemetry),
-      };
+      const referenceTelemetry = await getLapFramesFromIceberg(
+        fastestLap.userId,
+        fastestLap.sessionId,
+        fastestLap.lapNumber
+      );
+      if (referenceTelemetry.length > 0) {
+        referenceLap = {
+          lapTime: fastestLap.lapTime || 0,
+          summary: analyzeTelemetryData(referenceTelemetry),
+        };
+      }
     }
 
     // Build conversation history

@@ -1,14 +1,14 @@
 # Development Environment
 
-The development environment runs the full Kafka-based telemetry pipeline with demo data, so you can work on Purple Sector without having Assetto Corsa or ACC running.
+The development environment runs the full Redpanda/RisingWave/Redis/Iceberg telemetry pipeline with demo data, so you can work on Purple Sector without having Assetto Corsa or ACC running.
 
 ## Overview
 
 The dev environment is designed for:
 
 - Rapid iteration on the frontend and services.
-- Testing the full pipeline end-to-end.
-- Debugging collectors, bridge, and DB consumer.
+- Testing the full live + archive telemetry pipeline end-to-end.
+- Debugging collectors, Redis live delivery, archived lap retrieval, and Trino queries.
 - Demos without a game client.
 
 > For basic installation and a one-command startup, see **User Guide → Getting Started**.
@@ -18,32 +18,30 @@ The dev environment is designed for:
 The recommended way to start everything is:
 
 ```bash
-npm run dev:start
+./scripts/start-dev.sh
 ```
 
 This will:
 
-1. Start the Kafka cluster via Docker.
-2. Create Kafka topics.
-3. Start the Kafka–WebSocket bridge.
-4. Start the Kafka→DB consumer.
-5. Start the demo collector (publishes sample telemetry).
-6. Start the Next.js frontend.
+1. Start the Docker infrastructure defined in `docker-compose.dev.yml`.
+2. Start PM2-managed app processes such as `nextjs-dev`.
+3. Bring up Redpanda, RisingWave, Redis, MinIO, Trino, Postgres, and LakeKeeper.
+4. Leave you ready to replay demo telemetry through the live pipeline.
 
 After startup, the main access points are:
 
 - **Frontend:** `http://localhost:3000`
-- **Kafka UI (if enabled):** typically `http://localhost:8090`
+- **Redpanda Console:** `http://localhost:8090`
 - **WebSocket:** `ws://localhost:8080`
 
 To stop the environment:
 
 ```bash
-# Stop services, keep Kafka running
-npm run dev:stop
+# Stop PM2 + Docker
+./scripts/stop-dev.sh
 
-# Stop services AND Kafka
-npm run dev:stop-all
+# Stop PM2 only, keep Docker running
+./scripts/stop-dev.sh --keep-docker
 ```
 
 ## PM2 Process Management
@@ -56,21 +54,19 @@ The dev environment uses PM2 to manage services. The configuration is in `ecosys
 npx pm2 status
 ```
 
-Typical services:
+Typical PM2 services:
 
 | PM2 Name | Description |
 |----------|-------------|
 | `nextjs-dev` | Next.js dev server (port 3000) |
-| `kafka-bridge-dev` | Kafka → WebSocket bridge |
-| `kafka-db-consumer-dev` | Kafka → DB consumer |
-| `demo-collector-dev` | Demo telemetry publisher |
+| `demo-replay` | Optional demo replay process when started via PM2 |
 
 ### Viewing Logs
 
 ```bash
 npx pm2 logs                    # All services
 npx pm2 logs nextjs-dev         # Just the Next.js server
-npx pm2 logs kafka-bridge-dev   # Just the bridge
+npx pm2 logs demo-replay        # Demo replay process
 ```
 
 ### Restarting Services
@@ -85,23 +81,25 @@ npx pm2 restart all
 You can also start components individually, for example:
 
 ```bash
-# Kafka
-docker-compose -f docker-compose.kafka.yml up -d
+# Docker infrastructure (Redpanda, RisingWave, Redis, etc.)
+docker compose -f docker-compose.dev.yml up -d
 
-# Kafka topics
-npm run kafka:setup
+# RisingWave SQL initialization
+psql -h localhost -p 4566 -d dev -f infra/risingwave/001_sources.sql
+psql -h localhost -p 4566 -d dev -f infra/risingwave/002_materialized_views.sql
+psql -h localhost -p 4566 -d dev -f infra/risingwave/003_redis_sinks.sql
+psql -h localhost -p 4566 -d dev -f infra/risingwave/004_math_channels.sql
+psql -h localhost -p 4566 -d dev -f infra/risingwave/005_iceberg_connection.sql
+psql -h localhost -p 4566 -d dev -f infra/risingwave/006_iceberg_sinks.sql
 
-# Bridge
-npm run kafka:bridge
+# Redis WebSocket server
+node services/redis-websocket-server.js
 
-# DB consumer
-npm run kafka:db-consumer
-
-# Demo collector
-npm run telemetry:demo-kafka
+# Demo replay (Rust)
+cd rust && cargo run -p ps-demo-replay -- --file ../public/demo-telemetry.json
 
 # Frontend
-npm run dev
+npx nx serve web
 ```
 
 ## Authentication in Dev
@@ -117,7 +115,7 @@ No password is required. The middleware checks the `ps_user` cookie, and the `Au
 
 ## Database
 
-The dev environment uses SQLite by default (`DATABASE_URL="file:./dev.db"`).
+The dev environment commonly uses SQLite by default (`DATABASE_URL="file:./dev.db"`), while the Docker stack also provides PostgreSQL for the cloud-style pipeline services.
 
 ### Common Commands
 
@@ -132,10 +130,10 @@ npm run db:studio   # Open Prisma Studio
 If you need a clean slate:
 
 ```bash
-npm run dev:stop-all
+./scripts/stop-dev.sh
 rm -rf .next/
 npm run db:reset
-npm run dev:start
+./scripts/start-dev.sh
 ```
 
 ## Plugin Schema Merging
@@ -160,6 +158,9 @@ Key variables in `.env.local`:
 | `DATABASE_URL` | `file:./dev.db` | Database connection string |
 | `OPENAI_API_KEY` | — | Required for AI analysis and agent |
 | `WS_PORT` | `8080` | WebSocket server port |
+| `TRINO_HOST` | `localhost` | Trino hostname for archived lap queries |
+| `TRINO_PORT` | `8083` | Trino port |
+| `RISINGWAVE_HOST` | `localhost` | RisingWave SQL host for best-effort writes |
 | `TELEMETRY_UDP_PORT` | `9996` | AC telemetry UDP port |
 
 See `.env.example` for the full list.

@@ -1,0 +1,2 @@
+risingwave>=0.1.0
+simpleeval>=0.9.13

@@ -9,7 +9,7 @@ const protobuf = require('protobufjs');
 const path = require('path');
 
 // Load proto file relative to this package
-const protoPath = path.join(__dirname, './telemetry.proto');
+const protoPath = path.join(__dirname, '../../proto/telemetry.proto');
 let root = null;
 let TelemetryFrame = null;
 let WebSocketMessage = null;

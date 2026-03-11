@@ -446,13 +446,15 @@ export function MathChannelForm({
             <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleSave(true)}
-                    disabled={isExpressionValid}
-                  >
-                    Save as Draft
-                  </Button>
+                  <span>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleSave(true)}
+                      disabled={isExpressionValid}
+                    >
+                      Save as Draft
+                    </Button>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent side="top">{isExpressionValid ? "Expression is valid - use Create/Update button" : "Save without validation (work in progress)"}</TooltipContent>
               </Tooltip>

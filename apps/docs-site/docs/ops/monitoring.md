@@ -1,6 +1,6 @@
 # Monitoring
 
-This page summarizes how to monitor the Kafka pipeline, backend services, and overall telemetry health.
+This page summarizes how to monitor the current telemetry pipeline, backend services, and overall telemetry health.
 
 ## PM2 Service Monitoring
 
@@ -15,25 +15,23 @@ npx pm2 logs nextjs-dev # Specific service logs
 
 ### Healthy State
 
-All services should show `online` status:
+Core services should show `online` status when they are running under PM2:
 
 | Service | Expected Status |
 |---------|----------------|
 | `nextjs-dev` | online |
-| `kafka-bridge-dev` | online |
-| `kafka-db-consumer-dev` | online |
-| `demo-collector-dev` | online |
+| `demo-replay` | online |
 
 If a service shows `errored` or `stopped`, check its logs and restart it:
 
 ```bash
-npx pm2 logs kafka-db-consumer-dev
-npx pm2 restart kafka-db-consumer-dev
+npx pm2 logs nextjs-dev
+npx pm2 restart nextjs-dev
 ```
 
-## Kafka Monitoring
+## Redpanda Monitoring
 
-### Kafka UI
+### Redpanda Console
 
 If you run a Kafka UI, it is typically available at:
 
@@ -43,57 +41,26 @@ http://localhost:8090
 
 Use it to inspect:
 
-- Topics (e.g., `telemetry`, `telemetry-user-*`).
+- Topics (for example `telemetry-batches`).
 - Message throughput and lag.
 - Consumer groups.
 
-### Kafka CLI
+### Docker / Broker Checks
 
 Common commands:
 
 ```bash
-# Topic details
-kafka-topics.sh --describe --topic telemetry
+# Check infrastructure containers
+docker ps
 
-# List consumer groups
-kafka-consumer-groups.sh --list
+# Inspect Redpanda container logs
+docker logs ps-redpanda --tail 100
 
-# Describe consumer group lag
-kafka-consumer-groups.sh --describe --group telemetry-processors
+# Inspect RisingWave container logs
+docker logs ps-risingwave --tail 100
 ```
 
 ## Application Metrics and Logs
-
-### Bridge and Collectors
-
-Both the Kafka–WebSocket bridge and collectors log useful statistics, for example:
-
-```js
-// Bridge stats
-{
-  clientsConnected: 5,
-  messagesRelayed: 12000,
-  bytesRelayed: 2400000,
-  kafkaStats: {
-    messagesReceived: 12000,
-    sessionStats: {
-      'session-1': { count: 6000, lastSeen: 1699123456789 }
-    }
-  }
-}
-
-// Collector stats
-{
-  framesCollected: 12000,
-  framesPublished: 12000,
-  errors: 0,
-  producerStats: {
-    messagesSent: 12000,
-    bytesSent: 2400000,
-    errors: 0
-  }
-}
-```
 
 ### Next.js Server
 
@@ -107,7 +74,23 @@ Look for:
 - API route compilation errors.
 - Database connection issues.
 - Authentication failures.
+- Trino query errors.
 - OpenAI API errors (for the agent).
+
+### RisingWave / Redis / Trino
+
+The telemetry pipeline depends on several infrastructure services. Useful checks include:
+
+```bash
+# Redis
+redis-cli PING
+
+# Trino
+curl http://localhost:8083/v1/info
+
+# LakeKeeper
+curl "http://localhost:8181/catalog/v1/config?warehouse=purplesector-iceberg"
+```
 
 ## Database Monitoring
 
@@ -133,9 +116,6 @@ If using PostgreSQL in production:
 -- Recent sessions
 SELECT * FROM "Session" ORDER BY "createdAt" DESC LIMIT 10;
 
--- Telemetry frame count per session
-SELECT "sessionId", COUNT(*) FROM "TelemetryFrame" GROUP BY "sessionId";
-
 -- Fastest laps
 SELECT * FROM "Lap" ORDER BY "lapTime" ASC LIMIT 10;
 
@@ -155,9 +135,9 @@ SELECT * FROM "AgentConversation" ORDER BY "updatedAt" DESC LIMIT 10;
 | Symptom | Likely Cause | Action |
 |---------|-------------|--------|
 | Service shows `errored` in PM2 | Crash loop | Check logs, restart |
-| No telemetry appearing | Collector not running or Kafka down | Check PM2 status, Docker |
+| No telemetry appearing | Replay/collector not running or infrastructure unavailable | Check PM2 status, Docker, RisingWave logs |
 | Events tree stuck on "Loading..." | API route error or DB issue | Check nextjs-dev logs |
 | Agent not responding | Missing `OPENAI_API_KEY` or API quota | Check env vars and OpenAI dashboard |
 | High memory usage | Large telemetry dataset in memory | Consider pagination or data pruning |
 
-Combining PM2 status, service logs, Kafka metrics, DB queries, and frontend diagnostics gives a complete picture of system health.
+Combining PM2 status, service logs, Redpanda/RisingWave checks, DB queries, and frontend diagnostics gives a complete picture of system health.

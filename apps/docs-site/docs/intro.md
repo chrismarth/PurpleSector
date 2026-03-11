@@ -37,18 +37,18 @@ Purple Sector is an AI-powered telemetry analysis platform for Assetto Corsa and
                        │
           ┌────────────┼────────────┐
           ▼            ▼            ▼
-   ┌────────────┐ ┌─────────┐ ┌──────────────┐
-   │  SQLite /   │ │  Kafka  │ │  OpenAI API  │
-   │  PostgreSQL │ │ Cluster │ │  (GPT-4)     │
-   └────────────┘ └────┬────┘ └──────────────┘
+   ┌────────────┐ ┌────────────┐ ┌──────────────┐
+   │  SQLite /   │ │  Redpanda  │ │  OpenAI API  │
+   │  PostgreSQL │ │ + RisingWave│ │  (GPT-4)    │
+   └────────────┘ └────┬───────┘ └──────────────┘
                        │
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
-  ┌───────────┐ ┌────────────┐ ┌────────────┐
-  │ WS Bridge │ │ DB Consumer│ │ Collectors  │
-  │ (Kafka →  │ │ (Kafka →   │ │ (AC / ACC / │
-  │  Browser) │ │  Database) │ │  Demo)      │
-  └───────────┘ └────────────┘ └────────────┘
+        ┌──────────────┼───────────────────────────────┐
+        ▼              ▼                               ▼
+  ┌────────────┐ ┌──────────────┐              ┌──────────────┐
+  │ Redis WS   │ │ LakeKeeper + │              │ Collectors / │
+  │ Server     │ │ Trino +      │              │ Tray App /   │
+  │            │ │ MinIO        │              │ Demo Replay  │
+  └────────────┘ └──────────────┘              └──────────────┘
 ```
 
 <!-- Screenshot placeholder: ![Purple Sector app shell overview](./img/app-shell-overview.png)
@@ -62,7 +62,7 @@ Purple Sector is an AI-powered telemetry analysis platform for Assetto Corsa and
   - Events, sessions, and lap analysis.
   - Vehicle management and AI agent coaching.
 - **Operations**
-  - Kafka stack, services, and deployment patterns.
+  - Redpanda/RisingWave/Redis/Iceberg stack, services, and deployment patterns.
   - Monitoring and troubleshooting the pipeline.
 - **Developer Guide**
   - Monorepo structure and shared packages.

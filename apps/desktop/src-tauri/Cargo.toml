@@ -5,6 +5,16 @@ edition = "2021"
 
 [dependencies]
 tauri = { version = "2", features = [] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+chrono = "0.4"
+
+# Shared telemetry capture library — capture feature only (no cloud transport)
+ps-telemetry-core = { path = "../../../rust/crates/ps-telemetry-core", default-features = true }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

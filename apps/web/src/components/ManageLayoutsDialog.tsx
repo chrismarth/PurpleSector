@@ -258,26 +258,30 @@ export function ManageLayoutsDialog({
                           <div className="flex gap-1 flex-shrink-0">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={saveEdit}
-                                  disabled={!editData.name.trim()}
-                                >
-                                  <Check className="h-4 w-4 text-green-600" />
-                                </Button>
+                                <span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={saveEdit}
+                                    disabled={!editData.name.trim()}
+                                  >
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  </Button>
+                                </span>
                               </TooltipTrigger>
                               <TooltipContent side="bottom">Save edit</TooltipContent>
                             </Tooltip>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={cancelEdit}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
+                                <span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={cancelEdit}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </span>
                               </TooltipTrigger>
                               <TooltipContent side="bottom">Cancel edit</TooltipContent>
                             </Tooltip>
@@ -325,41 +329,47 @@ export function ManageLayoutsDialog({
                           <div className="flex gap-1 flex-shrink-0">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => toggleDefault(layout.id)}
-                                >
-                                  {display.isDefault ? (
-                                    <Star className="h-4 w-4 fill-current text-yellow-500" />
-                                  ) : (
-                                    <StarOff className="h-4 w-4" />
-                                  )}
-                                </Button>
+                                <span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => toggleDefault(layout.id)}
+                                  >
+                                    {display.isDefault ? (
+                                      <Star className="h-4 w-4 fill-current text-yellow-500" />
+                                    ) : (
+                                      <StarOff className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </span>
                               </TooltipTrigger>
                               <TooltipContent side="bottom">{display.isDefault ? 'Remove as default' : 'Set as default'}</TooltipContent>
                             </Tooltip>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => startEdit(layout)}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
+                                <span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => startEdit(layout)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </span>
                               </TooltipTrigger>
                               <TooltipContent side="bottom">Edit layout</TooltipContent>
                             </Tooltip>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => markForDelete(layout.id)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-600" />
-                                </Button>
+                                <span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => markForDelete(layout.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                  </Button>
+                                </span>
                               </TooltipTrigger>
                               <TooltipContent side="bottom">Delete layout</TooltipContent>
                             </Tooltip>

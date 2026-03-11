@@ -6,8 +6,8 @@ This document describes the ACC telemetry collector implementations and protocol
 
 Purple Sector provides **two ACC telemetry collectors**:
 
-1. **Broadcasting-only** (`collectors/acc-websocket/acc-collector-websocket.js`) - Cross-platform, limited telemetry
-2. **Hybrid** (`services/acc-telemetry-collector-hybrid.js`) - Windows-only, complete telemetry ✅ **Recommended**
+1. **Broadcasting-only** (cross-platform via `AccSource` in `rust/crates/ps-telemetry-core`) — limited telemetry
+2. **Hybrid** (Windows-only, `AccSource` with SHM enabled) — complete telemetry ✅ **Recommended**
 
 ### Comparison
 
@@ -294,7 +294,8 @@ The hybrid collector uses a **synchronized sampling strategy**:
 - `npm install` to get `acc-node-wrapper` package
 
 ```bash
-npm run telemetry:acc-hybrid
+# Via Rust tray app — select "ACC" as sim type
+cd rust && cargo run -p ps-tray-app
 ```
 
 **Expected Output:**
@@ -335,7 +336,9 @@ Sending registration request to ACC Broadcasting...
 For non-Windows systems or remote telemetry:
 
 ```bash
-npm run telemetry:acc
+# Broadcasting-only mode (cross-platform)
+cd rust && cargo run -p ps-tray-app
+# Select "ACC" sim type — on non-Windows, SHM is unavailable and broadcasting-only is used
 ```
 
 **Expected Output:**

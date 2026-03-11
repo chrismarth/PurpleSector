@@ -64,10 +64,12 @@ export function VehicleInfoPanel({ vehicle, configuration, setup }: VehicleInfoP
               </h4>
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-1">
-                    <Eye className="h-3 w-3" />
-                    View
-                  </Button>
+                  <span>
+                    <Button variant="ghost" size="sm" className="gap-1">
+                      <Eye className="h-3 w-3" />
+                      View
+                    </Button>
+                  </span>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
@@ -125,10 +127,12 @@ export function VehicleInfoPanel({ vehicle, configuration, setup }: VehicleInfoP
               </h4>
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-1">
-                    <Eye className="h-3 w-3" />
-                    View
-                  </Button>
+                  <span>
+                    <Button variant="ghost" size="sm" className="gap-1">
+                      <Eye className="h-3 w-3" />
+                      View
+                    </Button>
+                  </span>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>

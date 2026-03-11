@@ -1,0 +1,122 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<!--
+  PurpleSector Tray App — WiX Installer Manifest
+  
+  Used by cargo-wix to produce an MSI installer for Windows.
+  
+  Build:
+    cargo install cargo-wix
+    cargo wix -p ps-tray-app
+-->
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+
+    <Product
+        Id='*'
+        Name='PurpleSector'
+        UpgradeCode='B2D8F4A1-7C3E-4A9B-8D5F-1E2A3B4C5D6E'
+        Manufacturer='PurpleSector'
+        Language='1033'
+        Codepage='1252'
+        Version='$(var.Version)'>
+
+        <Package Id='*'
+            Keywords='Installer'
+            Description='PurpleSector Telemetry Capture — streams sim telemetry to the cloud'
+            Manufacturer='PurpleSector'
+            InstallerVersion='450'
+            Languages='1033'
+            Compressed='yes'
+            InstallScope='perUser'
+            SummaryCodepage='1252'
+            Platform='x64'/>
+
+        <MajorUpgrade
+            Schedule='afterInstallInitialize'
+            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
+
+        <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
+        <Property Id='DiskPrompt' Value='PurpleSector Installation'/>
+
+        <Directory Id='TARGETDIR' Name='SourceDir'>
+            <Directory Id='LocalAppDataFolder' Name='AppData'>
+                <Directory Id='APPLICATIONFOLDER' Name='PurpleSector'>
+                    <Component Id='binary0' Guid='*' Win64='yes'>
+                        <File
+                            Id='exe0'
+                            Name='ps-tray-app.exe'
+                            DiskId='1'
+                            Source='$(var.CargoTargetBinDir)\ps-tray-app.exe'
+                            KeyPath='yes'/>
+                    </Component>
+                </Directory>
+            </Directory>
+
+            <!-- Start Menu shortcut -->
+            <Directory Id='ProgramMenuFolder' Name='Programs'>
+                <Directory Id='ApplicationProgramsFolder' Name='PurpleSector'>
+                    <Component Id='ApplicationShortcut' Guid='A1B2C3D4-E5F6-7890-ABCD-EF1234567890'>
+                        <Shortcut Id='ApplicationStartMenuShortcut'
+                            Name='PurpleSector'
+                            Description='PurpleSector Telemetry Capture'
+                            Target='[APPLICATIONFOLDER]ps-tray-app.exe'
+                            WorkingDirectory='APPLICATIONFOLDER'/>
+                        <RemoveFolder Id='CleanUpShortCut' Directory='ApplicationProgramsFolder' On='uninstall'/>
+                        <RegistryValue Root='HKCU' Key='Software\PurpleSector\TrayApp' Name='installed' Type='integer' Value='1' KeyPath='yes'/>
+                    </Component>
+                </Directory>
+            </Directory>
+
+            <!-- Startup folder entry (auto-start with Windows) -->
+            <Directory Id='StartupFolder' Name='Startup'>
+                <Component Id='StartupShortcut' Guid='F1E2D3C4-B5A6-9870-FEDC-BA0987654321'>
+                    <Shortcut Id='ApplicationStartupShortcut'
+                        Name='PurpleSector'
+                        Description='PurpleSector Telemetry Capture'
+                        Target='[APPLICATIONFOLDER]ps-tray-app.exe'
+                        WorkingDirectory='APPLICATIONFOLDER'/>
+                    <RegistryValue Root='HKCU' Key='Software\PurpleSector\TrayApp' Name='autostart' Type='integer' Value='1' KeyPath='yes'/>
+                </Component>
+            </Directory>
+        </Directory>
+
+        <Feature
+            Id='Binaries'
+            Title='Application'
+            Description='Installs the PurpleSector tray application.'
+            Level='1'
+            ConfigurableDirectory='APPLICATIONFOLDER'
+            AllowAdvertise='no'
+            Display='expand'
+            Absent='disallow'>
+
+            <ComponentRef Id='binary0'/>
+            <ComponentRef Id='ApplicationShortcut'/>
+
+            <Feature
+                Id='AutoStart'
+                Title='Start with Windows'
+                Description='Automatically start PurpleSector when you log in.'
+                Level='1'
+                Absent='allow'>
+                <ComponentRef Id='StartupShortcut'/>
+            </Feature>
+        </Feature>
+
+        <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
+
+        <!-- Installer UI: minimal with a license dialog -->
+        <Icon Id='ProductICO' SourceFile='$(var.CargoTargetBinDir)\ps-tray-app.exe'/>
+        <Property Id='ARPPRODUCTICON' Value='ProductICO' />
+        <Property Id='ARPHELPLINK' Value='https://purplesector.io'/>
+
+        <UI>
+            <UIRef Id='WixUI_FeatureTree'/>
+            <!--
+                Uncomment to include a license agreement dialog:
+                <WixVariable Id='WixUILicenseRtf' Value='wix\License.rtf'/>
+            -->
+        </UI>
+
+    </Product>
+
+</Wix>

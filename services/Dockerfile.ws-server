@@ -1,0 +1,28 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install base dependencies
+RUN npm init -y && npm install ws redis protobufjs
+
+# Copy proto package and its dependencies
+COPY packages/proto ./packages/proto
+COPY proto ./proto
+
+# Create symlink for @purplesector/proto in node_modules
+RUN mkdir -p node_modules/@purplesector && \
+    ln -s /app/packages/proto node_modules/@purplesector/proto
+
+# Copy the server script
+COPY services/redis-websocket-server.js .
+
+EXPOSE 8080
+
+ENV NODE_ENV=production \
+    REDIS_URL=redis://redis:6379 \
+    WS_PORT=8080 \
+    WS_HOST=0.0.0.0 \
+    BACKFILL_COUNT=1000 \
+    POLL_INTERVAL_MS=50
+
+CMD ["node", "redis-websocket-server.js"]

@@ -28,18 +28,18 @@ This page describes the high-level architecture of Purple Sector: how telemetry 
                        │
           ┌────────────┼────────────┐
           ▼            ▼            ▼
-   ┌────────────┐ ┌─────────┐ ┌──────────────┐
-   │  SQLite /   │ │  Kafka  │ │  OpenAI API  │
-   │  PostgreSQL │ │ Cluster │ │  (GPT-4)     │
-   └────────────┘ └────┬────┘ └──────────────┘
+   ┌────────────┐ ┌────────────┐ ┌──────────────┐
+   │  SQLite /   │ │  Redpanda  │ │  OpenAI API  │
+   │  PostgreSQL │ │ + RisingWave│ │  (GPT-4)    │
+   └────────────┘ └────┬───────┘ └──────────────┘
                        │
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
-  ┌───────────┐ ┌────────────┐ ┌────────────┐
-  │ WS Bridge │ │ DB Consumer│ │ Collectors  │
-  │ (Kafka →  │ │ (Kafka →   │ │ (AC / ACC / │
-  │  Browser) │ │  Database) │ │  Demo)      │
-  └───────────┘ └────────────┘ └────────────┘
+        ┌──────────────┼───────────────────────────────┐
+        ▼              ▼                               ▼
+  ┌────────────┐ ┌──────────────┐              ┌──────────────┐
+  │ Redis WS   │ │ LakeKeeper + │              │ Collectors / │
+  │ Server     │ │ Trino +      │              │ Tray App /   │
+  │            │ │ MinIO        │              │ Demo Replay  │
+  └────────────┘ └──────────────┘              └──────────────┘
 ```
 
 ## Key Components
@@ -75,24 +75,34 @@ Purple Sector uses a plugin architecture where features are delivered as `Plugin
 
 For the full plugin API reference, see **Plugin Architecture**.
 
-### Kafka-Based Telemetry Pipeline
+### Telemetry Pipeline
 
-The Kafka pipeline provides durable, ordered telemetry transport:
+The current telemetry pipeline uses Redpanda for ingestion, RisingWave for stream processing, Redis for live delivery, and Iceberg for archival queryability:
 
 ```text
-Game Clients (AC/ACC)
+Game Clients / Demo Replay
    ↓
-Collectors (Producers) ── Protobuf + LZ4 ──▶ Kafka Topics
-                                              (telemetry-user-*)
-Kafka-WebSocket Bridge (Consumers) ──▶ WebSocket Clients
-   ↓
-Database Consumer ──▶ SQLite / PostgreSQL
+Collectors / Tray App ── Protobuf + Zstd ──▶ gRPC Gateway
+                                              ↓
+                                          Redpanda (:9092)
+                                              ↓
+                                   RisingWave SOURCE telemetry_frames
+                                              ↓
+                         telemetry_with_sessions → telemetry_samples
+                                   ↓                          ↓
+                         Redis sinks (live)      Iceberg sink archive_raw
+                                   ↓                          ↓
+                           Redis WS Server              LakeKeeper + MinIO
+                                   ↓                          ↓
+                             WebSocket Clients            Trino queries
 ```
 
-- **Collectors** — Parse game telemetry (UDP / shared memory), serialize as Protobuf, publish to Kafka.
-- **Kafka cluster** — Topics like `telemetry`, `commands`, `telemetry-user-<userId>`. LZ4 compression, per-session ordering.
-- **Kafka–WebSocket Bridge** (`services/kafka-websocket-bridge.js`) — Consumes telemetry, broadcasts decoded frames to connected browser clients.
-- **Database Consumer** (`services/kafka-database-consumer.js`) — Batch-inserts telemetry frames, detects lap completions, persists sessions and laps.
+- **Collectors / Tray App / Demo Replay** — Capture or replay telemetry and send batched Protobuf frames through the gRPC ingress path.
+- **gRPC Gateway** — Authenticates and forwards telemetry batches to Redpanda.
+- **Redpanda** — Kafka-compatible message broker. Topic: `telemetry-batches`.
+- **RisingWave** — Stream SQL engine that assigns sessions, detects lap boundaries, computes `telemetry_samples`, and sinks to Redis and Iceberg.
+- **Redis WebSocket Server** (`services/redis-websocket-server.js`) — Reads live telemetry from Redis and pushes it to connected browser clients.
+- **LakeKeeper + MinIO + Trino** — LakeKeeper manages the Iceberg catalog, MinIO stores Iceberg data files, and Trino is the query layer used by the web app for archived laps.
 
 ### Analysis Panel Grid
 
@@ -124,18 +134,18 @@ Multiple analyzer implementations behind a factory:
 
 ### User Isolation
 
-Purple Sector implements user-scoped Kafka topics for multi-tenancy:
+Purple Sector currently isolates live telemetry by session registration and user-scoped Redis channel names:
 
-- Each user gets a dedicated topic: `telemetry-user-alice`, `telemetry-user-bob`, etc.
-- Collectors publish to the user's topic.
-- The bridge creates a consumer per user and only forwards frames to that user's WebSocket clients.
-- In production, Kafka ACLs can restrict topic access.
+- Collectors publish into the shared `telemetry-batches` stream in Redpanda.
+- RisingWave joins incoming frames to `active_sessions` and assigns the owning `session_id` and `user_id`.
+- Redis channels and streams are named with the session owner: `telemetry:live:{user_id}:{session_id}` and `telemetry:{user_id}:{session_id}`.
+- Archived telemetry is queried by `session_id` and `lap_number`, with lap metadata access still protected by authenticated Prisma lookups.
 
 ### Database
 
 Managed via Prisma (`@purplesector/db-prisma`). Key models:
 
-- **User data** — Event, Session, Lap, TelemetryFrame
+- **User data** — Event, Session, Lap
 - **Vehicles** — Vehicle, VehicleConfiguration, VehicleSetup
 - **Analysis** — SavedPlotLayout, AnalysisLayout, MathTelemetryChannel
 - **Agent** — AgentConversation, AgentMessage, RunPlan, RunPlanItem (plugin schema)

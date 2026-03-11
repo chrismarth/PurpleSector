@@ -140,8 +140,22 @@ export default function LapDetailContent({ entityId }: LapDetailContentProps) {
       const response = await fetch(`/api/laps/${lapId}`);
       const data = await response.json();
       setLap(data);
-      const frames = JSON.parse(data.telemetryData);
-      setTelemetryFrames(frames);
+      
+      // Fetch telemetry data from Iceberg via Trino
+      try {
+        const framesResponse = await fetch(`/api/laps/${lapId}/frames`);
+        if (framesResponse.ok) {
+          const framesData = await framesResponse.json();
+          setTelemetryFrames(framesData.frames || []);
+        } else {
+          console.warn('No telemetry data available for this lap');
+          setTelemetryFrames([]);
+        }
+      } catch (frameError) {
+        console.error('Error fetching telemetry frames:', frameError);
+        setTelemetryFrames([]);
+      }
+      
       if (data.suggestions) setSuggestions(JSON.parse(data.suggestions));
       if (data.driverComments) setDriverComments(data.driverComments);
       if (data.tags) setTags(JSON.parse(data.tags));
@@ -358,7 +372,7 @@ export default function LapDetailContent({ entityId }: LapDetailContentProps) {
         <div>
           <h2 className="text-lg font-semibold">Lap {lap.lapNumber} Analysis</h2>
           <p className="text-sm text-muted-foreground">
-            {lap.session.event.name} &rsaquo; {lap.session.name}
+            {lap.session.event?.name ? `${lap.session.event.name} › ` : ''}{lap.session.name}
           </p>
         </div>
         <div className="text-right">

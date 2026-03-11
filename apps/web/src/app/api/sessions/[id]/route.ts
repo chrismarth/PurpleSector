@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { requireAuthUserId } from '@/lib/api-auth';
+import { updateActiveSessionStatus, deleteActiveSession } from '@/lib/risingwave';
 
 // GET /api/sessions/[id] - Get a specific session
 export async function GET(
@@ -75,6 +76,12 @@ export async function PATCH(
     }
 
     const session = await (prisma as any).session.findFirst({ where: { id: params.id, userId } });
+
+    // Sync status changes to RisingWave
+    if (status !== undefined) {
+      await updateActiveSessionStatus(params.id, status);
+    }
+
     return NextResponse.json(session);
   } catch (error) {
     console.error('Error updating session:', error);
@@ -108,6 +115,9 @@ export async function DELETE(
     if (!result.count) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
+
+    // Remove session from RisingWave
+    await deleteActiveSession(params.id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

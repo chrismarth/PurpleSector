@@ -1,0 +1,58 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ps-telemetry-core",
+    "crates/ps-tray-app",
+    "crates/ps-grpc-gateway",
+    "crates/ps-demo-replay",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0"
+repository = "https://github.com/purplesector/PurpleSector"
+
+[workspace.dependencies]
+# Shared across crates
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+
+# Protobuf / gRPC
+prost = "0.13"
+prost-types = "0.13"
+tonic = "0.12"
+tonic-build = "0.12"
+
+# Database (WAL)
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Compression
+zstd = "0.13"
+
+# Configuration
+toml = "0.8"
+
+# Async utilities
+async-trait = "0.1"
+tokio-stream = "0.1"
+humantime-serde = "1"
+
+# GUI / System Tray
+tray-icon = "0.19"
+muda = "0.15"
+eframe = { version = "0.30", default-features = false, features = ["default_fonts", "glow", "persistence", "x11", "wayland"] }
+egui = "0.30"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Platform utilities
+directories = "5"
+open = "5"
+
+# Testing
+tempfile = "3"

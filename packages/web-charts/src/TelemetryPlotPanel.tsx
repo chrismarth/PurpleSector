@@ -581,9 +581,11 @@ export function TelemetryPlotPanel({
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" title="Layout options">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
+                <span>
+                  <Button variant="ghost" size="icon" title="Layout options">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setShowLoadDialog(true)}>

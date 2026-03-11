@@ -14,19 +14,17 @@ PurpleSector/
 │   ├── mcp-analysis/                 # MCP server for analysis tools
 │   └── mcp-telemetry/               # MCP server for telemetry tools
 │
-├── collectors/                       # Runtime collector apps (AC/ACC/demo, Kafka & WebSocket)
+├── collectors/                       # Static demo data (all capture is now Rust-based)
 │
 ├── services/                         # Runtime infra services
-│   ├── kafka-websocket-bridge.js     # Kafka → WebSocket bridge
-│   ├── kafka-database-consumer.js    # Kafka → DB consumer
-│   └── ...                           # Legacy WebSocket server, etc.
+│   ├── redis-websocket-server.js     # RisingWave → Redis → WebSocket → Frontend (Docker container)
+│   └── Dockerfile.ws-server          # Docker build for the WS server
 │
 ├── packages/                         # Shared packages
 │   ├── core/                         # @purplesector/core — domain types (TelemetryFrame, etc.)
 │   ├── telemetry/                    # @purplesector/telemetry — parsing & helpers, MathTelemetryChannel
 │   ├── config/                       # @purplesector/config — configuration utilities
 │   ├── logger/                       # @purplesector/logger — structured logging
-│   ├── kafka/                        # @purplesector/kafka — producer/admin/consumer
 │   ├── proto/                        # @purplesector/proto — Protobuf helpers + telemetry.proto
 │   ├── db-base/                      # @purplesector/db-base — DB interfaces
 │   ├── db-prisma/                    # @purplesector/db-prisma — Prisma implementation + schema
@@ -53,9 +51,9 @@ PurpleSector/
 ├── scripts/                          # Operational scripts
 │   ├── dev-start.sh / dev-stop.sh    # One-command dev environment
 │   ├── merge-plugin-schemas.ts       # Merges plugin.prisma files into generated schema
-│   └── ...                           # Kafka setup, topic creation, etc.
+│   └── ...
 │
-├── docker-compose.kafka.yml          # Kafka cluster for dev
+├── docker-compose.dev.yml            # Full dev infrastructure (Redpanda, RisingWave, Redis, etc.)
 ├── ecosystem.config.js               # PM2 config (production)
 ├── ecosystem.dev.config.js           # PM2 config (development)
 ├── next.config.mjs                   # Next.js configuration

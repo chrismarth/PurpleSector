@@ -1,0 +1,27 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies for healthcheck
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends procps && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy ticker script
+COPY time-ticker.py .
+
+# Run as non-root user
+RUN useradd -m -u 1000 ticker && \
+    chown -R ticker:ticker /app
+USER ticker
+
+# Health check - verify the script is running
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
+    CMD pgrep -f time-ticker.py || exit 1
+
+# Run with unbuffered output for Docker logs
+CMD ["python3", "-u", "time-ticker.py"]

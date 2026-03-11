@@ -112,19 +112,14 @@ export function ToolbarPane() {
 
           {/* Built-in: Help */}
           <DropdownMenu>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="flex items-center justify-center w-10 h-10 hover:bg-gray-200 dark:hover:bg-gray-700 text-muted-foreground transition-colors"
-                    aria-label="Help"
-                  >
-                    <HelpCircle className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="left">Help</TooltipContent>
-            </Tooltip>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center justify-center w-10 h-10 hover:bg-gray-200 dark:hover:bg-gray-700 text-muted-foreground transition-colors"
+                aria-label="Help"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
             <DropdownMenuContent side="left" align="end">
               <DropdownMenuItem asChild>
                 <a

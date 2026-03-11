@@ -78,17 +78,16 @@ export default function SessionDetailContent({ entityId }: SessionDetailContentP
   const isMountedRef = useRef(true);
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedTagsRef = useRef<string>('[]');
-  const lastLapTimeRef = useRef(0);
-  const seenLapBoundaryRef = useRef(false);
+  const lastLapNumberRef = useRef<number | null>(null);
+  const pendingLapSavesRef = useRef<Array<{ lapNumber: number; frames: TelemetryFrame[] }>>([]);
 
   useEffect(() => {
     currentLapFramesRef.current = [];
     setCurrentLapFrames([]);
     currentLapNumberRef.current = 1;
     setCurrentLapNumber(1);
-    lastLapTimeRef.current = 0;
+    lastLapNumberRef.current = null;
     lastUpdateTimeRef.current = 0;
-    seenLapBoundaryRef.current = false;
 
     const sessionLockKey = `session-${sessionId}-lock`;
     const existingLock = localStorage.getItem(sessionLockKey);
@@ -119,7 +118,16 @@ export default function SessionDetailContent({ entityId }: SessionDetailContentP
   }, [sessionId]);
 
   useEffect(() => {
+    console.log('🔵 SessionDetailContent WebSocket check:', {
+      hasSession: !!session,
+      status: session?.status,
+      started: session?.started,
+      hasWsRef: !!wsRef.current,
+      sessionId
+    });
+    
     if (session && session.status === 'active' && session.started && !wsRef.current) {
+      console.log('✅ Starting WebSocket connection...');
       isPausedRef.current = isPaused;
       connectWebSocket();
     }
@@ -201,16 +209,23 @@ export default function SessionDetailContent({ entityId }: SessionDetailContentP
       clearInterval(heartbeatIntervalRef.current);
       heartbeatIntervalRef.current = null;
     }
+    
+    // All sessions (demo and live) use the actual session ID for WebSocket connection
+    // RisingWave publishes to session-specific channels: telemetry:live:{user_id}:{session_id}
     const userId = user?.id;
+    const effectiveSessionId = session.id;
+    
     if (!userId) {
       console.error('Cannot connect WebSocket: no authenticated user');
       return;
     }
-    const ws = new WebSocket(`ws://localhost:8080?userId=${userId}`);
+    console.log(`🔌 Connecting WebSocket: userId=${userId}, sessionId=${effectiveSessionId}, source=${session.source}`);
+    const ws = new WebSocket(`ws://localhost:8080?userId=${userId}&sessionId=${effectiveSessionId}`);
     ws.binaryType = 'arraybuffer';
     wsRef.current = ws;
 
     ws.onopen = () => {
+      console.log('✅ WebSocket connected successfully');
       if (isMountedRef.current) {
         setWsConnected(true);
         setReconnecting(false);
@@ -248,11 +263,12 @@ export default function SessionDetailContent({ entityId }: SessionDetailContentP
       if (!isMountedRef.current) return;
       try {
         if (message.type === 'demo_complete') {
-          if (currentLapFramesRef.current.length > 0 && !savingLapRef.current) {
-            savingLapRef.current = true;
-            saveLap(currentLapNumberRef.current, currentLapFramesRef.current).finally(() => {
-              savingLapRef.current = false;
+          if (currentLapFramesRef.current.length > 0) {
+            pendingLapSavesRef.current.push({
+              lapNumber: currentLapNumberRef.current,
+              frames: [...currentLapFramesRef.current],
             });
+            drainPendingSaves();
           }
           return;
         }
@@ -261,48 +277,37 @@ export default function SessionDetailContent({ entityId }: SessionDetailContentP
           if (isPausedRef.current) return;
           const frame: TelemetryFrame = message.data;
 
-          const isNewLap = frame.lapTime < lastLapTimeRef.current && lastLapTimeRef.current > 1000;
+          const isFirstTelemetryFrame = lastLapNumberRef.current === null;
+          const isLapBoundary = !isFirstTelemetryFrame && frame.lapNumber !== lastLapNumberRef.current;
 
-          if (isNewLap) {
-            if (!seenLapBoundaryRef.current && session?.source === 'demo') {
-              seenLapBoundaryRef.current = true;
-              currentLapNumberRef.current = 1;
-              currentLapFramesRef.current = [frame];
-              if (isMountedRef.current) {
-                setCurrentLapFrames([frame]);
-                setCurrentLapNumber(1);
-              }
-              lastUpdateTimeRef.current = Date.now();
-            } else {
-              seenLapBoundaryRef.current = true;
-              if (currentLapFramesRef.current.length > 0 && !savingLapRef.current) {
-                savingLapRef.current = true;
-                const lapToSave = currentLapFramesRef.current;
-                const lapNum = currentLapNumberRef.current;
-                saveLap(lapNum, lapToSave).finally(() => {
-                  savingLapRef.current = false;
-                });
-              }
-              const nextLapNumber = currentLapNumberRef.current + 1;
-              currentLapNumberRef.current = nextLapNumber;
-              currentLapFramesRef.current = [frame];
-              if (isMountedRef.current) {
-                setCurrentLapFrames([frame]);
-                setCurrentLapNumber(nextLapNumber);
-              }
-              lastUpdateTimeRef.current = Date.now();
+          if (isLapBoundary) {
+            if (currentLapFramesRef.current.length > 0) {
+              const lapToSave = [...currentLapFramesRef.current];
+              const lapNum = currentLapNumberRef.current;
+              // Queue lap save — never skip a lap even if a previous save is in flight
+              pendingLapSavesRef.current.push({ lapNumber: lapNum, frames: lapToSave });
+              drainPendingSaves();
             }
+
+            const nextLapNumber = currentLapNumberRef.current + 1;
+            currentLapNumberRef.current = nextLapNumber;
+            currentLapFramesRef.current = [frame];
+            if (isMountedRef.current) {
+              setCurrentLapFrames([frame]);
+              setCurrentLapNumber(nextLapNumber);
+            }
+            lastUpdateTimeRef.current = Date.now();
           } else {
             currentLapFramesRef.current = [...currentLapFramesRef.current, frame];
             const now = Date.now();
             const isFirstFrame = currentLapFramesRef.current.length === 1;
-            if ((isFirstFrame || now - lastUpdateTimeRef.current >= 67) && isMountedRef.current) {
+            if ((isFirstFrame || now - lastUpdateTimeRef.current >= 16) && isMountedRef.current) {
               setCurrentLapFrames([...currentLapFramesRef.current]);
               lastUpdateTimeRef.current = now;
             }
           }
 
-          lastLapTimeRef.current = frame.lapTime;
+          lastLapNumberRef.current = frame.lapNumber;
         }
       } catch (error) {
         console.error('Error handling decoded message:', error);
@@ -326,6 +331,16 @@ export default function SessionDetailContent({ entityId }: SessionDetailContentP
     };
 
     ws.onerror = () => { ws.close(); };
+  }
+
+  async function drainPendingSaves() {
+    if (savingLapRef.current) return; // already draining
+    while (pendingLapSavesRef.current.length > 0) {
+      savingLapRef.current = true;
+      const next = pendingLapSavesRef.current.shift()!;
+      await saveLap(next.lapNumber, next.frames);
+      savingLapRef.current = false;
+    }
   }
 
   async function saveLap(lapNumber: number, frames: TelemetryFrame[]) {
@@ -413,11 +428,21 @@ export default function SessionDetailContent({ entityId }: SessionDetailContentP
         wsRef.current = null;
       }
 
-      // Save current lap in background
-      if (currentLapFramesRef.current.length > 0 && seenLapBoundaryRef.current) {
-        saveLap(currentLapNumberRef.current, currentLapFramesRef.current).catch((err) =>
-          console.error('Error saving final lap:', err)
-        );
+      // Queue final partial lap save and drain all pending saves
+      if (currentLapFramesRef.current.length > 0) {
+        pendingLapSavesRef.current.push({
+          lapNumber: currentLapNumberRef.current,
+          frames: [...currentLapFramesRef.current],
+        });
+      }
+      // Force-drain: wait for any in-flight save, then process remaining queue
+      while (savingLapRef.current) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      // Drain remaining saves (including the final partial lap)
+      while (pendingLapSavesRef.current.length > 0) {
+        const next = pendingLapSavesRef.current.shift()!;
+        await saveLap(next.lapNumber, next.frames);
       }
 
       // Update session status
@@ -555,19 +580,23 @@ export default function SessionDetailContent({ entityId }: SessionDetailContentP
             <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge variant={session.status === 'active' ? 'default' : 'secondary'}>
-                  {session.status}
-                </Badge>
+                <span>
+                  <Badge variant={session.status === 'active' ? 'default' : 'secondary'}>
+                    {session.status}
+                  </Badge>
+                </span>
               </TooltipTrigger>
               <TooltipContent side="bottom">{session.status === 'active' ? 'Session is active and accepting telemetry' : `Session status: ${session.status}`}</TooltipContent>
             </Tooltip>
             {wsConnected && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="default" className="bg-green-600">
-                    <span className="h-1.5 w-1.5 rounded-full bg-green-300 mr-1 inline-block animate-pulse" />
-                    Connected
-                  </Badge>
+                  <span>
+                    <Badge variant="default" className="bg-green-600">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-300 mr-1 inline-block animate-pulse" />
+                      Connected
+                    </Badge>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">WebSocket connected to telemetry server</TooltipContent>
               </Tooltip>
@@ -575,7 +604,9 @@ export default function SessionDetailContent({ entityId }: SessionDetailContentP
             {reconnecting && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="secondary">Reconnecting...</Badge>
+                  <span>
+                    <Badge variant="secondary">Reconnecting...</Badge>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Attempting to reconnect to telemetry server</TooltipContent>
               </Tooltip>

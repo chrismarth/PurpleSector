@@ -11,8 +11,6 @@ import type {
   AnalysisPanelRenderResult,
 } from '@purplesector/plugin-api';
 import { TelemetryPlotPanel, SimpleTelemetryPlotPanel } from '@purplesector/web-charts';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ZoomOut, Pencil } from 'lucide-react';
 
 const lapTelemetryPlotsView: LapAnalysisView = {
@@ -80,40 +78,28 @@ const plugin: PluginModule = {
 
         const toolbarActions = (
           <>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-6 w-6"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    panelActionsMap.get(panelId)?.resetZoom?.();
-                  }}
-                >
-                  <ZoomOut className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Reset zoom</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-6 w-6"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    panelActionsMap.get(panelId)?.openConfig?.();
-                  }}
-                >
-                  <Pencil className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Edit plot</TooltipContent>
-            </Tooltip>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center h-6 w-6 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                panelActionsMap.get(panelId)?.resetZoom?.();
+              }}
+              title="Reset zoom"
+            >
+              <ZoomOut className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center h-6 w-6 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                panelActionsMap.get(panelId)?.openConfig?.();
+              }}
+              title="Edit plot"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
           </>
         );
 

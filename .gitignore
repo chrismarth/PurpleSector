@@ -6,6 +6,9 @@ node_modules/
 # Testing
 coverage/
 
+# Rust
+rust/target/
+
 # Next.js
 .next/
 out/
@@ -45,7 +48,8 @@ Thumbs.db
 # Misc
 *.pem
 
-
+# Runtime artifacts
+telemetry-wal.db*
 
 .nx/cache
 .nx/workspace-data

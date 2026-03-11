@@ -138,7 +138,7 @@ await producer.publishFrame(telemetryFrame);
 
 The bridge creates **one consumer per user** when a client connects.
 
-**File:** `services/kafka-websocket-bridge.js`
+**File:** `services/redis-websocket-server.js` (formerly `kafka-websocket-bridge.js`)
 
 ```javascript
 class KafkaWebSocketBridge {

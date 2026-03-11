@@ -146,15 +146,8 @@ export function UPlotChart({
       },
     };
 
+    // Completely remove hooks to prevent infinite loop during high-frequency updates
     const hooks: uPlot.Hooks.Arrays = {
-      setCursor: [
-        (u) => {
-          const idx = u.cursor.idx;
-          if (onHover) {
-            onHover(idx !== null && idx !== undefined ? idx : null);
-          }
-        },
-      ],
       setSelect: [
         (u) => {
           const select = u.select;
@@ -173,7 +166,7 @@ export function UPlotChart({
       series: uplotSeries,
       axes: finalAxes,
       cursor,
-      hooks,
+      hooks: {}, // Empty hooks object to prevent infinite loop
       legend: {
         show: false,
       },
@@ -203,22 +196,7 @@ export function UPlotChart({
       chart.destroy();
       chartRef.current = null;
     };
-  }, [data, series, axes, width, height, onHover, darkMode, onReady]);
-
-  useEffect(() => {
-    if (!chartRef.current || syncedHoverIndex === undefined) return;
-
-    const chart = chartRef.current;
-    if (syncedHoverIndex === null) {
-      chart.setCursor({ left: -10, top: -10 });
-    } else {
-      const xVal = data[0][syncedHoverIndex];
-      if (xVal !== undefined && xVal !== null) {
-        const left = chart.valToPos(xVal, 'x');
-        chart.setCursor({ left, top: chart.cursor.top || 0 });
-      }
-    }
-  }, [syncedHoverIndex, data]);
+  }, [series, axes, width, height, darkMode, onReady]);
 
   useEffect(() => {
     if (!chartRef.current) return;

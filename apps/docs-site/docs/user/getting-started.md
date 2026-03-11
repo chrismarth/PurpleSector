@@ -5,7 +5,7 @@ This guide walks you through installing Purple Sector and running it locally in 
 ## Prerequisites
 
 - **Node.js** 18+
-- **Docker** (for Kafka — optional if you only need the frontend with existing data)
+- **Docker** (for the local infrastructure stack: Redpanda, RisingWave, Redis, MinIO, Trino, Postgres, LakeKeeper)
 - (Optional) **Assetto Corsa** or **Assetto Corsa Competizione** for live telemetry.
 - (Optional) **OpenAI API key** for AI analysis and the AI agent.
 
@@ -37,22 +37,19 @@ npm run db:push
 
 ## 3. One-Command Dev Environment
 
-Purple Sector provides a full Kafka-based dev environment that runs the entire telemetry pipeline with demo data.
+Purple Sector provides a full local dev environment that runs the current telemetry pipeline with demo-capable infrastructure.
 
 Start everything with one command:
 
 ```bash
-npm run dev:start
+./scripts/start-dev.sh
 ```
 
 This will:
 
-1. Start the Kafka cluster (Docker).
-2. Create Kafka topics.
-3. Start the Kafka–WebSocket bridge.
-4. Start the database consumer.
-5. Start the demo collector (publishes demo telemetry).
-6. Start the Next.js frontend.
+1. Start the Docker infrastructure.
+2. Bring up Redpanda, RisingWave, Redis, MinIO, Trino, Postgres, and LakeKeeper.
+3. Start PM2-managed app processes such as the Next.js frontend.
 
 After ~30 seconds, open:
 
@@ -85,18 +82,18 @@ After logging in you will see the **app shell**:
 <!-- Screenshot placeholder: ![App shell after login](./img/app-shell-first-look.png)
 **Capture this:** The app shell immediately after first login — empty events tree with the "No events yet" state or a freshly created event. -->
 
-If the demo collector is running, you should see events and sessions appearing in the navigation tree as telemetry streams in.
+If demo replay or a live collector is running, you should see events and sessions appearing in the navigation tree as telemetry streams in.
 
 For a deeper walkthrough of the UI, see **Navigating the App**.
 
 ## Stopping the Environment
 
 ```bash
-# Stop services, keep Kafka running
-npm run dev:stop
+# Stop PM2 + Docker
+./scripts/stop-dev.sh
 
-# Stop services AND Kafka
-npm run dev:stop-all
+# Stop PM2 only, keep Docker running
+./scripts/stop-dev.sh --keep-docker
 ```
 
 For a deeper walkthrough of the dev environment, see **Developer Guide → Development Environment**.

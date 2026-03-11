@@ -1,0 +1,19 @@
+[package]
+name = "ps-demo-replay"
+description = "PurpleSector demo data replay tool — sends pre-recorded telemetry to the cloud pipeline"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ps-demo-replay"
+path = "src/main.rs"
+
+[dependencies]
+ps-telemetry-core = { path = "../ps-telemetry-core", features = ["cloud-transport"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }

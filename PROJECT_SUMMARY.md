@@ -54,7 +54,7 @@ PurpleSector/
 ├── prisma/
 │   └── schema.prisma                # Database schema
 ├── scripts/
-│   └── generate-demo-data.js        # Demo data generator
+│   └── generate-demo-telemetry.js    # Demo data generator
 ├── public/
 │   └── demo-telemetry.json          # Pre-recorded telemetry
 └── Documentation
@@ -155,16 +155,16 @@ cp .env.example .env.local      # Configure environment
 # Add OpenAI API key to .env.local
 ```
 
-### Running (3 terminals)
+### Running
 ```bash
+# Start infrastructure (includes WebSocket server, Redis, Redpanda, etc.)
+docker compose -f docker-compose.dev.yml up -d
+
 # Terminal 1
 npm run dev                     # Next.js app
 
-# Terminal 2
-npm run ws-server              # WebSocket server
-
-# Terminal 3 (optional)
-npm run telemetry              # AC telemetry collector
+# Terminal 2 (optional)
+cd rust && cargo run -p ps-tray-app  # Telemetry capture (select sim type in settings)
 ```
 
 ### First Session

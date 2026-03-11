@@ -5,8 +5,9 @@ This page describes the database schema, telemetry data model, and how data is p
 ## Database Stack
 
 - **ORM:** Prisma (`@purplesector/db-prisma`)
-- **Dev database:** SQLite (`file:./dev.db`)
-- **Production:** PostgreSQL / TimescaleDB recommended
+- **Dev database:** SQLite (`file:./dev.db`) is common for app metadata
+- **Cloud-style local stack:** PostgreSQL is also used by Docker services such as LakeKeeper
+- **Production:** PostgreSQL recommended for app metadata
 - **Schema location:** `packages/db-prisma/prisma/schema.prisma` (core) + `schema.generated.prisma` (plugin models)
 
 ## Core Models
@@ -51,28 +52,12 @@ A single lap within a session.
 | sessionId | String | Parent session |
 | lapNumber | Int | Lap number within session |
 | lapTime | Float? | Lap time in seconds |
-| telemetryFrames | TelemetryFrame[] | Raw telemetry data |
+| analyzed | Boolean | Whether AI analysis has been run |
+| suggestions | String? | Serialized analysis output |
+| driverComments | String? | Driver notes |
+| tags | String? | Serialized tags |
 
-### TelemetryFrame
-
-Individual time-ordered telemetry data points.
-
-```ts
-interface TelemetryFrame {
-  timestamp: number;
-  throttle: number;           // 0.0 – 1.0
-  brake: number;              // 0.0 – 1.0
-  steering: number;           // -1.0 to 1.0
-  speed: number;              // km/h
-  gear: number;
-  rpm: number;
-  lapTime: number;            // milliseconds
-  lapNumber: number;
-  normalizedPosition: number; // 0.0 – 1.0 (track position)
-}
-```
-
-Collectors read this data from the game (UDP or shared memory) and encode it for transport (Kafka + Protobuf). The frontend consumes a decoded form over WebSockets.
+Lap metadata lives in Prisma. Raw telemetry frames do **not** live in Prisma anymore — archived lap telemetry is queried from Iceberg through Trino, and live telemetry is delivered through Redis-backed WebSockets.
 
 ### Vehicle
 
@@ -180,18 +165,28 @@ This scans `packages/plugin-*/prisma/plugin.prisma` and outputs `packages/db-pri
 
 ## Telemetry Pipeline
 
-### Kafka Transport
+Telemetry now has two storage/delivery paths:
 
-In the Kafka pipeline, telemetry flows:
+1. **Live path** — Collectors / demo replay → gRPC Gateway → Redpanda → RisingWave → Redis sinks → Redis WebSocket server → browser.
+2. **Archive path** — Collectors / demo replay → gRPC Gateway → Redpanda → RisingWave → Iceberg sink (`raw_samples`) → LakeKeeper + MinIO → Trino → Next.js API routes.
 
-1. **Collector** reads game data → serializes as Protobuf → publishes to Kafka topic.
-2. **DB Consumer** subscribes to topic → batch-inserts frames → detects lap completions → persists laps.
-3. **WS Bridge** subscribes to topic → decodes Protobuf → broadcasts to WebSocket clients.
+RisingWave is responsible for:
+
+- Joining raw telemetry to `active_sessions`
+- Assigning `session_id` and `user_id`
+- Detecting lap boundaries
+- Producing `telemetry_samples`
+- Sinking live telemetry to Redis and archived telemetry to Iceberg
 
 ### Protobuf Encoding
 
-Telemetry frames are encoded using Protocol Buffers for efficient binary transport. The schema lives in `packages/proto/`. The frontend includes a generated decoder (`apps/web/src/proto/telemetry.js`) for client-side deserialization.
+Telemetry frames are encoded using Protocol Buffers for efficient binary transport. The single schema source of truth lives at `proto/telemetry.proto`. The frontend includes generated decoder output in `apps/web/src/proto/telemetry.js`.
 
-### Per-User Topics
+### Current Isolation Model
 
-Each user gets a dedicated Kafka topic (`telemetry-user-<userId>`) for data isolation. See **Architecture → User Isolation** for details.
+Purple Sector no longer uses per-user Kafka topics.
+
+- Redpanda uses the shared `telemetry-batches` topic.
+- Session ownership is assigned in RisingWave via the `active_sessions` table.
+- Live Redis channels are user- and session-scoped.
+- Archived lap access is protected by authenticated Prisma lookups before Trino queries run.

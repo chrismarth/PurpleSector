@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX Package Manifest for PurpleSector Tray App
+  
+  Used for Windows Store submission and sideloading.
+  
+  Before submitting to the Windows Store:
+  1. Register a publisher identity at https://partner.microsoft.com
+  2. Update Identity.Publisher with your certificate CN
+  3. Replace placeholder logos in Assets/ with actual artwork
+  4. Sign the MSIX with your code signing certificate
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="PurpleSector.TrayApp"
+    Publisher="CN=PurpleSector"
+    Version="0.1.0.0"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>PurpleSector</DisplayName>
+    <PublisherDisplayName>PurpleSector</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Captures sim racing telemetry and streams it to the PurpleSector cloud for analysis.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us"/>
+  </Resources>
+
+  <Applications>
+    <Application Id="PurpleSectorTrayApp"
+      Executable="ps-tray-app.exe"
+      EntryPoint="Windows.FullTrustApplication">
+
+      <uap:VisualElements
+        DisplayName="PurpleSector"
+        Description="Sim racing telemetry capture and streaming"
+        BackgroundColor="#7C3AED"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+
+      <!-- Allow startup task (auto-launch on login) -->
+      <Extensions>
+        <uap:Extension Category="windows.startupTask">
+          <uap:StartupTask TaskId="PurpleSectorStartup" Enabled="false" DisplayName="PurpleSector Telemetry" />
+        </uap:Extension>
+      </Extensions>
+
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <Capability Name="privateNetworkClientServer" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+</Package>

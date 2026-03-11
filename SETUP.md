@@ -53,7 +53,7 @@ This creates the SQLite database and tables.
 ### 4. Generate Demo Data
 
 ```bash
-node scripts/generate-demo-data.js
+node scripts/generate-demo-telemetry.js
 ```
 
 This creates realistic demo telemetry data for testing the app without Assetto Corsa.
@@ -91,21 +91,19 @@ This starts:
 - Frontend: http://localhost:3000
 - API routes: http://localhost:3000/api/*
 
-### Terminal 2: WebSocket Server
+### WebSocket Server
+
+The WebSocket server runs as a Docker container (`ps-ws-server`) and starts
+automatically with `docker compose -f docker-compose.dev.yml up -d`.
+It listens on `ws://localhost:8080`.
+
+### Terminal 3: Telemetry Capture (only for live telemetry)
 
 ```bash
-npm run ws-server
+cd rust && cargo run -p ps-tray-app
 ```
 
-This starts the WebSocket relay server on `ws://localhost:8080`
-
-### Terminal 3: Telemetry Collector (only for live telemetry)
-
-```bash
-npm run telemetry
-```
-
-This starts the UDP listener for Assetto Corsa telemetry.
+Select the sim type in settings. The Rust tray app captures AC/ACC telemetry via UDP/SHM.
 
 **Note:** You only need Terminal 3 if you're using live telemetry. Demo mode works with just Terminals 1 and 2.
 
@@ -162,7 +160,7 @@ You should now see live telemetry streaming!
 **Problem:** Charts are empty, "Waiting for telemetry data..."
 
 **Solutions:**
-1. Ensure WebSocket server is running (`npm run ws-server`)
+1. Ensure WebSocket server container is running (`docker ps | grep ps-ws-server`)
 2. Check browser console for WebSocket connection errors
 3. Verify demo data was generated: `ls -lh public/demo-telemetry.json`
 
@@ -224,7 +222,7 @@ npm run db:push
 ### Regenerate Demo Data
 
 ```bash
-node scripts/generate-demo-data.js
+node scripts/generate-demo-telemetry.js
 ```
 
 ### Check Logs
