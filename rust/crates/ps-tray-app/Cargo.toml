@@ -26,5 +26,8 @@ eframe = { workspace = true }
 egui = { workspace = true }
 image = { workspace = true }
 
+# Protobuf (for computing serialized batch sizes)
+prost = { workspace = true }
+
 # Platform utilities
 directories = { workspace = true }

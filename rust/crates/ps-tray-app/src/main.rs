@@ -21,12 +21,15 @@
 mod config;
 mod gui;
 mod pipeline;
+mod platform;
 mod stats;
 
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use anyhow::Result;
+use eframe::egui;
 use tokio::sync::mpsc;
 use tracing::info;
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
@@ -36,6 +39,11 @@ use config::AppConfig;
 use gui::GuiState;
 use pipeline::PipelineCommand;
 use stats::PipelineStats;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UiCommand {
+    OpenWindow,
+}
 
 fn main() -> Result<()> {
     // Initialize logging
@@ -53,6 +61,9 @@ fn main() -> Result<()> {
     let stats = PipelineStats::new();
     let running = Arc::new(AtomicBool::new(false));
     let (cmd_tx, cmd_rx) = mpsc::channel::<PipelineCommand>(32);
+    let (ui_cmd_tx, ui_cmd_rx) = std::sync::mpsc::channel::<UiCommand>();
+    let app_quit_flag = Arc::new(AtomicBool::new(false));
+    let egui_ctx: Arc<std::sync::OnceLock<egui::Context>> = Arc::new(std::sync::OnceLock::new());
 
     // Build the tray menu
     let menu = Menu::new();
@@ -86,7 +97,7 @@ fn main() -> Result<()> {
     let config_clone = config.clone();
     let stats_clone = stats.clone();
     let running_clone = running.clone();
-    let _rt_handle = std::thread::spawn(move || {
+    let rt_handle = std::thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
         rt.block_on(pipeline::run_pipeline_manager(
             config_clone,
@@ -102,46 +113,87 @@ fn main() -> Result<()> {
         stats: stats.clone(),
         pipeline_running: running.clone(),
         command_tx: cmd_tx.clone(),
+        app_quit_flag: app_quit_flag.clone(),
+        egui_ctx: egui_ctx.clone(),
     };
 
     // Process tray menu events on a background thread
     let cmd_tx_menu = cmd_tx.clone();
-    let gui_state_menu = gui_state.clone();
-    std::thread::spawn(move || {
+    let app_quit_flag_menu = app_quit_flag.clone();
+    let egui_ctx_menu = egui_ctx.clone();
+    let menu_handle = std::thread::spawn(move || {
         loop {
-            if let Ok(event) = MenuEvent::receiver().recv() {
-                if event.id == start_id {
-                    let _ = cmd_tx_menu.blocking_send(PipelineCommand::Start);
-                } else if event.id == stop_id {
-                    let _ = cmd_tx_menu.blocking_send(PipelineCommand::Stop);
-                } else if event.id == open_id {
-                    let state = gui_state_menu.clone();
-                    std::thread::spawn(move || {
-                        gui::open_window(state);
-                    });
-                } else if event.id == quit_id {
-                    let _ = cmd_tx_menu.blocking_send(PipelineCommand::Quit);
-                    // Give pipeline a moment to shut down, then exit
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    std::process::exit(0);
+            if app_quit_flag_menu.load(Ordering::Relaxed) {
+                info!("Menu thread: quit flag set, breaking loop");
+                break;
+            }
+            match MenuEvent::receiver().try_recv() {
+                Ok(event) => {
+                    info!("Menu thread: received event id={:?}", event.id);
+                    if event.id == start_id {
+                        let _ = cmd_tx_menu.blocking_send(PipelineCommand::Start);
+                    } else if event.id == stop_id {
+                        let _ = cmd_tx_menu.blocking_send(PipelineCommand::Stop);
+                    } else if event.id == open_id {
+                        info!("Menu thread: Open Dashboard clicked, restoring window");
+                        #[cfg(windows)]
+                        platform::show_from_tray();
+                        if let Some(ctx) = egui_ctx_menu.get() {
+                            ctx.request_repaint();
+                        }
+                    } else if event.id == quit_id {
+                        info!("Menu thread: Quit clicked, shutting down");
+                        let _ = cmd_tx_menu.try_send(PipelineCommand::Quit);
+                        // Give the pipeline a moment to flush before exiting.
+                        // process::exit works regardless of window visibility.
+                        std::thread::sleep(Duration::from_millis(200));
+                        std::process::exit(0);
+                    }
+                }
+                Err(_) => {
+                    std::thread::sleep(Duration::from_millis(50));
                 }
             }
         }
     });
 
-    // Open the dashboard window immediately on first launch
-    gui::open_window(gui_state);
+    // UI loop (must run on the main thread for winit/eframe on Windows).
+    // The tray thread sends OpenWindow/Quit commands to this loop.
+    // Open the dashboard on first launch.
+    let _ = ui_cmd_tx.send(UiCommand::OpenWindow);
 
-    // If the GUI window is closed, keep running in the tray.
-    // The quit menu item or Ctrl+C will actually exit.
-    info!("GUI window closed, running in tray...");
-
-    // Wait for pipeline manager thread
-    // (It will exit when PipelineCommand::Quit is received)
-    // Park the main thread — the app runs via tray menu and GUI threads.
     loop {
-        std::thread::park();
+        match ui_cmd_rx.recv() {
+            Ok(UiCommand::OpenWindow) => {
+                gui::open_window(gui_state.clone());
+                info!("GUI window closed, running in tray...");
+            }
+            Err(e) => {
+                info!("Main thread: ui_cmd_rx recv error: {e:?}, breaking loop");
+                break;
+            }
+        }
     }
+
+    // Ensure all background threads observe quit and terminate.
+    app_quit_flag.store(true, Ordering::Relaxed);
+    drop(cmd_tx);
+
+    let _ = menu_handle.join();
+
+    // Wait for the pipeline to flush and the tokio runtime to exit cleanly.
+    // A watchdog ensures the process always terminates even if a task hangs.
+    let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        let _ = rt_handle.join();
+        let _ = done_tx.send(());
+    });
+    match done_rx.recv_timeout(Duration::from_secs(3)) {
+        Ok(_) => info!("Pipeline shut down cleanly"),
+        Err(_) => info!("Pipeline shutdown timed out, forcing exit"),
+    }
+
+    std::process::exit(0);
 }
 
 /// Create a simple 32x32 purple icon as a placeholder.

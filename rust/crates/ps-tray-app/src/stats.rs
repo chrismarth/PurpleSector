@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
+
 /// Thread-safe live statistics, shared between the pipeline and the UI.
 #[derive(Debug, Clone)]
 pub struct PipelineStats {
@@ -15,7 +16,7 @@ struct Inner {
     samples_captured: AtomicU64,
     batches_sent: AtomicU64,
     batches_failed: AtomicU64,
-    wal_depth: AtomicU64,
+    wal_depth: Arc<AtomicU64>,
     bytes_sent: AtomicU64,
     start_time: Instant,
 }
@@ -39,7 +40,7 @@ impl PipelineStats {
                 samples_captured: AtomicU64::new(0),
                 batches_sent: AtomicU64::new(0),
                 batches_failed: AtomicU64::new(0),
-                wal_depth: AtomicU64::new(0),
+                wal_depth: Arc::new(AtomicU64::new(0)),
                 bytes_sent: AtomicU64::new(0),
                 start_time: Instant::now(),
             }),
@@ -58,8 +59,10 @@ impl PipelineStats {
         self.inner.batches_failed.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn set_wal_depth(&self, depth: u64) {
-        self.inner.wal_depth.store(depth, Ordering::Relaxed);
+    /// Returns a shared handle to the WAL depth counter for passing to
+    /// `GrpcConfig::wal_depth_reporter`. The transport writes to it directly.
+    pub fn wal_depth_arc(&self) -> Arc<AtomicU64> {
+        self.inner.wal_depth.clone()
     }
 
     pub fn add_bytes_sent(&self, bytes: u64) {

@@ -7,6 +7,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
+use prost::Message as _;
 use ps_telemetry_core::batch::{self, BatchConfig};
 use ps_telemetry_core::capture::ac::AcSource;
 use ps_telemetry_core::capture::acc::AccSource;
@@ -130,7 +131,7 @@ async fn run_pipeline(
         } else {
             config.username.clone()
         },
-        session_id: format!("session-{}", chrono_session_id()),
+        source: format!("session-{}", chrono_session_id()),
         source_rate_hz: match config.sim_type {
             SimType::AssettoCorsaSS => 60,
             SimType::AssettoCorsa => 10,
@@ -140,20 +141,37 @@ async fn run_pipeline(
 
     let grpc_config = GrpcConfig {
         gateway_url: config.grpc_endpoint.clone(),
+        wal_depth_reporter: Some(stats.wal_depth_arc()),
         ..Default::default()
     };
 
     // Channels
     let (sample_tx, sample_rx) = mpsc::channel(4096);
     let (batch_tx, batch_rx) = mpsc::channel(256);
+    let (transport_tx, transport_rx) = mpsc::channel(256);
 
     // Spawn batch assembler
     let _batch_handle = batch::spawn_batch_assembler(batch_config, sample_rx, batch_tx);
 
+    // Stats interceptor: count every batch that leaves the assembler before
+    // it enters the WAL / gRPC transport. Tracks batches_sent and bytes_sent.
+    let stats_intercept = stats.clone();
+    tokio::spawn(async move {
+        let mut rx = batch_rx;
+        while let Some(batch) = rx.recv().await {
+            let bytes = batch.encoded_len() as u64;
+            stats_intercept.inc_batches_sent();
+            stats_intercept.add_bytes_sent(bytes);
+            if transport_tx.send(batch).await.is_err() {
+                break;
+            }
+        }
+    });
+
     // Spawn gRPC transport
     let stats_grpc = stats.clone();
     let grpc_handle = tokio::spawn(async move {
-        if let Err(e) = grpc::run_transport(grpc_config, batch_rx).await {
+        if let Err(e) = grpc::run_transport(grpc_config, transport_rx).await {
             error!("gRPC transport error: {e}");
             stats_grpc.inc_batches_failed();
         }

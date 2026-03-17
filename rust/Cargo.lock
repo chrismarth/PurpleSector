@@ -3226,6 +3226,7 @@ dependencies = [
  "egui",
  "image",
  "muda",
+ "prost",
  "ps-telemetry-core",
  "serde",
  "serde_json",
