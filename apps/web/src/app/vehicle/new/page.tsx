@@ -4,16 +4,19 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, X } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { queryKeys } from '@/lib/queryKeys';
+import { mutationJson } from '@/lib/client-fetch';
 
 export default function NewVehiclePage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -23,33 +26,36 @@ export default function NewVehiclePage() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
 
+  const createVehicleMutation = useMutation({
+    mutationFn: async () => {
+      return mutationJson<{ id: string }>(
+        '/api/vehicles',
+        {
+          method: 'POST',
+          body: {
+            ...formData,
+            tags,
+          },
+        },
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+    },
+  });
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-
     try {
-      const response = await fetch('/api/vehicles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          tags,
-        }),
-      });
-
-      if (response.ok) {
-        const vehicle = await response.json();
-        router.push(`/vehicle/${vehicle.id}`);
-      } else {
-        alert('Failed to create vehicle');
-      }
+      const vehicle = await createVehicleMutation.mutateAsync();
+      router.push(`/vehicle/${vehicle.id}`);
     } catch (error) {
       console.error('Error creating vehicle:', error);
       alert('Failed to create vehicle');
-    } finally {
-      setLoading(false);
     }
   }
+
+  const loading = createVehicleMutation.isPending;
 
   function addTag() {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) {

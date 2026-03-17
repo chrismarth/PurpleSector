@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuthUserId } from '@/lib/api-auth';
+import { requireAuthUserId } from '@/lib/auth';
 import { getRegisteredRoutes } from '@purplesector/plugin-registry';
 import { initServerPlugins } from '@/lib/plugin-server';
 import type { PluginRequestContext } from '@purplesector/plugin-api';

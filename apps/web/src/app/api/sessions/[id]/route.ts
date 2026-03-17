@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
-import { requireAuthUserId } from '@/lib/api-auth';
+import { requireAuthUserId } from '@/lib/auth';
 import { updateActiveSessionStatus, deleteActiveSession } from '@/lib/risingwave';
+import { requireCanReadSessionById } from '@/lib/access-control';
 
 // GET /api/sessions/[id] - Get a specific session
 export async function GET(
@@ -16,12 +17,17 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { ownerUserId } = await requireCanReadSessionById({
+      requesterUserId: userId,
+      sessionId: params.id,
+    });
+
     const session = await (prisma as any).session.findFirst({
-      where: { id: params.id, userId },
+      where: { id: params.id },
       include: {
         event: true,
         laps: {
-          where: { userId },
+          where: { userId: ownerUserId },
           orderBy: { lapNumber: 'asc' },
         },
       },
@@ -36,6 +42,12 @@ export async function GET(
 
     return NextResponse.json(session);
   } catch (error) {
+    if ((error as any)?.code === 'NOT_FOUND') {
+      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+    if ((error as any)?.code === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     console.error('Error fetching session:', error);
     return NextResponse.json(
       { error: 'Failed to fetch session' },

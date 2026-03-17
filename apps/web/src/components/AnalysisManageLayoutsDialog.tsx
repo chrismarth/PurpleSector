@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -17,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Trash2, Star, StarOff, Pencil, Check, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDistanceToNow } from 'date-fns';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface SavedLayout {
   id: string;
@@ -44,8 +46,8 @@ export function AnalysisManageLayoutsDialog({
   onOpenChange,
   context = 'global',
 }: AnalysisManageLayoutsDialogProps) {
+  const queryClient = useQueryClient();
   const [layouts, setLayouts] = useState<SavedLayout[]>([]);
-  const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<LayoutEdit | null>(null);
   const [pendingChanges, setPendingChanges] = useState<Map<string, LayoutEdit>>(
@@ -55,34 +57,70 @@ export function AnalysisManageLayoutsDialog({
   const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
+  const layoutsQuery = useQuery({
+    queryKey: ['analysis-layouts', 'list', context] as const,
+    queryFn: async (): Promise<SavedLayout[]> => {
+      const data = await fetchJson<unknown>(`/api/analysis-layouts?context=${encodeURIComponent(context)}`, {
+        unauthorized: { kind: 'return_fallback' },
+        fallback: [],
+      });
+      return Array.isArray(data) ? (data as SavedLayout[]) : [];
+    },
+    enabled: open,
+  });
+
   useEffect(() => {
-    if (open) {
-      fetchLayouts();
+    if (!open) return;
+    const data = layoutsQuery.data ?? [];
+    setLayouts(data);
+    const defaultLayout = data.find((l: SavedLayout) => l.isDefault);
+    if (defaultLayout) {
+      setPendingDefaultId(defaultLayout.id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, context]);
+  }, [layoutsQuery.data, open]);
 
-  const fetchLayouts = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `/api/analysis-layouts?context=${encodeURIComponent(context)}`,
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setLayouts(data);
+  const applyLayoutChangesMutation = useMutation({
+    mutationFn: async (payload: {
+      pendingDeletes: Set<string>;
+      pendingChanges: Map<string, LayoutEdit>;
+      pendingDefaultId: string | null;
+      layouts: SavedLayout[];
+    }) => {
+      // deletions
+      for (const layoutId of payload.pendingDeletes) {
+        await mutationJson(`/api/analysis-layouts/${layoutId}`, { method: 'DELETE' });
+      }
 
-        const defaultLayout = data.find((l: SavedLayout) => l.isDefault);
-        if (defaultLayout) {
-          setPendingDefaultId(defaultLayout.id);
+      // edits
+      for (const [layoutId, changes] of payload.pendingChanges) {
+        if (!payload.pendingDeletes.has(layoutId)) {
+          await mutationJson(`/api/analysis-layouts/${layoutId}`, {
+            method: 'PATCH',
+            body: {
+              name: changes.name,
+              description: changes.description || null,
+            },
+          });
         }
       }
-    } catch (error) {
-      console.error('Error fetching analysis layouts:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+
+      // defaults
+      for (const layout of payload.layouts) {
+        const shouldBeDefault = payload.pendingDefaultId === layout.id;
+        if (layout.isDefault !== shouldBeDefault && !payload.pendingDeletes.has(layout.id)) {
+          await mutationJson(`/api/analysis-layouts/${layout.id}`, {
+            method: 'PATCH',
+            body: { isDefault: shouldBeDefault },
+          });
+        }
+      }
+
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['analysis-layouts', 'list', context] });
+    },
+  });
 
   const startEdit = (layout: SavedLayout) => {
     setEditingId(layout.id);
@@ -135,38 +173,12 @@ export function AnalysisManageLayoutsDialog({
   const handleSaveAll = async () => {
     setSaving(true);
     try {
-      // deletions
-      for (const layoutId of pendingDeletes) {
-        await fetch(`/api/analysis-layouts/${layoutId}`, {
-          method: 'DELETE',
-        });
-      }
-
-      // edits
-      for (const [layoutId, changes] of pendingChanges) {
-        if (!pendingDeletes.has(layoutId)) {
-          await fetch(`/api/analysis-layouts/${layoutId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: changes.name,
-              description: changes.description || null,
-            }),
-          });
-        }
-      }
-
-      // defaults (ensure only one default per context)
-      for (const layout of layouts) {
-        const shouldBeDefault = pendingDefaultId === layout.id;
-        if (layout.isDefault !== shouldBeDefault && !pendingDeletes.has(layout.id)) {
-          await fetch(`/api/analysis-layouts/${layout.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isDefault: shouldBeDefault }),
-          });
-        }
-      }
+      await applyLayoutChangesMutation.mutateAsync({
+        pendingDeletes,
+        pendingChanges,
+        pendingDefaultId,
+        layouts,
+      });
 
       setPendingChanges(new Map());
       setPendingDeletes(new Set());
@@ -180,6 +192,8 @@ export function AnalysisManageLayoutsDialog({
       setSaving(false);
     }
   };
+
+  const loading = layoutsQuery.isLoading;
 
   const handleCancel = () => {
     setPendingChanges(new Map());

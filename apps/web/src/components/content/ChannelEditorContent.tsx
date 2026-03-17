@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Calculator, Database, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +11,7 @@ import {
   TelemetryChannelDefinition,
 } from '@purplesector/telemetry';
 import { MathChannelForm } from '@/components/MathChannelForm';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface ChannelEditorContentProps {
   /** Called whenever the math channels list changes (create/update/delete). */
@@ -17,6 +19,7 @@ interface ChannelEditorContentProps {
 }
 
 export default function ChannelEditorContent({ onChannelsChange }: ChannelEditorContentProps = {}) {
+  const queryClient = useQueryClient();
   const [mathChannels, setMathChannels] = useState<MathTelemetryChannel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<TelemetryChannelDefinition | null>(null);
   const [editingMathChannel, setEditingMathChannel] = useState<MathTelemetryChannel | null>(null);
@@ -24,9 +27,78 @@ export default function ChannelEditorContent({ onChannelsChange }: ChannelEditor
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['raw', 'math']));
   const [pendingChannelLabel, setPendingChannelLabel] = useState<string | null>(null);
 
+  const mathChannelsQuery = useQuery({
+    queryKey: ['channels', 'math'] as const,
+    queryFn: async (): Promise<MathTelemetryChannel[]> => {
+      const data = await fetchJson<unknown>('/api/channels/math', {
+        unauthorized: { kind: 'return_fallback' },
+        fallback: [],
+      });
+      return Array.isArray(data) ? (data as MathTelemetryChannel[]) : [];
+    },
+  });
+
   useEffect(() => {
-    fetchMathChannels();
-  }, []);
+    if (mathChannelsQuery.data) {
+      setMathChannels(mathChannelsQuery.data);
+    }
+  }, [mathChannelsQuery.data]);
+
+  const createMathChannelMutation = useMutation({
+    mutationFn: async (channel: MathTelemetryChannel) => {
+      return mutationJson<MathTelemetryChannel>('/api/channels/math', {
+        method: 'POST',
+        body: {
+          label: channel.label,
+          unit: channel.unit,
+          expression: channel.expression,
+          inputs: channel.inputs,
+          validated: channel.validated,
+        },
+      });
+    },
+    onSuccess: (newChannel) => {
+      queryClient.invalidateQueries({ queryKey: ['channels', 'math'] });
+      onChannelsChange?.([...mathChannels, newChannel]);
+      setPendingChannelLabel(newChannel.label);
+    },
+  });
+
+  const updateMathChannelMutation = useMutation({
+    mutationFn: async (channel: MathTelemetryChannel) => {
+      return mutationJson<MathTelemetryChannel>(`/api/channels/math/${channel.id}`, {
+        method: 'PUT',
+        body: {
+          label: channel.label,
+          unit: channel.unit,
+          expression: channel.expression,
+          inputs: channel.inputs,
+          validated: channel.validated,
+        },
+      });
+    },
+    onSuccess: (updatedChannel) => {
+      queryClient.invalidateQueries({ queryKey: ['channels', 'math'] });
+      setSelectedChannel(updatedChannel);
+      setEditingMathChannel(updatedChannel);
+      onChannelsChange?.(mathChannels.map((ch) => (ch.id === updatedChannel.id ? updatedChannel : ch)));
+    },
+  });
+
+  const deleteMathChannelMutation = useMutation({
+    mutationFn: async (channelId: string) => {
+      await mutationJson(`/api/channels/math/${channelId}`, {
+        method: 'DELETE',
+      });
+      return channelId;
+    },
+    onSuccess: (channelId) => {
+      queryClient.invalidateQueries({ queryKey: ['channels', 'math'] });
+      onChannelsChange?.(mathChannels.filter((ch) => ch.id !== channelId));
+      setSelectedChannel(null);
+      setEditingMathChannel(null);
+    },
+  });
 
   // Watch for newly created channel to appear in the list
   useEffect(() => {
@@ -41,94 +113,31 @@ export default function ChannelEditorContent({ onChannelsChange }: ChannelEditor
     }
   }, [mathChannels, pendingChannelLabel]);
 
-  async function fetchMathChannels() {
-    try {
-      const response = await fetch('/api/channels/math');
-      if (response.ok) {
-        const data = await response.json();
-        setMathChannels(data);
-      }
-    } catch (error) {
-      console.error('Error fetching math channels:', error);
-    }
-  }
-
   const handleCreate = async (channel: MathTelemetryChannel) => {
     try {
-      const response = await fetch('/api/channels/math', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label: channel.label,
-          unit: channel.unit,
-          expression: channel.expression,
-          inputs: channel.inputs,
-          validated: channel.validated,
-        }),
-      });
-      if (response.ok) {
-        const newChannel = await response.json();
-        setMathChannels((prev) => {
-          const next = [...prev, newChannel];
-          onChannelsChange?.(next);
-          return next;
-        });
-        setPendingChannelLabel(channel.label);
-      } else {
-        const errorText = await response.text();
-        alert(`Failed to create math channel: ${errorText}`);
-      }
+      await createMathChannelMutation.mutateAsync(channel);
     } catch (error) {
       console.error('Error creating math channel:', error);
-      alert('Failed to create math channel');
+      alert(`Failed to create math channel: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
   const handleUpdate = async (channel: MathTelemetryChannel) => {
     try {
-      const response = await fetch(`/api/channels/math/${channel.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label: channel.label,
-          unit: channel.unit,
-          expression: channel.expression,
-          inputs: channel.inputs,
-          validated: channel.validated,
-        }),
-      });
-      if (response.ok) {
-        const updatedChannel = await response.json();
-        setMathChannels((prev) => {
-          const next = prev.map((ch) => (ch.id === updatedChannel.id ? updatedChannel : ch));
-          onChannelsChange?.(next);
-          return next;
-        });
-        setSelectedChannel(updatedChannel);
-        setEditingMathChannel(updatedChannel);
-      }
+      await updateMathChannelMutation.mutateAsync(channel);
     } catch (error) {
       console.error('Error updating math channel:', error);
-      alert('Failed to update math channel');
+      alert(`Failed to update math channel: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
   const handleDelete = async (channelId: string) => {
     if (!confirm('Are you sure you want to delete this math channel?')) return;
     try {
-      const response = await fetch(`/api/channels/math/${channelId}`, { method: 'DELETE' });
-      if (response.ok) {
-        setMathChannels((prev) => {
-          const next = prev.filter((ch) => ch.id !== channelId);
-          onChannelsChange?.(next);
-          return next;
-        });
-        setSelectedChannel(null);
-        setEditingMathChannel(null);
-      }
+      await deleteMathChannelMutation.mutateAsync(channelId);
     } catch (error) {
       console.error('Error deleting math channel:', error);
-      alert('Failed to delete math channel');
+      alert(`Failed to delete math channel: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

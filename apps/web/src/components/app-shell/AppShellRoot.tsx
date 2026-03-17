@@ -47,5 +47,5 @@ export function AppShellRoot({ children }: { children?: React.ReactNode }) {
     return null;
   }
 
-  return <AppShell />;
+  return <AppShell>{children}</AppShell>;
 }

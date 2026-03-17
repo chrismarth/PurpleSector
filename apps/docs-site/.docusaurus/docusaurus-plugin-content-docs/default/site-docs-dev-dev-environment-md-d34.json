@@ -1,7 +1,7 @@
 {
   "id": "dev/dev-environment",
   "title": "Development Environment",
-  "description": "The development environment runs the full Kafka-based telemetry pipeline with demo data, so you can work on Purple Sector without having Assetto Corsa or ACC running.",
+  "description": "The development environment runs the full Redpanda/RisingWave/Redis/Iceberg telemetry pipeline with demo data, so you can work on Purple Sector without having Assetto Corsa or ACC running.",
   "source": "@site/docs/dev/dev-environment.md",
   "sourceDirName": "dev",
   "slug": "/dev/dev-environment",

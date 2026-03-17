@@ -18,6 +18,7 @@ import type { MathTelemetryChannel } from '@purplesector/telemetry';
 import type { AnalysisLayoutJSON } from '@/lib/analysisLayout';
 import type { AnalysisPanelContext } from '@purplesector/plugin-api';
 import { AnalysisPanelGrid } from '@/components/AnalysisPanelGrid';
+import { useTelemetryPanelUiStore } from '@/stores/telemetryPanelUiStore';
 
 interface CompareLap {
   id: string;
@@ -30,6 +31,8 @@ interface TelemetryDataPanelProps {
   telemetry: TelemetryFrame[];
   compareTelemetry?: TelemetryFrame[];
   compareLapId?: string | null;
+  /** Optional key to persist certain UI state (fullscreen, focused panel) across refresh/navigation. */
+  uiScopeKey?: string;
   layout: AnalysisLayoutJSON;
   onLayoutChange?: (layout: AnalysisLayoutJSON) => void;
   onSaveLayout?: () => void;
@@ -52,6 +55,7 @@ export function TelemetryDataPanel({
   telemetry,
   compareTelemetry,
   compareLapId,
+  uiScopeKey,
   layout,
   onLayoutChange,
   onSaveLayout,
@@ -64,10 +68,35 @@ export function TelemetryDataPanel({
   onRemoveCompareLap,
   formatLapTime: formatTime,
 }: TelemetryDataPanelProps) {
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const getIsFullscreen = useTelemetryPanelUiStore((s) => s.getIsFullscreen);
+  const setIsFullscreenPersisted = useTelemetryPanelUiStore((s) => s.setIsFullscreen);
+  const getFocusPanelId = useTelemetryPanelUiStore((s) => s.getFocusPanelId);
+  const setFocusPanelIdPersisted = useTelemetryPanelUiStore((s) => s.setFocusPanelId);
+
+  const [isFullscreen, setIsFullscreen] = useState(() =>
+    uiScopeKey ? getIsFullscreen(uiScopeKey) : false,
+  );
   const [comparePopoverOpen, setComparePopoverOpen] = useState(false);
-  const [focusPanelId, setFocusPanelId] = useState<string | null>(null);
+  const [focusPanelId, setFocusPanelId] = useState<string | null>(() =>
+    uiScopeKey ? getFocusPanelId(uiScopeKey) : null,
+  );
   const [focusPanelHeight, setFocusPanelHeight] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!uiScopeKey) return;
+    setIsFullscreen(getIsFullscreen(uiScopeKey));
+    setFocusPanelId(getFocusPanelId(uiScopeKey));
+  }, [getFocusPanelId, getIsFullscreen, uiScopeKey]);
+
+  useEffect(() => {
+    if (!uiScopeKey) return;
+    setIsFullscreenPersisted(uiScopeKey, isFullscreen);
+  }, [isFullscreen, setIsFullscreenPersisted, uiScopeKey]);
+
+  useEffect(() => {
+    if (!uiScopeKey) return;
+    setFocusPanelIdPersisted(uiScopeKey, focusPanelId);
+  }, [focusPanelId, setFocusPanelIdPersisted, uiScopeKey]);
 
   // When a panel is focused, force the whole TelemetryDataPanel fullscreen
   const handlePanelFullscreenToggle = useCallback((panelId: string | null) => {

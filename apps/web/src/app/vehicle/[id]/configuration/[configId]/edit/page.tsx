@@ -4,12 +4,15 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, X, MoreVertical, FileText } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface PartField {
   key: string;
@@ -22,8 +25,8 @@ export default function EditConfigurationPage() {
   const vehicleId = params.id as string;
   const configId = params.configId as string;
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -33,68 +36,68 @@ export default function EditConfigurationPage() {
   ]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetchConfiguration();
-  }, [configId]);
+  const configurationQuery = useQuery({
+    queryKey: queryKeys.vehicleConfigurationDetail(vehicleId, configId),
+    queryFn: async () => {
+      return fetchJson<any>(`/api/vehicles/${vehicleId}/configurations/${configId}`, {
+        unauthorized: { kind: 'redirect_to_login' },
+      });
+    },
+    enabled: !!vehicleId && !!configId,
+  });
 
-  async function fetchConfiguration() {
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/configurations/${configId}`);
-      const data = await response.json();
-      
-      setFormData({
-        name: data.name,
-        description: data.description || '',
+  useEffect(() => {
+    if (!configurationQuery.data) return;
+    const data = configurationQuery.data;
+    setFormData({
+      name: data.name,
+      description: data.description || '',
+    });
+
+    const partsData = JSON.parse(data.parts);
+    if (Object.keys(partsData).length > 0) {
+      setParts(Object.entries(partsData).map(([key, value]) => ({ key, value: value as string })));
+    }
+  }, [configurationQuery.data]);
+
+  const updateConfigurationMutation = useMutation({
+    mutationFn: async () => {
+      const partsObject: Record<string, string> = {};
+      parts.forEach((part) => {
+        if (part.key.trim() && part.value.trim()) {
+          partsObject[part.key.trim()] = part.value.trim();
+        }
       });
 
-      // Parse parts from JSON
-      const partsData = JSON.parse(data.parts);
-      if (Object.keys(partsData).length > 0) {
-        setParts(
-          Object.entries(partsData).map(([key, value]) => ({ key, value: value as string }))
-        );
-      }
-    } catch (error) {
-      console.error('Error fetching configuration:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+      return mutationJson<any>(`/api/vehicles/${vehicleId}/configurations/${configId}`, {
+        method: 'PATCH',
+        body: {
+          ...formData,
+          parts: partsObject,
+        },
+      });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.vehicleConfigurationDetail(vehicleId, configId), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleDetail(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleConfigurations(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+    },
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
-
-    // Convert parts array to object
-    const partsObject: Record<string, string> = {};
-    parts.forEach(part => {
-      if (part.key.trim() && part.value.trim()) {
-        partsObject[part.key.trim()] = part.value.trim();
-      }
-    });
-
     try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/configurations/${configId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          parts: partsObject,
-        }),
-      });
-
-      if (response.ok) {
-        router.push(`/vehicle/${vehicleId}/configuration/${configId}`);
-      } else {
-        alert('Failed to update configuration');
-      }
+      await updateConfigurationMutation.mutateAsync();
+      router.push(`/vehicle/${vehicleId}/configuration/${configId}`);
     } catch (error) {
       console.error('Error updating configuration:', error);
       alert('Failed to update configuration');
-    } finally {
-      setSaving(false);
     }
   }
+
+  const loading = configurationQuery.isLoading;
+  const saving = updateConfigurationMutation.isPending;
 
   function addPartField() {
     setParts([...parts, { key: '', value: '' }]);

@@ -1,7 +1,7 @@
 {
   "id": "ops/monitoring",
   "title": "Monitoring",
-  "description": "This page summarizes how to monitor the Kafka pipeline, backend services, and overall telemetry health.",
+  "description": "This page summarizes how to monitor the current telemetry pipeline, backend services, and overall telemetry health.",
   "source": "@site/docs/ops/monitoring.md",
   "sourceDirName": "ops",
   "slug": "/ops/monitoring",

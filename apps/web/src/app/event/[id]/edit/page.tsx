@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Save } from 'lucide-react';
@@ -9,6 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface Event {
   id: string;
@@ -24,9 +27,7 @@ export default function EditEventPage() {
   const router = useRouter();
   const eventId = params.id as string;
 
-  const [event, setEvent] = useState<Event | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -36,54 +37,56 @@ export default function EditEventPage() {
     endDate: '',
   });
 
-  useEffect(() => {
-    fetchEvent();
-  }, [eventId]);
-
-  async function fetchEvent() {
-    try {
-      const response = await fetch(`/api/events/${eventId}`);
-      const data = await response.json();
-      setEvent(data);
-      
-      // Populate form
-      setFormData({
-        name: data.name || '',
-        description: data.description || '',
-        location: data.location || '',
-        startDate: data.startDate || '',
-        endDate: data.endDate || '',
+  const eventQuery = useQuery({
+    queryKey: queryKeys.eventDetail(eventId),
+    queryFn: async (): Promise<Event> => {
+      return fetchJson<Event>(`/api/events/${eventId}`, {
+        unauthorized: { kind: 'redirect_to_login' },
       });
-    } catch (error) {
-      console.error('Error fetching event:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+    },
+    enabled: !!eventId,
+  });
+
+  useEffect(() => {
+    if (!eventQuery.data) return;
+    const data = eventQuery.data;
+    setFormData({
+      name: data.name || '',
+      description: data.description || '',
+      location: data.location || '',
+      startDate: data.startDate || '',
+      endDate: data.endDate || '',
+    });
+  }, [eventQuery.data]);
+
+  const updateEventMutation = useMutation({
+    mutationFn: async (payload: typeof formData) => {
+      return mutationJson<Event, typeof formData>(`/api/events/${eventId}`, {
+        method: 'PUT',
+        body: payload,
+      });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.eventDetail(eventId), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+    },
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
-
     try {
-      const response = await fetch(`/api/events/${eventId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        router.push('/');
-      } else {
-        alert('Failed to update event');
-      }
+      await updateEventMutation.mutateAsync(formData);
+      router.push(`/event/${eventId}`);
     } catch (error) {
       console.error('Error updating event:', error);
       alert('Failed to update event');
-    } finally {
-      setSaving(false);
     }
   }
+
+  const loading = eventQuery.isLoading;
+  const event = eventQuery.data ?? null;
+  const saving = updateEventMutation.isPending;
 
   if (loading) {
     return (

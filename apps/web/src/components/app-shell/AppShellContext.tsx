@@ -1,13 +1,12 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from 'react';
+import { useRouter } from 'next/navigation';
 import type { TabDescriptor } from '@purplesector/plugin-api';
 
 // ── State ──
 
 interface AppShellState {
-  tabs: TabDescriptor[];
-  activeTabId: string | null;
   agentPanelOpen: boolean;
   navCollapsed: boolean;
   activeNavTab: string;
@@ -16,10 +15,6 @@ interface AppShellState {
 // ── Actions ──
 
 type AppShellAction =
-  | { type: 'OPEN_TAB'; tab: TabDescriptor }
-  | { type: 'CLOSE_TAB'; tabId: string }
-  | { type: 'SET_ACTIVE_TAB'; tabId: string }
-  | { type: 'UPDATE_TAB'; tabId: string; updates: Partial<Pick<TabDescriptor, 'label' | 'breadcrumbs'>> }
   | { type: 'TOGGLE_AGENT_PANEL' }
   | { type: 'SET_AGENT_PANEL'; open: boolean }
   | { type: 'TOGGLE_NAV' }
@@ -28,49 +23,6 @@ type AppShellAction =
 
 function reducer(state: AppShellState, action: AppShellAction): AppShellState {
   switch (action.type) {
-    case 'OPEN_TAB': {
-      // Deduplicate by type + entityId
-      const existing = state.tabs.find(
-        (t) => t.type === action.tab.type && t.entityId === action.tab.entityId
-      );
-      if (existing) {
-        return { ...state, activeTabId: existing.id };
-      }
-      return {
-        ...state,
-        tabs: [...state.tabs, action.tab],
-        activeTabId: action.tab.id,
-      };
-    }
-    case 'CLOSE_TAB': {
-      const idx = state.tabs.findIndex((t) => t.id === action.tabId);
-      if (idx === -1) return state;
-      const newTabs = state.tabs.filter((t) => t.id !== action.tabId);
-      let newActiveId = state.activeTabId;
-      if (state.activeTabId === action.tabId) {
-        // Activate the next tab, or previous, or null
-        if (newTabs.length === 0) {
-          newActiveId = null;
-        } else if (idx < newTabs.length) {
-          newActiveId = newTabs[idx].id;
-        } else {
-          newActiveId = newTabs[newTabs.length - 1].id;
-        }
-      }
-      return { ...state, tabs: newTabs, activeTabId: newActiveId };
-    }
-    case 'SET_ACTIVE_TAB': {
-      if (!state.tabs.find((t) => t.id === action.tabId)) return state;
-      return { ...state, activeTabId: action.tabId };
-    }
-    case 'UPDATE_TAB': {
-      return {
-        ...state,
-        tabs: state.tabs.map((t) =>
-          t.id === action.tabId ? { ...t, ...action.updates } : t
-        ),
-      };
-    }
     case 'TOGGLE_AGENT_PANEL':
       return { ...state, agentPanelOpen: !state.agentPanelOpen };
     case 'SET_AGENT_PANEL':
@@ -97,9 +49,6 @@ function reducer(state: AppShellState, action: AppShellAction): AppShellState {
 interface AppShellContextValue {
   state: AppShellState;
   openTab: (tab: TabDescriptor) => void;
-  closeTab: (tabId: string) => void;
-  setActiveTab: (tabId: string) => void;
-  updateTab: (tabId: string, updates: Partial<Pick<TabDescriptor, 'label' | 'breadcrumbs'>>) => void;
   toggleAgentPanel: () => void;
   setAgentPanel: (open: boolean) => void;
   toggleNav: () => void;
@@ -108,49 +57,6 @@ interface AppShellContextValue {
 }
 
 const AppShellCtx = createContext<AppShellContextValue | null>(null);
-
-// ── Deep linking helpers ──
-
-function serializeTabToUrl(tab: TabDescriptor | undefined): void {
-  if (typeof window === 'undefined') return;
-  const url = new URL(window.location.href);
-  if (!tab) {
-    url.searchParams.delete('tab');
-    url.searchParams.delete('id');
-    url.searchParams.delete('p');
-  } else {
-    url.searchParams.set('tab', tab.type);
-    if (tab.entityId) {
-      url.searchParams.set('id', tab.entityId);
-    } else {
-      url.searchParams.delete('id');
-    }
-    if (tab.parentIds && Object.keys(tab.parentIds).length > 0) {
-      url.searchParams.set('p', JSON.stringify(tab.parentIds));
-    } else {
-      url.searchParams.delete('p');
-    }
-  }
-  window.history.replaceState({}, '', url.toString());
-}
-
-function deserializeTabFromUrl(): { type: string; entityId?: string; parentIds?: Record<string, string> } | null {
-  if (typeof window === 'undefined') return null;
-  const params = new URLSearchParams(window.location.search);
-  const type = params.get('tab');
-  if (!type) return null;
-  const entityId = params.get('id') || undefined;
-  let parentIds: Record<string, string> | undefined;
-  const pStr = params.get('p');
-  if (pStr) {
-    try {
-      parentIds = JSON.parse(pStr);
-    } catch {
-      // ignore malformed
-    }
-  }
-  return { type, entityId, parentIds };
-}
 
 // ── localStorage helpers ──
 
@@ -177,14 +83,13 @@ function saveNavCollapsed(collapsed: boolean): void {
 // ── Provider ──
 
 const initialState: AppShellState = {
-  tabs: [],
-  activeTabId: null,
   agentPanelOpen: false,
   navCollapsed: false,
   activeNavTab: 'events',
 };
 
 export function AppShellProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [state, dispatch] = useReducer(reducer, {
     ...initialState,
     navCollapsed: loadNavCollapsed(),
@@ -195,29 +100,50 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
     saveNavCollapsed(state.navCollapsed);
   }, [state.navCollapsed]);
 
-  // Sync active tab to URL
-  useEffect(() => {
-    const activeTab = state.tabs.find((t) => t.id === state.activeTabId);
-    serializeTabToUrl(activeTab);
-  }, [state.activeTabId, state.tabs]);
+  const openTab = useCallback(
+    (tab: TabDescriptor) => {
+      const type = String((tab as any)?.type || '');
+      const entityId = (tab as any)?.entityId as string | undefined;
+      const parentIds = ((tab as any)?.parentIds || {}) as Record<string, string>;
 
-  const openTab = useCallback((tab: TabDescriptor) => {
-    dispatch({ type: 'OPEN_TAB', tab });
-  }, []);
+      // Events
+      if (type === 'event-detail' && entityId) return router.push(`/event/${entityId}`);
+      if (type === 'event-edit' && entityId) return router.push(`/event/${entityId}/edit`);
+      if (type === 'event-new') return router.push('/event/new');
 
-  const closeTab = useCallback((tabId: string) => {
-    dispatch({ type: 'CLOSE_TAB', tabId });
-  }, []);
+      // Sessions
+      if (type === 'session-detail' && entityId) return router.push(`/session/${entityId}`);
+      if (type === 'session-edit' && entityId) return router.push(`/session/${entityId}/edit`);
+      if (type === 'session-new') {
+        const eventId = parentIds.eventId;
+        return router.push(eventId ? `/session/new?eventId=${encodeURIComponent(eventId)}` : '/session/new');
+      }
 
-  const setActiveTab = useCallback((tabId: string) => {
-    dispatch({ type: 'SET_ACTIVE_TAB', tabId });
-  }, []);
+      // Laps
+      if (type === 'lap-detail' && entityId) return router.push(`/lap/${entityId}`);
 
-  const updateTab = useCallback(
-    (tabId: string, updates: Partial<Pick<TabDescriptor, 'label' | 'breadcrumbs'>>) => {
-      dispatch({ type: 'UPDATE_TAB', tabId, updates });
+      // Run plan
+      if (type === 'run-plan-new' && entityId) return router.push(`/event/${entityId}/run-plan`);
+
+      // Vehicles
+      if (type === 'vehicle-detail' && entityId) return router.push(`/vehicle/${entityId}`);
+      if (type === 'vehicle-edit' && entityId) return router.push(`/vehicle/${entityId}/edit`);
+      if (type === 'vehicle-new') return router.push('/vehicle/new');
+
+      if (type === 'vehicle-config-detail' && entityId && parentIds.vehicleId) {
+        return router.push(`/vehicle/${parentIds.vehicleId}/configuration/${entityId}`);
+      }
+      if (type === 'vehicle-config-new' && parentIds.vehicleId) {
+        return router.push(`/vehicle/${parentIds.vehicleId}/configuration/new`);
+      }
+      if (type === 'vehicle-setup-detail' && entityId && parentIds.vehicleId) {
+        return router.push(`/vehicle/${parentIds.vehicleId}/setup/${entityId}`);
+      }
+      if (type === 'vehicle-setup-new' && parentIds.vehicleId) {
+        return router.push(`/vehicle/${parentIds.vehicleId}/setup/new`);
+      }
     },
-    []
+    [router]
   );
 
   const toggleAgentPanel = useCallback(() => {
@@ -252,40 +178,17 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('appshell:openTab', handleOpenTab);
   }, [openTab]);
 
-  // Restore tab from URL on initial mount
-  useEffect(() => {
-    const urlTab = deserializeTabFromUrl();
-    if (urlTab) {
-      const tabId = urlTab.entityId
-        ? `${urlTab.type}:${urlTab.entityId}`
-        : `${urlTab.type}:${Date.now()}`;
-      openTab({
-        id: tabId,
-        type: urlTab.type,
-        label: urlTab.type.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        breadcrumbs: [urlTab.type.replace(/-/g, ' ')],
-        entityId: urlTab.entityId,
-        parentIds: urlTab.parentIds,
-        closable: true,
-      });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const value = useMemo<AppShellContextValue>(
     () => ({
       state,
       openTab,
-      closeTab,
-      setActiveTab,
-      updateTab,
       toggleAgentPanel,
       setAgentPanel,
       toggleNav,
       setNavCollapsed,
       setActiveNavTab,
     }),
-    [state, openTab, closeTab, setActiveTab, updateTab, toggleAgentPanel, setAgentPanel, toggleNav, setNavCollapsed, setActiveNavTab]
+    [state, openTab, toggleAgentPanel, setAgentPanel, toggleNav, setNavCollapsed, setActiveNavTab]
   );
 
   return <AppShellCtx.Provider value={value}>{children}</AppShellCtx.Provider>;
@@ -298,6 +201,4 @@ export function useAppShell(): AppShellContextValue {
   }
   return ctx;
 }
-
-export { deserializeTabFromUrl };
 export type { AppShellState };

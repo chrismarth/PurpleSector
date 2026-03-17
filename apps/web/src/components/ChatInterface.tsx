@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import ReactMarkdown from 'react-markdown';
+import { mutationJson } from '@/lib/client-fetch';
 
 interface ChatMessage {
   id: string;
@@ -22,9 +24,19 @@ interface ChatInterfaceProps {
 export function ChatInterface({ lapId, initialMessages = [] }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialMount = useRef(true);
+
+  const sendMessageMutation = useMutation({
+    mutationFn: async (payload: { lapId: string; message: string }) => {
+      return mutationJson<any>('/api/chat', {
+        method: 'POST',
+        body: payload,
+      });
+    },
+  });
+
+  const loading = sendMessageMutation.isPending;
 
   useEffect(() => {
     // Skip scroll on initial mount to prevent auto-scroll on page load
@@ -51,19 +63,9 @@ export function ChatInterface({ lapId, initialMessages = [] }: ChatInterfaceProp
 
     setMessages(prev => [...prev, userMessage]);
     setInput('');
-    setLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lapId,
-          message: input,
-        }),
-      });
-
-      const data = await response.json();
+      const data = await sendMessageMutation.mutateAsync({ lapId, message: input });
 
       if (data.success) {
         setMessages(prev => [...prev, {
@@ -75,8 +77,6 @@ export function ChatInterface({ lapId, initialMessages = [] }: ChatInterfaceProp
       }
     } catch (error) {
       console.error('Error sending message:', error);
-    } finally {
-      setLoading(false);
     }
   }
 

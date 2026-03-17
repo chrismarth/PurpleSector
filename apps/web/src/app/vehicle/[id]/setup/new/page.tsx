@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, X, MoreVertical, Upload, FileText } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface ParameterField {
   key: string;
@@ -29,8 +32,7 @@ export default function NewSetupPage() {
   const router = useRouter();
   const vehicleId = params.id as string;
 
-  const [loading, setLoading] = useState(false);
-  const [configurations, setConfigurations] = useState<VehicleConfiguration[]>([]);
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -43,58 +45,62 @@ export default function NewSetupPage() {
   const [importType, setImportType] = useState<'csv' | 'ac' | 'acc' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetchConfigurations();
-  }, [vehicleId]);
+  const configurationsQuery = useQuery({
+    queryKey: queryKeys.vehicleConfigurations(vehicleId),
+    queryFn: async (): Promise<VehicleConfiguration[]> => {
+      const data = await fetchJson<unknown>(`/api/vehicles/${vehicleId}/configurations`, {
+        unauthorized: { kind: 'redirect_to_login' },
+        fallback: [],
+      });
+      return Array.isArray(data) ? (data as VehicleConfiguration[]) : [];
+    },
+    enabled: !!vehicleId,
+    staleTime: 15_000,
+  });
 
-  async function fetchConfigurations() {
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/configurations`);
-      const data = await response.json();
-      setConfigurations(data);
-    } catch (error) {
-      console.error('Error fetching configurations:', error);
-    }
-  }
+  const configurations = configurationsQuery.data ?? [];
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
+  const createSetupMutation = useMutation({
+    mutationFn: async () => {
+      const parametersObject: Record<string, any> = {};
+      parameters.forEach((param) => {
+        if (param.key.trim() && param.value.trim()) {
+          parametersObject[param.key.trim()] = {
+            value: param.value.trim(),
+            units: param.units.trim(),
+          };
+        }
+      });
 
-    // Convert parameters array to object
-    const parametersObject: Record<string, any> = {};
-    parameters.forEach(param => {
-      if (param.key.trim() && param.value.trim()) {
-        parametersObject[param.key.trim()] = {
-          value: param.value.trim(),
-          units: param.units.trim()
-        };
-      }
-    });
-
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/setups`, {
+      await mutationJson(`/api/vehicles/${vehicleId}/setups`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           ...formData,
           vehicleConfigurationId: formData.vehicleConfigurationId || null,
           parameters: parametersObject,
-        }),
+        },
       });
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleDetail(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleSetups(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+    },
+  });
 
-      if (response.ok) {
-        router.push(`/vehicle/${vehicleId}`);
-      } else {
-        alert('Failed to create setup');
-      }
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await createSetupMutation.mutateAsync();
+      router.push(`/vehicle/${vehicleId}`);
     } catch (error) {
       console.error('Error creating setup:', error);
       alert('Failed to create setup');
-    } finally {
-      setLoading(false);
     }
   }
+
+  const loading = createSetupMutation.isPending;
 
   function addParameterField() {
     setParameters([...parameters, { key: '', value: '', units: '' }]);

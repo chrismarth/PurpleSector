@@ -5,12 +5,12 @@ import { AppShellProvider } from './AppShellContext';
 import { NavProvider } from './NavContext';
 import { TitleBar } from './TitleBar';
 import { NavPane } from './NavPane';
-import { ContentPane } from './ContentPane';
 import { ToolbarPane } from './ToolbarPane';
 import { StatusBar } from './StatusBar';
 import { AgentSlidePanel } from './AgentSlidePanel';
 
-export function AppShell() {
+export function AppShell(props: { children?: React.ReactNode }) {
+  const { children } = props;
   return (
     <AppShellProvider>
       <NavProvider>
@@ -23,8 +23,14 @@ export function AppShell() {
             {/* Navigation Pane (vtabs + tree) */}
             <NavPane />
 
-            {/* Content Pane (tabbed) */}
-            <ContentPane />
+            {/* Content Pane */}
+            {children ? (
+              <div className="flex-1 min-w-0 overflow-hidden">{children}</div>
+            ) : (
+              <div className="flex-1 min-w-0 overflow-hidden flex items-center justify-center text-muted-foreground">
+                <p className="text-sm">No route content</p>
+              </div>
+            )}
 
             {/* Agent Slide-out Panel */}
             <AgentSlidePanel />

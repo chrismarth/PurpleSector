@@ -3,11 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2, Calendar, MapPin, Edit, Car, Settings, Wrench } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatTimestamp } from '@/lib/utils';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface Event {
   id: string;
@@ -38,51 +41,72 @@ interface Vehicle {
 }
 
 export default function HomePage() {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('events');
 
-  useEffect(() => {
-    fetchData();
+  const eventsQuery = useQuery({
+    queryKey: queryKeys.eventsList,
+    queryFn: async (): Promise<Event[]> =>
+      fetchJson<Event[]>('/api/events', {
+        unauthorized: { kind: 'redirect_to_login' },
+        fallback: [],
+      }),
+    staleTime: 15_000,
+  });
 
-    // Re-fetch when the AI agent mutates data (e.g. creates an event)
-    const onDataMutated = () => fetchData();
+  const vehiclesQuery = useQuery({
+    queryKey: queryKeys.vehiclesList,
+    queryFn: async (): Promise<Vehicle[]> =>
+      fetchJson<Vehicle[]>('/api/vehicles', {
+        unauthorized: { kind: 'redirect_to_login' },
+        fallback: [],
+      }),
+    staleTime: 15_000,
+  });
+
+  const events = eventsQuery.data ?? [];
+  const vehicles = vehiclesQuery.data ?? [];
+  const loading = eventsQuery.isLoading || vehiclesQuery.isLoading;
+
+  useEffect(() => {
+    const onDataMutated = () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+    };
     window.addEventListener('agent:data-mutated', onDataMutated);
     return () => window.removeEventListener('agent:data-mutated', onDataMutated);
-  }, []);
+  }, [queryClient]);
 
-  async function fetchData() {
-    try {
-      const [eventsResponse, vehiclesResponse] = await Promise.all([
-        fetch('/api/events', { cache: 'no-store' }),
-        fetch('/api/vehicles', { cache: 'no-store' }),
-      ]);
+  const deleteEventMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await mutationJson(`/api/events/${id}`, { method: 'DELETE' });
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData(queryKeys.eventsList, (prev: Event[] | undefined) =>
+        (prev ?? []).filter((e) => e.id !== id)
+      );
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+    },
+  });
 
-      if (eventsResponse.status === 401 || vehiclesResponse.status === 401) {
-        const next = encodeURIComponent(window.location.pathname + window.location.search);
-        window.location.href = `/login?next=${next}`;
-        return;
-      }
-
-      const eventsData = await eventsResponse.json();
-      const vehiclesData = await vehiclesResponse.json();
-
-      setEvents(Array.isArray(eventsData) ? eventsData : []);
-      setVehicles(Array.isArray(vehiclesData) ? vehiclesData : []);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const deleteVehicleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await mutationJson(`/api/vehicles/${id}`, { method: 'DELETE' });
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData(queryKeys.vehiclesList, (prev: Vehicle[] | undefined) =>
+        (prev ?? []).filter((v) => v.id !== id)
+      );
+    },
+  });
 
   async function deleteEvent(id: string) {
     if (!confirm('Are you sure you want to delete this event? All sessions and laps will be deleted.')) return;
-
     try {
-      await fetch(`/api/events/${id}`, { method: 'DELETE' });
-      setEvents(events.filter(e => e.id !== id));
+      await deleteEventMutation.mutateAsync(id);
     } catch (error) {
       console.error('Error deleting event:', error);
     }
@@ -90,10 +114,8 @@ export default function HomePage() {
 
   async function deleteVehicle(id: string) {
     if (!confirm('Are you sure you want to delete this vehicle? All configurations and setups will be deleted.')) return;
-
     try {
-      await fetch(`/api/vehicles/${id}`, { method: 'DELETE' });
-      setVehicles(vehicles.filter(v => v.id !== id));
+      await deleteVehicleMutation.mutateAsync(id);
     } catch (error) {
       console.error('Error deleting vehicle:', error);
     }

@@ -1,7 +1,10 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 export type AuthUserRole = 'ORG_ADMIN' | 'USER';
 
@@ -24,79 +27,43 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  // Internal fetch that throws on failure so the retry loop can catch.
-  const fetchMe = useCallback(async (signal?: AbortSignal) => {
-    const res = await fetch('/api/auth/me', { cache: 'no-store', signal });
-    if (!res.ok) {
-      setUser(null);
-      return;
-    }
-    const data = (await res.json()) as { user: AuthUser };
-    setUser(data.user);
+  const fetchMe = useCallback(async (): Promise<AuthUser | null> => {
+    const data = await fetchJson<{ user: AuthUser | null }>('/api/auth/me', {
+      unauthorized: { kind: 'return_fallback' },
+      fallback: { user: null },
+    });
+    return data.user ?? null;
   }, []);
 
-  // Safe wrapper for external callers (login page, user menu, etc.)
+  const meQuery = useQuery({
+    queryKey: queryKeys.authMe,
+    queryFn: fetchMe,
+    staleTime: 30_000,
+  });
+
+  const user = meQuery.data ?? null;
+  const loading = meQuery.isLoading;
+
   const refresh = useCallback(async () => {
-    try {
-      await fetchMe();
-    } catch {
-      setUser(null);
-    }
-  }, [fetchMe]);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
+  }, [queryClient]);
 
   const logout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await mutationJson('/api/auth/logout', {
+        method: 'POST',
+        unauthorized: { kind: 'return_fallback' },
+        fallback: undefined,
+      });
     } finally {
-      setUser(null);
+      queryClient.setQueryData(queryKeys.authMe, null);
+      queryClient.removeQueries({ queryKey: queryKeys.navEventsTree });
       router.replace('/login');
       router.refresh();
     }
-  }, [router]);
-
-  useEffect(() => {
-    let cancelled = false;
-    let activeController: AbortController | null = null;
-
-    const AUTH_TIMEOUT_MS = 5000;
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY_MS = 2000;
-
-    (async () => {
-      setLoading(true);
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        if (cancelled) return;
-        const controller = new AbortController();
-        activeController = controller;
-        const timer = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
-        try {
-          await fetchMe(controller.signal);
-          clearTimeout(timer);
-          break; // success
-        } catch {
-          clearTimeout(timer);
-          if (cancelled) return;
-          // On final attempt, ensure user is null so the app redirects to login
-          if (attempt === MAX_RETRIES) {
-            setUser(null);
-          } else {
-            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-          }
-        }
-      }
-      if (!cancelled) {
-        setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      activeController?.abort();
-    };
-  }, [fetchMe]);
+  }, [queryClient, router]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ user, loading, refresh, logout }),

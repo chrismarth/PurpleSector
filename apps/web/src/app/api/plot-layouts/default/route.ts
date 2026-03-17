@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
-import { requireAuthUserId } from '@/lib/api-auth';
+import { requireAuthUserId } from '@/lib/auth';
 import { DEFAULT_PLOT_CONFIGS, generateDefaultLayout } from '@/types/plotConfig';
 
 const GLOBAL_DEFAULT_USER_ID = '__global__';

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
-import { requireAuthUserId } from '@/lib/api-auth';
+import { requireAuthUserId } from '@/lib/auth';
 
 // POST /api/sessions/[id]/start - Start a session (enable telemetry collection)
 export async function POST(

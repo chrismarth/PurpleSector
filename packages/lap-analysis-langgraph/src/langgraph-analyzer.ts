@@ -69,7 +69,12 @@ export class LangGraphAnalyzer {
       throw new Error(`Lap not found: ${lapId}`);
     }
 
-    const telemetryFrames = JSON.parse(lap.telemetryData);
+    const rawTelemetryData = (lap as any).telemetryData as string | undefined;
+    if (!rawTelemetryData) {
+      throw new Error('Lap telemetry data not available in database');
+    }
+
+    const telemetryFrames = JSON.parse(rawTelemetryData);
     const summary = analyzeTelemetryData(telemetryFrames);
 
     return {
@@ -105,7 +110,12 @@ export class LangGraphAnalyzer {
       return null;
     }
 
-    const telemetryFrames = JSON.parse(fastestLap.telemetryData);
+    const rawTelemetryData = (fastestLap as any).telemetryData as string | undefined;
+    if (!rawTelemetryData) {
+      return null;
+    }
+
+    const telemetryFrames = JSON.parse(rawTelemetryData);
     const summary = analyzeTelemetryData(telemetryFrames);
 
     return {

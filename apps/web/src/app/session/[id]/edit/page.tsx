@@ -4,10 +4,13 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Save } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface Session {
   id: string;
@@ -20,59 +23,59 @@ export default function EditSessionPage() {
   const router = useRouter();
   const sessionId = params.id as string;
 
+  const queryClient = useQueryClient();
+
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
   });
 
-  useEffect(() => {
-    fetchSession();
-  }, [sessionId]);
-
-  async function fetchSession() {
-    try {
-      const response = await fetch(`/api/sessions/${sessionId}`);
-      const data = await response.json();
-      setSession(data);
-      
-      // Populate form
-      setFormData({
-        name: data.name || '',
+  const sessionQuery = useQuery({
+    queryKey: queryKeys.sessionDetail(sessionId),
+    queryFn: async (): Promise<Session> => {
+      return fetchJson<Session>(`/api/sessions/${sessionId}`, {
+        unauthorized: { kind: 'redirect_to_login' },
       });
-    } catch (error) {
-      console.error('Error fetching session:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+    },
+    enabled: !!sessionId,
+  });
+
+  useEffect(() => {
+    if (!sessionQuery.data) return;
+    const data = sessionQuery.data;
+    setSession(data);
+    setFormData({ name: data.name || '' });
+  }, [sessionQuery.data]);
+
+  const updateSessionMutation = useMutation({
+    mutationFn: async (payload: typeof formData) => {
+      return mutationJson<Session, typeof formData>(`/api/sessions/${sessionId}`, {
+        method: 'PUT',
+        body: payload,
+      });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.sessionDetail(sessionId), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(updated.eventId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+    },
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
-
     try {
-      const response = await fetch(`/api/sessions/${sessionId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        const updatedSession = await response.json();
-        router.push(`/event/${updatedSession.eventId}`);
-      } else {
-        alert('Failed to update session');
-      }
+      const updatedSession = await updateSessionMutation.mutateAsync(formData);
+      router.push(`/event/${updatedSession.eventId}`);
     } catch (error) {
       console.error('Error updating session:', error);
       alert('Failed to update session');
-    } finally {
-      setSaving(false);
     }
   }
+
+  const loading = sessionQuery.isLoading;
+  const saving = updateSessionMutation.isPending;
 
   if (loading) {
     return (

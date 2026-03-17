@@ -23,9 +23,7 @@ model Event {
   
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions        Session[]
-
-  // Plugin: agent
-  // runPlans        RunPlan[]
+  runPlans        RunPlan[]
   
   @@index([createdAt])
   @@index([userId])
@@ -39,6 +37,8 @@ model Session {
   source                  String   // "live" | "demo"
   status                  String   @default("active") // "active" | "paused" | "archived"
   started                 Boolean  @default(false) // Whether telemetry collection has been started
+  readAccess              String   @default("PRIVATE")
+  readAccessOrgId         String?
   tags                    String?  // JSON array of session tags
   plotConfigs             String?  // JSON array of plot configurations
   vehicleId               String?
@@ -53,6 +53,8 @@ model Session {
   vehicleConfiguration    VehicleConfiguration? @relation(fields: [vehicleConfigurationId], references: [id], onDelete: SetNull)
   vehicleSetup            VehicleSetup?         @relation(fields: [vehicleSetupId], references: [id], onDelete: SetNull)
   laps                    Lap[]
+
+  runPlanItems             RunPlanItem[]
 
   // Plugin: agent
   // runPlanItem             RunPlanItem?
@@ -156,6 +158,8 @@ model Vehicle {
   setups                VehicleSetup[]
   sessions              Session[]
 
+  runPlanItems           RunPlanItem[]
+
   // Plugin: agent
   // runPlanItems          RunPlanItem[]
   
@@ -177,6 +181,8 @@ model VehicleConfiguration {
   vehicle         Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   setups          VehicleSetup[]
   sessions        Session[]
+
+  runPlanItems     RunPlanItem[]
 
   // Plugin: agent
   // runPlanItems    RunPlanItem[]
@@ -201,6 +207,8 @@ model VehicleSetup {
   vehicle                 Vehicle               @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   vehicleConfiguration    VehicleConfiguration? @relation(fields: [vehicleConfigurationId], references: [id], onDelete: SetNull)
   sessions                Session[]
+
+  runPlanItems            RunPlanItem[]
 
   // Plugin: agent
   // runPlanItems            RunPlanItem[]
@@ -250,12 +258,16 @@ model User {
   mathChannels    MathChannel[]
   chatMessages    ChatMessage[]
 
+  apiTokens       ApiToken[]
+
   orgMemberships  OrganizationMember[]
   groupMemberships GroupMember[]
 
   // Plugin: agent
   // agentConversations AgentConversation[]
   // runPlans           RunPlan[]
+  agentConversations AgentConversation[]
+  runPlans           RunPlan[]
 }
 
 model UserSettings {
@@ -317,3 +329,18 @@ model GroupMember {
   @@index([userId])
 }
 
+model ApiToken {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  tokenHash   String   @unique
+  scopes      String?  // JSON array of scope strings
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([revokedAt])
+}

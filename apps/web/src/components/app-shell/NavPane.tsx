@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useDrag } from '@use-gesture/react';
+import { useRouter } from 'next/navigation';
 import { useAppShell } from './AppShellContext';
 import { NavTabBar } from './NavTabBar';
 import { EventsTree } from './EventsTree';
@@ -37,6 +38,7 @@ function saveWidth(w: number): void {
 }
 
 export function NavPane() {
+  const router = useRouter();
   const { state, openTab } = useAppShell();
   const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
   const [width, setWidth] = useState(loadWidth);
@@ -82,14 +84,7 @@ export function NavPane() {
 
   function handleVehicleCreated(vehicle: { id: string; name: string }) {
     window.dispatchEvent(new Event('agent:data-mutated'));
-    openTab({
-      id: `vehicle-detail:${vehicle.id}`,
-      type: 'vehicle-detail',
-      label: vehicle.name,
-      breadcrumbs: [vehicle.name],
-      entityId: vehicle.id,
-      closable: true,
-    });
+    router.push(`/vehicle/${vehicle.id}`);
   }
 
   // Determine which tree to render
@@ -101,10 +96,7 @@ export function NavPane() {
     const pluginTab = pluginNavTabs.find((t) => t.id === state.activeNavTab);
     if (pluginTab && !pluginTab.disabled) {
       return pluginTab.renderTree({
-        openTab: (tab) => {
-          const event = new CustomEvent('appshell:openTab', { detail: tab });
-          window.dispatchEvent(event);
-        },
+        openTab,
         refreshNav: () => {
           window.dispatchEvent(new Event('agent:data-mutated'));
         },

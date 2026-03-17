@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
-import { requireAuthUserId } from '@/lib/api-auth';
+import { requireAuthUserId } from '@/lib/auth';
 
 // GET /api/plot-layouts - Get all saved plot layouts
 export async function GET(request: NextRequest) {

@@ -30,11 +30,14 @@ export class SimpleAnalyzer implements LapAnalyzer {
         });
 
         if (refLap) {
-          const referenceTelemetry = JSON.parse(refLap.telemetryData);
-          referenceLap = {
-            lapTime: refLap.lapTime || 0,
-            summary: analyzeTelemetryData(referenceTelemetry),
-          };
+          const rawTelemetryData = (refLap as any).telemetryData as string | undefined;
+          if (rawTelemetryData) {
+            const referenceTelemetry = JSON.parse(rawTelemetryData);
+            referenceLap = {
+              lapTime: refLap.lapTime || 0,
+              summary: analyzeTelemetryData(referenceTelemetry),
+            };
+          }
         }
       } catch (error) {
         console.error('Failed to fetch reference lap:', error);

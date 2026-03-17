@@ -4,11 +4,14 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Wifi, Play, Car } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface Vehicle {
   id: string;
@@ -30,14 +33,11 @@ export function NewSessionClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const eventId = searchParams.get('eventId');
+  const queryClient = useQueryClient();
   
   const [name, setName] = useState('');
   const [source, setSource] = useState<'live' | 'demo' | null>(null);
   const [creating, setCreating] = useState(false);
-  
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [configurations, setConfigurations] = useState<VehicleConfiguration[]>([]);
-  const [setups, setSetups] = useState<VehicleSetup[]>([]);
   
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [selectedConfigurationId, setSelectedConfigurationId] = useState('');
@@ -47,52 +47,79 @@ export function NewSessionClient() {
     // Redirect to home if no eventId provided
     if (!eventId) {
       router.push('/');
-    } else {
-      fetchVehicles();
     }
   }, [eventId, router]);
 
+  const vehiclesQuery = useQuery({
+    queryKey: queryKeys.vehiclesList,
+    queryFn: async (): Promise<Vehicle[]> => {
+      return fetchJson<Vehicle[]>('/api/vehicles', {
+        unauthorized: { kind: 'return_fallback' },
+        fallback: [],
+      });
+    },
+    staleTime: 15_000,
+  });
+
+  const configurationsQuery = useQuery({
+    queryKey: queryKeys.vehicleConfigurations(selectedVehicleId),
+    queryFn: async (): Promise<VehicleConfiguration[]> => {
+      return fetchJson<VehicleConfiguration[]>(`/api/vehicles/${selectedVehicleId}/configurations`, {
+        unauthorized: { kind: 'return_fallback' },
+        fallback: [],
+      });
+    },
+    enabled: Boolean(selectedVehicleId),
+    staleTime: 15_000,
+  });
+
+  const setupsQuery = useQuery({
+    queryKey: queryKeys.vehicleSetups(selectedVehicleId),
+    queryFn: async (): Promise<VehicleSetup[]> => {
+      return fetchJson<VehicleSetup[]>(`/api/vehicles/${selectedVehicleId}/setups`, {
+        unauthorized: { kind: 'return_fallback' },
+        fallback: [],
+      });
+    },
+    enabled: Boolean(selectedVehicleId),
+    staleTime: 15_000,
+  });
+
+  const vehicles = vehiclesQuery.data ?? [];
+  const configurations = configurationsQuery.data ?? [];
+  const setups = setupsQuery.data ?? [];
+
   useEffect(() => {
-    if (selectedVehicleId) {
-      fetchConfigurations(selectedVehicleId);
-      fetchSetups(selectedVehicleId);
-    } else {
-      setConfigurations([]);
-      setSetups([]);
+    if (!selectedVehicleId) {
       setSelectedConfigurationId('');
       setSelectedSetupId('');
     }
   }, [selectedVehicleId]);
 
-  async function fetchVehicles() {
-    try {
-      const response = await fetch('/api/vehicles');
-      const data = await response.json();
-      setVehicles(data);
-    } catch (error) {
-      console.error('Error fetching vehicles:', error);
-    }
-  }
+  const createSessionMutation = useMutation({
+    mutationFn: async () => {
+      if (!name || !source || !eventId) {
+        throw new Error('Missing required fields');
+      }
 
-  async function fetchConfigurations(vehicleId: string) {
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/configurations`);
-      const data = await response.json();
-      setConfigurations(data);
-    } catch (error) {
-      console.error('Error fetching configurations:', error);
-    }
-  }
-
-  async function fetchSetups(vehicleId: string) {
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/setups`);
-      const data = await response.json();
-      setSetups(data);
-    } catch (error) {
-      console.error('Error fetching setups:', error);
-    }
-  }
+      return mutationJson<{ id: string }>('/api/sessions', {
+        method: 'POST',
+        body: {
+          eventId,
+          name,
+          source,
+          vehicleId: selectedVehicleId || null,
+          vehicleConfigurationId: selectedConfigurationId || null,
+          vehicleSetupId: selectedSetupId || null,
+        },
+      });
+    },
+    onSuccess: async (session) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+      router.push(`/session/${session.id}`);
+    },
+  });
 
   async function createSession() {
     if (!name || !source || !eventId) return;
@@ -100,21 +127,7 @@ export function NewSessionClient() {
     setCreating(true);
 
     try {
-      const response = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          eventId, 
-          name, 
-          source,
-          vehicleId: selectedVehicleId || null,
-          vehicleConfigurationId: selectedConfigurationId || null,
-          vehicleSetupId: selectedSetupId || null,
-        }),
-      });
-
-      const session = await response.json();
-      router.push(`/session/${session.id}`);
+      await createSessionMutation.mutateAsync();
     } catch (error) {
       console.error('Error creating session:', error);
       setCreating(false);

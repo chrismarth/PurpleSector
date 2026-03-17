@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { generateLapSuggestions, analyzeTelemetryData, createAnalyzer } from '@purplesector/lap-analysis-base';
-import { requireAuthUserId } from '@/lib/api-auth';
+import { requireAuthUserId } from '@/lib/auth';
 
 // POST /api/laps/[id]/analyze - Analyze a lap with AI
 export async function POST(

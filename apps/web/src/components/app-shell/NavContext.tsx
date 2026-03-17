@@ -1,6 +1,10 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { useNavUiStore } from '@/stores/navUiStore';
+import { fetchJson } from '@/lib/client-fetch';
 
 // ── Types ──
 
@@ -46,71 +50,43 @@ const NavCtx = createContext<NavContextValue | null>(null);
 // ── Provider ──
 
 export function NavProvider({ children }: { children: React.ReactNode }) {
-  const [events, setEvents] = useState<NavEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const fetchData = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/events?include=sessions.laps', { signal });
-      if (res.ok) {
-        const data = await res.json();
-        setEvents(Array.isArray(data) ? data : []);
-      }
-    } catch (error) {
-      if ((error as any)?.name !== 'AbortError') {
-        console.error('NavContext: Error fetching events:', error);
-      }
-    } finally {
-      setLoading(false);
-    }
+  const expandedNodeIds = useNavUiStore((s) => s.expandedNodeIds);
+  const selectedNodeId = useNavUiStore((s) => s.selectedNodeId);
+  const toggleExpand = useNavUiStore((s) => s.toggleExpand);
+  const setSelectedNode = useNavUiStore((s) => s.setSelectedNode);
+
+  const expandedNodes = useMemo(() => new Set(expandedNodeIds), [expandedNodeIds]);
+
+  const fetchNavEventsTree = useCallback(async (): Promise<NavEvent[]> => {
+    return fetchJson<NavEvent[]>('/api/events?include=sessions.laps', {
+      unauthorized: { kind: 'return_fallback' },
+      fallback: [],
+    });
   }, []);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    fetchData(controller.signal).finally(() => clearTimeout(timer));
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [fetchData]);
+  const navQuery = useQuery({
+    queryKey: queryKeys.navEventsTree,
+    queryFn: fetchNavEventsTree,
+    staleTime: 15_000,
+  });
+
+  const events = navQuery.data ?? [];
+  const loading = navQuery.isLoading;
 
   // Listen for agent:data-mutated to auto-refresh
   useEffect(() => {
     const handler = () => {
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
     };
     window.addEventListener('agent:data-mutated', handler);
     return () => window.removeEventListener('agent:data-mutated', handler);
-  }, [fetchData]);
-
-  const toggleExpand = useCallback((nodeId: string) => {
-    setExpandedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
-  }, []);
-
-  const setSelectedNode = useCallback((nodeId: string | null) => {
-    setSelectedNodeId(nodeId);
-  }, []);
+  }, [queryClient]);
 
   const refresh = useCallback(async () => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    try {
-      await fetchData(controller.signal);
-    } finally {
-      clearTimeout(timer);
-    }
-  }, [fetchData]);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+  }, [queryClient]);
 
   const value = useMemo<NavContextValue>(
     () => ({
@@ -122,6 +98,7 @@ export function NavProvider({ children }: { children: React.ReactNode }) {
       setSelectedNode,
       refresh,
     }),
+    // note: expandedNodes changes when expandedNodeIds changes
     [events, loading, expandedNodes, selectedNodeId, toggleExpand, setSelectedNode, refresh]
   );
 

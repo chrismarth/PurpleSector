@@ -9,23 +9,14 @@ import {
   Clock,
   GripVertical,
   MoreVertical,
-  FolderOpen,
-  Save,
-  Star,
-  Settings,
-  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { SaveLayoutDialog } from '@/components/SaveLayoutDialog';
-import { LoadLayoutDialog } from '@/components/LoadLayoutDialog';
-import { ManageLayoutsDialog } from '@/components/ManageLayoutsDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConfigurableTelemetryChart } from './ConfigurableTelemetryChart';
 import { TelemetryFrame } from '@/types/telemetry';
@@ -65,7 +56,7 @@ export function TelemetryPlotPanel({
   showFullscreenToggle = true,
   currentLapNumber,
   showLapHeader = false,
-  layoutContext = 'global',
+  layoutContext: _layoutContext = 'global',
   mathChannels = [],
 }: TelemetryPlotPanelProps) {
   const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(
@@ -76,12 +67,6 @@ export function TelemetryPlotPanel({
   );
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [syncedHoverValue, setSyncedHoverValue] = useState<number | null>(null);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [showLoadDialog, setShowLoadDialog] = useState(false);
-  const [showManageDialog, setShowManageDialog] = useState(false);
-  const [currentLayoutId, setCurrentLayoutId] = useState<string | null>(null);
-  const [currentLayoutName, setCurrentLayoutName] = useState<string | null>(null);
-  const [isLayoutModified, setIsLayoutModified] = useState(false);
   const [resizing, setResizing] = useState<{
     type: 'width' | 'height';
     layoutIndex: number;
@@ -99,9 +84,6 @@ export function TelemetryPlotPanel({
   const lastNotifiedLayout = useRef<string>('');
   const lastInitialConfigs = useRef<string>('');
   const lastInitialLayout = useRef<string>('');
-
-  const loadedLayoutConfigs = useRef<string | null>(null);
-  const loadedLayoutLayout = useRef<string | null>(null);
 
   useEffect(() => {
     if (initialPlotConfigs) {
@@ -151,22 +133,6 @@ export function TelemetryPlotPanel({
       }
     }
   }, [layout, onLayoutChange]);
-
-  useEffect(() => {
-    if (!currentLayoutId || !loadedLayoutConfigs.current || !loadedLayoutLayout.current) {
-      setIsLayoutModified(false);
-      return;
-    }
-
-    const currentConfigsStr = JSON.stringify(plotConfigs);
-    const currentLayoutStr = JSON.stringify(layout);
-
-    const hasChanged =
-      currentConfigsStr !== loadedLayoutConfigs.current ||
-      currentLayoutStr !== loadedLayoutLayout.current;
-
-    setIsLayoutModified(hasChanged);
-  }, [plotConfigs, layout, currentLayoutId]);
 
   const handleConfigChange = useCallback((index: number, newConfig: PlotConfig) => {
     setPlotConfigs((prev) => {
@@ -332,120 +298,6 @@ export function TelemetryPlotPanel({
     [layout.items]
   );
 
-  const handleSaveLayout = useCallback(
-    async (name: string, description?: string) => {
-      try {
-        const response = await fetch('/api/plot-layouts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name,
-            description,
-            plotConfigs,
-            layout,
-            context: layoutContext,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to save layout');
-        }
-      } catch (error) {
-        console.error('Error saving layout:', error);
-        throw error;
-      }
-    },
-    [plotConfigs, layout, layoutContext]
-  );
-
-  const handleLoadLayout = useCallback(async (layoutId: string) => {
-    try {
-      const response = await fetch(`/api/plot-layouts/${layoutId}`);
-      if (!response.ok) {
-        throw new Error('Failed to load layout');
-      }
-
-      const savedLayout = await response.json();
-      const loadedPlotConfigs = JSON.parse(savedLayout.plotConfigs);
-      const loadedLayout = JSON.parse(savedLayout.layout);
-
-      setPlotConfigs(loadedPlotConfigs);
-      setLayout(loadedLayout);
-
-      setCurrentLayoutId(savedLayout.id);
-      setCurrentLayoutName(savedLayout.name);
-      loadedLayoutConfigs.current = JSON.stringify(loadedPlotConfigs);
-      loadedLayoutLayout.current = JSON.stringify(loadedLayout);
-      setIsLayoutModified(false);
-    } catch (error) {
-      console.error('Error loading layout:', error);
-      throw error;
-    }
-  }, []);
-
-  const handleUpdateCurrentLayout = useCallback(async () => {
-    if (!currentLayoutId) return;
-
-    try {
-      const response = await fetch(`/api/plot-layouts/${currentLayoutId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plotConfigs,
-          layout,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update layout');
-      }
-
-      loadedLayoutConfigs.current = JSON.stringify(plotConfigs);
-      loadedLayoutLayout.current = JSON.stringify(layout);
-      setIsLayoutModified(false);
-    } catch (error) {
-      console.error('Error updating layout:', error);
-      throw error;
-    }
-  }, [currentLayoutId, plotConfigs, layout]);
-
-  const handleSetAsDefault = useCallback(async () => {
-    try {
-      const response = await fetch('/api/plot-layouts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: `Default ${layoutContext} Layout`,
-          description: 'Auto-saved default layout',
-          plotConfigs,
-          layout,
-          context: layoutContext,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save layout');
-      }
-
-      const savedLayout = await response.json();
-
-      const defaultResponse = await fetch('/api/plot-layouts/default', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          layoutId: savedLayout.id,
-          context: layoutContext,
-        }),
-      });
-
-      if (!defaultResponse.ok) {
-        throw new Error('Failed to set default layout');
-      }
-    } catch (error) {
-      console.error('Error setting default layout:', error);
-    }
-  }, [plotConfigs, layout, layoutContext]);
-
   useEffect(() => {
     if (!resizing || !containerRef.current) return;
 
@@ -545,21 +397,7 @@ export function TelemetryPlotPanel({
               <>
                 <CardTitle>Telemetry Data</CardTitle>
                 <CardDescription>
-                  {currentLayoutName ? (
-                    <span className="flex items-center gap-2">
-                      <span>Layout: {currentLayoutName}</span>
-                      {isLayoutModified && (
-                        <span className="text-orange-600 dark:text-orange-400 text-xs font-medium">
-                          (Modified)
-                        </span>
-                      )}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">No saved layout active</span>
-                  )}
-                  {compareLapId && (
-                    <span className="text-purple-600"> • Comparison lap shown in dashed lines</span>
-                  )}
+                  Configure and arrange telemetry plots for analysis
                 </CardDescription>
               </>
             )}
@@ -588,29 +426,13 @@ export function TelemetryPlotPanel({
                 </span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setShowLoadDialog(true)}>
-                  <FolderOpen className="h-4 w-4 mr-2" />
-                  Apply Saved Layout
-                </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={handleUpdateCurrentLayout}
-                  disabled={!currentLayoutId}
+                  onClick={() => {
+                    setPlotConfigs(DEFAULT_PLOT_CONFIGS);
+                    setLayout(generateDefaultLayout(DEFAULT_PLOT_CONFIGS));
+                  }}
                 >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Update Current Layout
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleSetAsDefault}>
-                  <Star className="h-4 w-4 mr-2" />
-                  Set Current as Default
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowSaveDialog(true)}>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Layout As...
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setShowManageDialog(true)}>
-                  <Settings className="h-4 w-4 mr-2" />
-                  Manage Layouts
+                  Reset to Default
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -793,23 +615,6 @@ export function TelemetryPlotPanel({
           </div>
         </div>
       </CardContent>
-
-      <SaveLayoutDialog
-        open={showSaveDialog}
-        onOpenChange={setShowSaveDialog}
-        onSave={handleSaveLayout}
-      />
-      <LoadLayoutDialog
-        open={showLoadDialog}
-        onOpenChange={setShowLoadDialog}
-        onLoad={handleLoadLayout}
-        context={layoutContext}
-      />
-      <ManageLayoutsDialog
-        open={showManageDialog}
-        onOpenChange={setShowManageDialog}
-        context={layoutContext}
-      />
     </Card>
   );
 }

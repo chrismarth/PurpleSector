@@ -4,12 +4,15 @@ import { useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, X, MoreVertical, FileText } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { queryKeys } from '@/lib/queryKeys';
+import { mutationJson } from '@/lib/client-fetch';
 
 interface PartField {
   key: string;
@@ -21,7 +24,7 @@ export default function NewConfigurationPage() {
   const router = useRouter();
   const vehicleId = params.id as string;
 
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -31,40 +34,43 @@ export default function NewConfigurationPage() {
   ]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-
-    // Convert parts array to object
-    const partsObject: Record<string, string> = {};
-    parts.forEach(part => {
-      if (part.key.trim() && part.value.trim()) {
-        partsObject[part.key.trim()] = part.value.trim();
-      }
-    });
-
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/configurations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          parts: partsObject,
-        }),
+  const createConfigurationMutation = useMutation({
+    mutationFn: async () => {
+      const partsObject: Record<string, string> = {};
+      parts.forEach((part) => {
+        if (part.key.trim() && part.value.trim()) {
+          partsObject[part.key.trim()] = part.value.trim();
+        }
       });
 
-      if (response.ok) {
-        router.push(`/vehicle/${vehicleId}`);
-      } else {
-        alert('Failed to create configuration');
-      }
+      await mutationJson(`/api/vehicles/${vehicleId}/configurations`, {
+        method: 'POST',
+        body: {
+          ...formData,
+          parts: partsObject,
+        },
+      });
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleDetail(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleConfigurations(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+    },
+  });
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await createConfigurationMutation.mutateAsync();
+      router.push(`/vehicle/${vehicleId}`);
     } catch (error) {
       console.error('Error creating configuration:', error);
       alert('Failed to create configuration');
-    } finally {
-      setLoading(false);
     }
   }
+
+  const loading = createConfigurationMutation.isPending;
 
   function addPartField() {
     setParts([...parts, { key: '', value: '' }]);

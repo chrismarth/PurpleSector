@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,6 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Check } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface SavedLayout {
   id: string;
@@ -37,34 +39,35 @@ export function AnalysisLoadLayoutDialog({
   onLoad,
   context = 'global',
 }: AnalysisLoadLayoutDialogProps) {
-  const [layouts, setLayouts] = useState<SavedLayout[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      fetchLayouts();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, context]);
+  const layoutsQuery = useQuery({
+    queryKey: ['analysis-layouts', 'list', context] as const,
+    queryFn: async (): Promise<SavedLayout[]> => {
+      const data = await fetchJson<unknown>(`/api/analysis-layouts?context=${encodeURIComponent(context)}`, {
+        unauthorized: { kind: 'return_fallback' },
+        fallback: [],
+      });
+      return Array.isArray(data) ? (data as SavedLayout[]) : [];
+    },
+    enabled: open,
+  });
 
-  const fetchLayouts = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `/api/analysis-layouts?context=${encodeURIComponent(context)}`,
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setLayouts(data);
+  const deleteLayoutMutation = useMutation({
+    mutationFn: async (layoutId: string) => {
+      await mutationJson(`/api/analysis-layouts/${layoutId}`, {
+        method: 'DELETE',
+      });
+      return layoutId;
+    },
+    onSuccess: (layoutId) => {
+      queryClient.invalidateQueries({ queryKey: ['analysis-layouts', 'list', context] });
+      if (selectedId === layoutId) {
+        setSelectedId(null);
       }
-    } catch (error) {
-      console.error('Error fetching analysis layouts:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+  });
 
   const handleLoad = async () => {
     if (!selectedId) return;
@@ -84,24 +87,16 @@ export function AnalysisLoadLayoutDialog({
       return;
     }
 
-    setDeleting(layoutId);
     try {
-      const response = await fetch(`/api/analysis-layouts/${layoutId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setLayouts((prev) => prev.filter((l) => l.id !== layoutId));
-        if (selectedId === layoutId) {
-          setSelectedId(null);
-        }
-      }
+      await deleteLayoutMutation.mutateAsync(layoutId);
     } catch (error) {
       console.error('Error deleting analysis layout:', error);
-    } finally {
-      setDeleting(null);
     }
   };
+
+  const layouts = layoutsQuery.data ?? [];
+  const loading = layoutsQuery.isLoading;
+  const deleting = deleteLayoutMutation.isPending ? deleteLayoutMutation.variables ?? null : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface VehicleConfiguration {
   id: string;
@@ -29,36 +31,45 @@ export default function ConfigurationDetailPage() {
   const vehicleId = params.id as string;
   const configId = params.configId as string;
 
-  const [configuration, setConfiguration] = useState<VehicleConfiguration | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchConfiguration();
-  }, [configId]);
+  const configurationQuery = useQuery({
+    queryKey: queryKeys.vehicleConfigurationDetail(vehicleId, configId),
+    queryFn: async (): Promise<VehicleConfiguration> => {
+      return fetchJson<VehicleConfiguration>(`/api/vehicles/${vehicleId}/configurations/${configId}`, {
+        unauthorized: { kind: 'redirect_to_login' },
+      });
+    },
+    enabled: !!vehicleId && !!configId,
+  });
 
-  async function fetchConfiguration() {
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/configurations/${configId}`);
-      const data = await response.json();
-      setConfiguration(data);
-    } catch (error) {
-      console.error('Error fetching configuration:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const deleteConfigurationMutation = useMutation({
+    mutationFn: async () => {
+      await mutationJson(`/api/vehicles/${vehicleId}/configurations/${configId}`, { method: 'DELETE' });
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleDetail(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleConfigurations(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+      queryClient.removeQueries({ queryKey: queryKeys.vehicleConfigurationDetail(vehicleId, configId) });
+    },
+  });
 
   async function handleDelete() {
     if (!confirm('Are you sure you want to delete this configuration?')) return;
 
     try {
-      await fetch(`/api/vehicles/${vehicleId}/configurations/${configId}`, { method: 'DELETE' });
+      await deleteConfigurationMutation.mutateAsync();
       router.push(`/vehicle/${vehicleId}`);
     } catch (error) {
       console.error('Error deleting configuration:', error);
       alert('Failed to delete configuration');
     }
   }
+
+  const loading = configurationQuery.isLoading;
+  const configuration = configurationQuery.data ?? null;
 
   if (loading) {
     return (

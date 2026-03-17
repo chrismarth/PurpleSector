@@ -3,19 +3,22 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Pause, Play, Archive, Clock, Flag, Tag, Plus, X, AlertCircle } from 'lucide-react';
+import { Pause, Play, Archive, Tag, X, AlertCircle } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { TelemetryFrame } from '@/types/telemetry';
-import { formatLapTime } from '@/lib/utils';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { decodeMessage, createStartDemoMessage, createStopDemoMessage, createPingMessage } from '@/lib/telemetry-proto-browser';
+import { decodeMessage, createStopDemoMessage, createPingMessage } from '@/lib/telemetry-proto-browser';
 import type { AnalysisLayoutJSON } from '@/lib/analysisLayout';
 import { DEFAULT_ANALYSIS_LAYOUT } from '@/lib/analysisLayout';
 import { useAuth } from '@/components/AuthProvider';
 import { TelemetryDataPanel } from '@/components/TelemetryDataPanel';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
+import { useSessionUiStore } from '@/stores/sessionUiStore';
 
 const SESSION_TAGS = [
   'Testing',
@@ -59,9 +62,24 @@ export default function SessionPage() {
   const { user } = useAuth();
   const sessionId = params.id as string;
 
+  const queryClient = useQueryClient();
+
+  const getIsPaused = useSessionUiStore((s) => s.getIsPaused);
+  const setIsPausedPersisted = useSessionUiStore((s) => s.setIsPaused);
+
+  const sessionQuery = useQuery({
+    queryKey: queryKeys.sessionDetail(sessionId),
+    queryFn: async (): Promise<Session> => {
+      return fetchJson<Session>(`/api/sessions/${sessionId}`, {
+        unauthorized: { kind: 'redirect_to_login' },
+      });
+    },
+    enabled: !!sessionId,
+  });
+
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPaused] = useState(() => getIsPaused(sessionId));
   const [currentLapFrames, setCurrentLapFrames] = useState<TelemetryFrame[]>([]);
   const [currentLapNumber, setCurrentLapNumber] = useState(1);
   const [wsConnected, setWsConnected] = useState(false);
@@ -69,7 +87,6 @@ export default function SessionPage() {
   const [sessionTags, setSessionTags] = useState<string[]>([]);
   const [customSessionTag, setCustomSessionTag] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
-  const [sessionAlreadyOpen, setSessionAlreadyOpen] = useState(false);
   const [analysisLayoutId, setAnalysisLayoutId] = useState<string | null>(null);
   const [analysisLayout, setAnalysisLayout] = useState<AnalysisLayoutJSON | null>(null);
 
@@ -87,6 +104,73 @@ export default function SessionPage() {
   const lastLapTimeRef = useRef(0); // Track last lapTime to detect resets (new lap)
   const seenLapBoundaryRef = useRef(false); // True once we've seen a lap-time reset; prevents saving a partial first lap
 
+  const analysisLayoutsQuery = useQuery({
+    queryKey: ['analysis-layouts', 'session', sessionId] as const,
+    queryFn: async () => {
+      const contextKey = `session:${sessionId}`;
+      const data = await fetchJson<unknown>(`/api/analysis-layouts?context=${encodeURIComponent(contextKey)}`, {
+        unauthorized: { kind: 'return_fallback' },
+        fallback: [],
+      });
+      return Array.isArray(data) ? (data as any[]) : ([] as any[]);
+    },
+    enabled: !!sessionId,
+  });
+
+  const saveAnalysisLayoutMutation = useMutation({
+    mutationFn: async (payload: { id: string; layout: AnalysisLayoutJSON }) => {
+      await mutationJson(`/api/analysis-layouts/${payload.id}`, {
+        method: 'PATCH',
+        body: { layout: payload.layout },
+      });
+      return true as const;
+    },
+  });
+
+  const startSessionMutation = useMutation({
+    mutationFn: async () => {
+      return mutationJson<Session>(`/api/sessions/${sessionId}/start`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.sessionDetail(sessionId), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(updated.eventId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+    },
+  });
+
+  const patchSessionMutation = useMutation({
+    mutationFn: async (payload: Record<string, any>) => {
+      return mutationJson<Session>(`/api/sessions/${sessionId}`, {
+        method: 'PATCH',
+        body: payload,
+      });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.sessionDetail(sessionId), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(updated.eventId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+    },
+  });
+
+  const saveLapMutation = useMutation({
+    mutationFn: async (payload: { frames: TelemetryFrame[]; lapNumber: number }): Promise<Lap> => {
+      return mutationJson<Lap>(`/api/laps`, {
+        method: 'POST',
+        body: {
+          sessionId,
+          lapNumber: payload.lapNumber,
+          telemetryData: JSON.stringify(payload.frames),
+        },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessionDetail(sessionId) });
+    },
+  });
+
   useEffect(() => {
     // Reset lap-related state/refs whenever we switch sessions so that
     // each new session starts from lap 1 and with empty live data
@@ -97,47 +181,54 @@ export default function SessionPage() {
     lastLapTimeRef.current = 0;
     lastUpdateTimeRef.current = 0;
     seenLapBoundaryRef.current = false;
-
-    // Check if this session is already open in another tab
-    const sessionLockKey = `session-${sessionId}-lock`;
-    const existingLock = localStorage.getItem(sessionLockKey);
-    
-    if (existingLock) {
-      const lockTime = parseInt(existingLock);
-      const now = Date.now();
-      
-      // If lock is older than 5 seconds, consider it stale and take over
-      if (now - lockTime < 5000) {
-        // Session is actively open in another tab
-        setSessionAlreadyOpen(true);
-        setLoading(false);
-        return;
-      }
-    }
-    
-    // Claim the lock for this tab with current timestamp
-    localStorage.setItem(sessionLockKey, Date.now().toString());
-    
-    // Update the lock timestamp every 2 seconds to show this tab is active
-    const lockInterval = setInterval(() => {
-      localStorage.setItem(sessionLockKey, Date.now().toString());
-    }, 2000);
-    
-    fetchSession();
-
-    return () => {
-      // Release the lock when this tab closes/unmounts
-      clearInterval(lockInterval);
-      localStorage.removeItem(sessionLockKey);
-      
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-    };
   }, [sessionId]);
+
+  useEffect(() => {
+    setIsPaused(getIsPaused(sessionId));
+    isPausedRef.current = getIsPaused(sessionId);
+  }, [getIsPaused, sessionId]);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+    setIsPausedPersisted(sessionId, isPaused);
+  }, [isPaused, sessionId, setIsPausedPersisted]);
+
+  // Sync session data from TanStack Query into local state.
+  useEffect(() => {
+    if (!sessionId) return;
+
+    if (sessionQuery.isError) {
+      console.error('Session not found or error loading session');
+      alert('Session not found. It may have been deleted. Please create a new session.');
+      router.push('/');
+      return;
+    }
+
+    if (!sessionQuery.data) {
+      setLoading(true);
+      return;
+    }
+
+    const data = sessionQuery.data;
+    setSession(data);
+
+    // Set current lap number based on saved laps
+    const nextLapNumber = (data.laps?.length || 0) + 1;
+    setCurrentLapNumber(nextLapNumber);
+
+    // Load session tags (only if different from current)
+    if (data.tags) {
+      const newTags = JSON.parse(data.tags);
+      setSessionTags((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(newTags)) {
+          return newTags;
+        }
+        return prev;
+      });
+    }
+
+    setLoading(false);
+  }, [router, sessionId, sessionQuery.data, sessionQuery.isError]);
 
   // Connect WebSocket when session becomes active and started
   useEffect(() => {
@@ -173,46 +264,6 @@ export default function SessionPage() {
     };
   }, [session?.status, session?.started, session?.source]); // Depend on status, started flag, and source
 
-  async function fetchSession() {
-    try {
-      const response = await fetch(`/api/sessions/${sessionId}`);
-      
-      if (!response.ok) {
-        console.error('Session not found or error loading session');
-        alert('Session not found. It may have been deleted. Please create a new session.');
-        router.push('/');
-        return;
-      }
-      
-      const data = await response.json();
-      console.log('Session data loaded:', data);
-      console.log('Number of laps:', data.laps?.length || 0);
-      setSession(data);
-      
-      // Set current lap number based on saved laps
-      const nextLapNumber = (data.laps?.length || 0) + 1;
-      setCurrentLapNumber(nextLapNumber);
-      console.log(`Session has ${data.laps?.length || 0} laps, next lap will be #${nextLapNumber}`);
-      
-      // Load session tags (only if different from current)
-      if (data.tags) {
-        const newTags = JSON.parse(data.tags);
-        setSessionTags(prev => {
-          // Only update if actually different
-          if (JSON.stringify(prev) !== JSON.stringify(newTags)) {
-            return newTags;
-          }
-          return prev;
-        });
-      }
-
-    } catch (error) {
-      console.error('Error fetching session:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   // Master cleanup effect on component unmount
   useEffect(() => {
     isMountedRef.current = true;
@@ -242,59 +293,31 @@ export default function SessionPage() {
   // Load analysis layout for this session from backend (or use default if none exists)
   useEffect(() => {
     if (!session) return;
-
-    const controller = new AbortController();
-
-    const loadLayout = async () => {
-      const contextKey = `session:${sessionId}`;
-
+    const layouts = analysisLayoutsQuery.data ?? [];
+    if (Array.isArray(layouts) && layouts.length > 0) {
+      const layoutRecord = (layouts.find((l: any) => l.isDefault) ?? layouts[0]) as any;
       try {
-        const response = await fetch(`/api/analysis-layouts?context=${encodeURIComponent(contextKey)}`, {
-          signal: controller.signal,
-        });
+        const parsed: AnalysisLayoutJSON = JSON.parse(layoutRecord.layout);
+        const hasAnyType = parsed.panels.some((p) => !!p.typeId);
+        const nextLayout = hasAnyType
+          ? parsed
+          : {
+              ...parsed,
+              panels: parsed.panels.map((p, idx) =>
+                idx === 0 ? { ...p, typeId: 'plot' } : p,
+              ),
+            };
 
-        if (response.ok) {
-          const layouts = await response.json();
-          if (Array.isArray(layouts) && layouts.length > 0) {
-            const layoutRecord = layouts.find((l: any) => l.isDefault) ?? layouts[0];
-            try {
-              const parsed: AnalysisLayoutJSON = JSON.parse(layoutRecord.layout);
-              // If the saved layout has no panel types configured, default first panel to plot
-              const hasAnyType = parsed.panels.some((p) => !!p.typeId);
-              const nextLayout = hasAnyType
-                ? parsed
-                : {
-                    ...parsed,
-                    panels: parsed.panels.map((p, idx) =>
-                      idx === 0 ? { ...p, typeId: 'plot' } : p,
-                    ),
-                  };
-
-              setAnalysisLayoutId(layoutRecord.id);
-              setAnalysisLayout(nextLayout);
-              return;
-            } catch (e) {
-              console.error('Failed to parse saved analysis layout JSON for session:', e);
-            }
-          }
-        }
-      } catch (error) {
-        if ((error as any).name !== 'AbortError') {
-          console.error('Error loading analysis layout for session:', error);
-        }
+        setAnalysisLayoutId(layoutRecord.id);
+        setAnalysisLayout(nextLayout);
+        return;
+      } catch (e) {
+        console.error('Failed to parse saved analysis layout JSON for session:', e);
       }
+    }
 
-      // Fallback: use the shared default layout
-      setAnalysisLayoutId(null);
-      setAnalysisLayout(DEFAULT_ANALYSIS_LAYOUT);
-
-    };
-
-    loadLayout();
-
-    return () => {
-      controller.abort();
-    };
+    setAnalysisLayoutId(null);
+    setAnalysisLayout(DEFAULT_ANALYSIS_LAYOUT);
   }, [session, sessionId]);
 
   // Persist analysis layout changes to backend for this session
@@ -305,28 +328,7 @@ export default function SessionPage() {
     // Creating new layouts is handled by the load effect above
     if (!analysisLayoutId) return;
 
-    const controller = new AbortController();
-
-    const saveLayout = async () => {
-      try {
-        await fetch(`/api/analysis-layouts/${analysisLayoutId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ layout: analysisLayout }),
-          signal: controller.signal,
-        });
-      } catch (error) {
-        if ((error as any).name !== 'AbortError') {
-          console.error('Error saving analysis layout for session:', error);
-        }
-      }
-    };
-
-    saveLayout();
-
-    return () => {
-      controller.abort();
-    };
+    saveAnalysisLayoutMutation.mutate({ id: analysisLayoutId, layout: analysisLayout });
   }, [analysisLayout, analysisLayoutId, session, sessionId]);
 
   function connectWebSocket() {
@@ -569,23 +571,7 @@ export default function SessionPage() {
     console.log(`Saving lap ${lapNumber} with ${frames.length} frames to database...`);
 
     try {
-      const response = await fetch('/api/laps', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          lapNumber: lapNumber,
-          telemetryData: JSON.stringify(frames),
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('Failed to save lap:', error);
-        return;
-      }
-
-      const savedLap = await response.json();
+      const savedLap = await saveLapMutation.mutateAsync({ frames, lapNumber });
       console.log('Lap saved successfully:', savedLap);
 
       // Update session state directly instead of fetching
@@ -607,6 +593,14 @@ export default function SessionPage() {
           };
         });
       }
+
+      // Keep query cache in sync too.
+      queryClient.setQueryData(queryKeys.sessionDetail(sessionId), (prev: Session | undefined) => {
+        if (!prev) return prev;
+        const lapExists = prev.laps?.some((lap) => lap.lapNumber === savedLap.lapNumber);
+        if (lapExists) return prev;
+        return { ...prev, laps: [...(prev.laps || []), savedLap] };
+      });
     } catch (error) {
       console.error('Error saving lap:', error);
     }
@@ -614,25 +608,19 @@ export default function SessionPage() {
 
   async function startSession() {
     try {
-      const response = await fetch(`/api/sessions/${sessionId}/start`, {
-        method: 'POST',
-      });
-      
-      if (response.ok) {
-        const updatedSession = await response.json();
-        setSession(updatedSession);
-        
-        // Reset lap tracking for a fresh telemetry run within this session
-        currentLapFramesRef.current = [];
-        setCurrentLapFrames([]);
-        currentLapNumberRef.current = 1;
-        setCurrentLapNumber(1);
-        lastLapTimeRef.current = 0;
-        lastUpdateTimeRef.current = 0;
-        seenLapBoundaryRef.current = false;
-        
-        // WebSocket will connect automatically via useEffect when session.started becomes true
-      }
+      const updatedSession = await startSessionMutation.mutateAsync();
+      setSession(updatedSession);
+
+      // Reset lap tracking for a fresh telemetry run within this session
+      currentLapFramesRef.current = [];
+      setCurrentLapFrames([]);
+      currentLapNumberRef.current = 1;
+      setCurrentLapNumber(1);
+      lastLapTimeRef.current = 0;
+      lastUpdateTimeRef.current = 0;
+      seenLapBoundaryRef.current = false;
+
+      // WebSocket will connect automatically via useEffect when session.started becomes true
     } catch (error) {
       console.error('Error starting session:', error);
     }
@@ -696,15 +684,11 @@ export default function SessionPage() {
   // Auto-save session tags
   const autoSaveSessionTags = useCallback(async (tags: string[]) => {
     try {
-      await fetch(`/api/sessions/${sessionId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tags: JSON.stringify(tags) }),
-      });
+      await patchSessionMutation.mutateAsync({ tags: JSON.stringify(tags) });
     } catch (error) {
       console.error('Error saving session tags:', error);
     }
-  }, [sessionId]);
+  }, [patchSessionMutation]);
 
   // Save tags immediately when changed
   useEffect(() => {
@@ -779,11 +763,7 @@ export default function SessionPage() {
       }
 
       // Update session status
-      await fetch(`/api/sessions/${sessionId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'archived' }),
-      });
+      await patchSessionMutation.mutateAsync({ status: 'archived' });
 
       // Navigate back to event page (session list)
       if (session?.eventId) {
@@ -794,43 +774,6 @@ export default function SessionPage() {
     } catch (error) {
       console.error('Error ending session:', error);
     }
-  }
-
-  if (sessionAlreadyOpen) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-yellow-600" />
-              Session Already Open
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-muted-foreground">
-              This session is already open in another tab. To prevent telemetry sync issues, 
-              only one instance of a session can be active at a time.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Please close this tab and return to the original session tab.
-            </p>
-            <Button 
-              onClick={() => {
-                // Try to close the tab
-                window.close();
-                // If that doesn't work (manually opened tab), navigate back after a delay
-                setTimeout(() => {
-                  router.push('/');
-                }, 100);
-              }}
-              className="w-full"
-            >
-              Close This Tab
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
   }
 
   if (loading) {
@@ -1016,6 +959,7 @@ export default function SessionPage() {
               {session.started && analysisLayout && (
                 <TelemetryDataPanel
                   context="live"
+                  uiScopeKey={`session:${sessionId}`}
                   telemetry={currentLapFrames}
                   layout={analysisLayout}
                   onLayoutChange={setAnalysisLayout}

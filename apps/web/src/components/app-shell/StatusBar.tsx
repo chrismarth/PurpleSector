@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Wifi, WifiOff, Activity, AlertCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { fetchJson } from '@/lib/client-fetch';
 
 interface ConnectionStatus {
   sessionId: string;
@@ -21,7 +23,6 @@ interface BackendHealth {
 
 export function StatusBar() {
   const [connections, setConnections] = useState<Map<string, ConnectionStatus>>(new Map());
-  const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(null);
 
   useEffect(() => {
     function handleUpdate(e: Event) {
@@ -41,25 +42,18 @@ export function StatusBar() {
     return () => window.removeEventListener('statusbar:connection', handleUpdate);
   }, []);
 
-  // Poll backend health every 10 seconds
-  useEffect(() => {
-    async function checkHealth() {
-      try {
-        const response = await fetch('/api/health');
-        if (response.ok) {
-          const data = await response.json();
-          setBackendHealth(data);
-        }
-      } catch (error) {
-        console.error('Health check failed:', error);
-        setBackendHealth({ status: 'unknown', services: [] });
-      }
-    }
+  const backendHealthQuery = useQuery({
+    queryKey: ['backendHealth'] as const,
+    queryFn: async (): Promise<BackendHealth> => {
+      return fetchJson<BackendHealth>('/api/health', {
+        unauthorized: { kind: 'return_fallback' },
+        fallback: { status: 'unknown', services: [] },
+      }).catch(() => ({ status: 'unknown', services: [] }));
+    },
+    refetchInterval: 10_000,
+  });
 
-    checkHealth();
-    const interval = setInterval(checkHealth, 10000);
-    return () => clearInterval(interval);
-  }, []);
+  const backendHealth = backendHealthQuery.data ?? null;
 
   const activeCount = connections.size;
   const isConnected = activeCount > 0;

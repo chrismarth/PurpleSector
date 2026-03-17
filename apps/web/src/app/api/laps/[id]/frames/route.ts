@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
-import { requireAuthUserId } from '@/lib/api-auth';
+import { requireAuthUserId } from '@/lib/auth';
 import { getLapFramesFromIceberg, isTrinoAvailable } from '@/lib/trino';
+import { requireCanReadSessionById } from '@/lib/access-control';
 
 export async function GET(
   request: NextRequest,
@@ -16,7 +17,7 @@ export async function GET(
     }
 
     const lap = await (prisma as any).lap.findFirst({
-      where: { id: params.id, userId },
+      where: { id: params.id },
       select: {
         id: true,
         sessionId: true,
@@ -28,6 +29,11 @@ export async function GET(
     if (!lap) {
       return NextResponse.json({ error: 'Lap not found' }, { status: 404 });
     }
+
+    await requireCanReadSessionById({
+      requesterUserId: userId,
+      sessionId: lap.sessionId,
+    });
 
     const trinoAvailable = await isTrinoAvailable();
     
@@ -53,6 +59,12 @@ export async function GET(
 
     return NextResponse.json({ frames });
   } catch (error) {
+    if ((error as any)?.code === 'NOT_FOUND') {
+      return NextResponse.json({ error: 'Lap not found' }, { status: 404 });
+    }
+    if ((error as any)?.code === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     console.error('Error fetching lap frames from Iceberg:', error);
     return NextResponse.json(
       { error: 'Failed to fetch lap frames' },

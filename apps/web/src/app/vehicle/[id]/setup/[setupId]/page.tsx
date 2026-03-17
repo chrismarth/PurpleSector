@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface VehicleSetup {
   id: string;
@@ -33,36 +35,45 @@ export default function SetupDetailPage() {
   const vehicleId = params.id as string;
   const setupId = params.setupId as string;
 
-  const [setup, setSetup] = useState<VehicleSetup | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchSetup();
-  }, [setupId]);
+  const setupQuery = useQuery({
+    queryKey: queryKeys.vehicleSetupDetail(vehicleId, setupId),
+    queryFn: async (): Promise<VehicleSetup> => {
+      return fetchJson<VehicleSetup>(`/api/vehicles/${vehicleId}/setups/${setupId}`, {
+        unauthorized: { kind: 'redirect_to_login' },
+      });
+    },
+    enabled: !!vehicleId && !!setupId,
+  });
 
-  async function fetchSetup() {
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/setups/${setupId}`);
-      const data = await response.json();
-      setSetup(data);
-    } catch (error) {
-      console.error('Error fetching setup:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const deleteSetupMutation = useMutation({
+    mutationFn: async () => {
+      await mutationJson(`/api/vehicles/${vehicleId}/setups/${setupId}`, { method: 'DELETE' });
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleDetail(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleSetups(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+      queryClient.removeQueries({ queryKey: queryKeys.vehicleSetupDetail(vehicleId, setupId) });
+    },
+  });
 
   async function handleDelete() {
     if (!confirm('Are you sure you want to delete this setup?')) return;
 
     try {
-      await fetch(`/api/vehicles/${vehicleId}/setups/${setupId}`, { method: 'DELETE' });
+      await deleteSetupMutation.mutateAsync();
       router.push(`/vehicle/${vehicleId}`);
     } catch (error) {
       console.error('Error deleting setup:', error);
       alert('Failed to delete setup');
     }
   }
+
+  const loading = setupQuery.isLoading;
+  const setup = setupQuery.data ?? null;
 
   if (loading) {
     return (

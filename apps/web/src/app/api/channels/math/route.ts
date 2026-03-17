@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { MathTelemetryChannel, MathChannelInput } from '@purplesector/telemetry';
-import { requireAuthUserId } from '@/lib/api-auth';
+import { requireAuthUserId } from '@/lib/auth';
 import { upsertMathChannelRule } from '@/lib/risingwave';
 
 // Color palette for math channels (visible on dark themes)

@@ -2,10 +2,13 @@
 
 import React, { useState } from 'react';
 import { Calendar } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { queryKeys } from '@/lib/queryKeys';
+import { mutationJson } from '@/lib/client-fetch';
 
 interface CreateEventDialogProps {
   open: boolean;
@@ -14,12 +17,31 @@ interface CreateEventDialogProps {
 }
 
 export function CreateEventDialog({ open, onOpenChange, onCreated }: CreateEventDialogProps) {
+  const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [creating, setCreating] = useState(false);
+
+  const createEventMutation = useMutation({
+    mutationFn: async () => {
+      return mutationJson<{ id: string; name: string }>('/api/events', {
+        method: 'POST',
+        body: {
+          name,
+          description: description || null,
+          location: location || null,
+          startDate: startDate || null,
+          endDate: endDate || null,
+        },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+    },
+  });
 
   function reset() {
     setName('');
@@ -27,38 +49,21 @@ export function CreateEventDialog({ open, onOpenChange, onCreated }: CreateEvent
     setLocation('');
     setStartDate('');
     setEndDate('');
-    setCreating(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setCreating(true);
     try {
-      const response = await fetch('/api/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          description: description || null,
-          location: location || null,
-          startDate: startDate || null,
-          endDate: endDate || null,
-        }),
-      });
-      if (response.ok) {
-        const event = await response.json();
-        reset();
-        onOpenChange(false);
-        onCreated(event);
-      } else {
-        console.error('Failed to create event');
-      }
+      const event = await createEventMutation.mutateAsync();
+      reset();
+      onOpenChange(false);
+      onCreated(event);
     } catch (error) {
       console.error('Error creating event:', error);
-    } finally {
-      setCreating(false);
     }
   }
+
+  const creating = createEventMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>

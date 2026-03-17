@@ -4,20 +4,23 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, X } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 export default function EditVehiclePage() {
   const params = useParams();
   const router = useRouter();
   const vehicleId = params.id as string;
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -27,56 +30,54 @@ export default function EditVehiclePage() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
 
-  useEffect(() => {
-    fetchVehicle();
-  }, [vehicleId]);
-
-  async function fetchVehicle() {
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}`);
-      const data = await response.json();
-      
-      setFormData({
-        name: data.name,
-        description: data.description || '',
-        inServiceDate: data.inServiceDate ? data.inServiceDate.split('T')[0] : '',
-        outOfServiceDate: data.outOfServiceDate ? data.outOfServiceDate.split('T')[0] : '',
+  const vehicleQuery = useQuery({
+    queryKey: queryKeys.vehicleDetail(vehicleId),
+    queryFn: async () => {
+      return fetchJson<any>(`/api/vehicles/${vehicleId}`, {
+        unauthorized: { kind: 'redirect_to_login' },
       });
-      
-      if (data.tags) {
-        setTags(JSON.parse(data.tags));
-      }
-    } catch (error) {
-      console.error('Error fetching vehicle:', error);
-    } finally {
-      setLoading(false);
+    },
+    enabled: !!vehicleId,
+  });
+
+  useEffect(() => {
+    if (!vehicleQuery.data) return;
+    const data = vehicleQuery.data;
+    setFormData({
+      name: data.name,
+      description: data.description || '',
+      inServiceDate: data.inServiceDate ? String(data.inServiceDate).split('T')[0] : '',
+      outOfServiceDate: data.outOfServiceDate ? String(data.outOfServiceDate).split('T')[0] : '',
+    });
+    if (data.tags) {
+      setTags(JSON.parse(data.tags));
     }
-  }
+  }, [vehicleQuery.data]);
+
+  const updateVehicleMutation = useMutation({
+    mutationFn: async () => {
+      return mutationJson<any>(`/api/vehicles/${vehicleId}`, {
+        method: 'PATCH',
+        body: {
+          ...formData,
+          tags,
+        },
+      });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.vehicleDetail(vehicleId), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+    },
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
-
     try {
-      const response = await fetch(`/api/vehicles/${vehicleId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          tags,
-        }),
-      });
-
-      if (response.ok) {
-        router.push(`/vehicle/${vehicleId}`);
-      } else {
-        alert('Failed to update vehicle');
-      }
+      await updateVehicleMutation.mutateAsync();
+      router.push(`/vehicle/${vehicleId}`);
     } catch (error) {
       console.error('Error updating vehicle:', error);
       alert('Failed to update vehicle');
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -90,6 +91,9 @@ export default function EditVehiclePage() {
   function removeTag(tag: string) {
     setTags(tags.filter(t => t !== tag));
   }
+
+  const loading = vehicleQuery.isLoading;
+  const saving = updateVehicleMutation.isPending;
 
   if (loading) {
     return (

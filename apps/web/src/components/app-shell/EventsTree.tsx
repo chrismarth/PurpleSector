@@ -1,35 +1,23 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ChevronRight, ChevronDown, Plus, ListChecks, Archive, Flag } from 'lucide-react';
 import { useNav } from './NavContext';
-import { useAppShell } from './AppShellContext';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatLapTime } from '@/lib/utils';
 import { CreateEventDialog } from './CreateEventDialog';
-import type { TabDescriptor } from '@purplesector/plugin-api';
-
-function makeTabId(type: string, entityId?: string): string {
-  return entityId ? `${type}:${entityId}` : `${type}:${Date.now()}`;
-}
 
 export function EventsTree() {
+  const router = useRouter();
   const { events, loading, expandedNodes, toggleExpand, selectedNodeId, setSelectedNode, refresh: refreshNav } = useNav();
-  const { openTab } = useAppShell();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   function handleEventCreated(event: { id: string; name: string }) {
     refreshNav();
-    openTab({
-      id: makeTabId('event-detail', event.id),
-      type: 'event-detail',
-      label: event.name,
-      breadcrumbs: [event.name],
-      entityId: event.id,
-      closable: true,
-    });
+    router.push(`/event/${event.id}`);
   }
 
   function handleCurrentLapClick(
@@ -37,26 +25,12 @@ export function EventsTree() {
     eventName: string
   ) {
     setSelectedNode(`session-current:${session.id}`);
-    openTab({
-      id: makeTabId('session-detail', session.id),
-      type: 'session-detail',
-      label: session.name,
-      breadcrumbs: [eventName, session.name, 'Current Lap'],
-      entityId: session.id,
-      closable: true,
-    });
+    router.push(`/session/${session.id}`);
   }
 
   function handleEventClick(event: { id: string; name: string }) {
     setSelectedNode(`event:${event.id}`);
-    openTab({
-      id: makeTabId('event-detail', event.id),
-      type: 'event-detail',
-      label: event.name,
-      breadcrumbs: [event.name],
-      entityId: event.id,
-      closable: true,
-    });
+    router.push(`/event/${event.id}`);
   }
 
   function handleAddEvent() {
@@ -64,27 +38,11 @@ export function EventsTree() {
   }
 
   function handleAddSession(eventId: string, eventName: string) {
-    const tabId = makeTabId('session-new', eventId);
-    openTab({
-      id: tabId,
-      type: 'session-new',
-      label: 'New Session',
-      breadcrumbs: [eventName, 'New Session'],
-      parentIds: { eventId },
-      closable: true,
-    });
+    router.push(`/session/new?eventId=${encodeURIComponent(eventId)}`);
   }
 
   function handleAddRunPlan(eventId: string, eventName: string) {
-    const tabId = makeTabId('run-plan-new', eventId);
-    openTab({
-      id: tabId,
-      type: 'run-plan-new',
-      label: 'Run Plan',
-      breadcrumbs: [eventName, 'Run Plan'],
-      entityId: eventId,
-      closable: true,
-    });
+    router.push(`/event/${eventId}/run-plan`);
   }
 
   function handleSessionClick(
@@ -92,14 +50,7 @@ export function EventsTree() {
     eventName: string
   ) {
     setSelectedNode(`session:${session.id}`);
-    openTab({
-      id: makeTabId('session-detail', session.id),
-      type: 'session-detail',
-      label: session.name,
-      breadcrumbs: [eventName, session.name],
-      entityId: session.id,
-      closable: true,
-    });
+    router.push(`/session/${session.id}`);
   }
 
   function handleLapClick(
@@ -108,14 +59,7 @@ export function EventsTree() {
     eventName: string
   ) {
     setSelectedNode(`lap:${lap.id}`);
-    openTab({
-      id: makeTabId('lap-detail', lap.id),
-      type: 'lap-detail',
-      label: `Lap ${lap.lapNumber}`,
-      breadcrumbs: [eventName, sessionName, `Lap ${lap.lapNumber}`],
-      entityId: lap.id,
-      closable: true,
-    });
+    router.push(`/lap/${lap.id}`);
   }
 
   if (loading) {

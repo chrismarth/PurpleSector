@@ -1,12 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Moon, Sun } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [mounted, setMounted] = useState(false);
+
+  const userThemeQuery = useQuery({
+    queryKey: ['userSettings', 'theme'] as const,
+    queryFn: async (): Promise<{ theme: 'light' | 'dark' | null }> => {
+      return fetchJson<{ theme: 'light' | 'dark' | null }>('/api/user/settings', {
+        unauthorized: { kind: 'return_fallback' },
+        fallback: { theme: null },
+      }).catch(() => ({ theme: null }));
+    },
+    enabled: mounted,
+  });
+
+  const persistThemeMutation = useMutation({
+    mutationFn: async (newTheme: 'light' | 'dark') => {
+      await mutationJson('/api/user/settings', {
+        method: 'PUT',
+        body: { theme: newTheme },
+        unauthorized: { kind: 'return_fallback' },
+        fallback: undefined,
+      });
+    },
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -17,23 +41,15 @@ export function ThemeToggle() {
     
     setTheme(initialTheme);
     applyTheme(initialTheme);
-
-    // Best-effort: fetch persisted theme from DB (may override localStorage)
-    fetch('/api/user/settings', { cache: 'no-store' })
-      .then(async (res) => {
-        if (!res.ok) return null;
-        return (await res.json()) as { theme: 'light' | 'dark' | null };
-      })
-      .then((data) => {
-        if (!data?.theme) return;
-        setTheme(data.theme);
-        applyTheme(data.theme);
-        localStorage.setItem('theme', data.theme);
-      })
-      .catch(() => {
-        // ignore
-      });
   }, []);
+
+  useEffect(() => {
+    const persisted = userThemeQuery.data?.theme;
+    if (!persisted) return;
+    setTheme(persisted);
+    applyTheme(persisted);
+    localStorage.setItem('theme', persisted);
+  }, [userThemeQuery.data]);
 
   const applyTheme = (newTheme: 'light' | 'dark') => {
     const html = document.documentElement;
@@ -51,13 +67,7 @@ export function ThemeToggle() {
     localStorage.setItem('theme', newTheme);
 
     // Best-effort persistence
-    fetch('/api/user/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ theme: newTheme }),
-    }).catch(() => {
-      // ignore
-    });
+    persistThemeMutation.mutate(newTheme);
   };
 
   // Prevent hydration mismatch by not rendering until mounted

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { calculateLapTime, normalizeTelemetryFrames } from '@/lib/utils';
-import { requireAuthUserId } from '@/lib/api-auth';
+import { requireAuthUserId } from '@/lib/auth';
 
 // POST /api/laps - Create a new lap
 export async function POST(request: NextRequest) {

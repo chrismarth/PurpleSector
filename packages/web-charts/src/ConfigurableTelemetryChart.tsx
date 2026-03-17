@@ -509,7 +509,7 @@ export function ConfigurableTelemetryChart({
         ) : (
           <div style={{ height: `${height}px` }} className="overflow-hidden">
             <UPlotChart
-              data={chartData.uplotData}
+              data={chartData.uplotData as uPlot.AlignedData}
               series={chartData.series}
               axes={chartData.axes}
               width={containerWidth - 32}

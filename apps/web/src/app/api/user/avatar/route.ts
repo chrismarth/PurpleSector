@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { prisma } from '@purplesector/db-prisma';
-import { requireAuthUserId } from '@/lib/api-auth';
+import { requireAuthUserId } from '@/lib/auth';
 
 const UPLOAD_DIR = join(process.cwd(), 'apps', 'web', 'public', 'images', 'avatars', 'uploads');
 const MAX_SIZE = 2 * 1024 * 1024; // 2 MB

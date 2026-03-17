@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Calendar, MapPin, Play, Archive, Trash2, Edit, ListChecks } from 'lucide-react';
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatTimestamp } from '@/lib/utils';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface Session {
   id: string;
@@ -37,35 +39,43 @@ export default function EventPage() {
   const router = useRouter();
   const eventId = params.id as string;
 
-  const [event, setEvent] = useState<Event | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchEvent();
-  }, [eventId]);
+  const eventQuery = useQuery({
+    queryKey: queryKeys.eventDetail(eventId),
+    queryFn: async (): Promise<Event> => {
+      return fetchJson<Event>(`/api/events/${eventId}`, {
+        unauthorized: { kind: 'redirect_to_login' },
+      });
+    },
+    enabled: !!eventId,
+  });
 
-  async function fetchEvent() {
-    try {
-      const response = await fetch(`/api/events/${eventId}`);
-      const data = await response.json();
-      setEvent(data);
-    } catch (error) {
-      console.error('Error fetching event:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const deleteSessionMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      await mutationJson(`/api/sessions/${sessionId}`, {
+        method: 'DELETE',
+      });
+      return sessionId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(eventId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+    },
+  });
 
   async function deleteSession(sessionId: string) {
     if (!confirm('Are you sure you want to delete this session?')) return;
-
     try {
-      await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
-      fetchEvent(); // Refresh
+      await deleteSessionMutation.mutateAsync(sessionId);
     } catch (error) {
       console.error('Error deleting session:', error);
     }
   }
+
+  const loading = eventQuery.isLoading;
+  const event = eventQuery.data ?? null;
 
   if (loading) {
     return (

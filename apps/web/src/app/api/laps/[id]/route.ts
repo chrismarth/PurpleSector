@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
-import { requireAuthUserId } from '@/lib/api-auth';
+import { requireAuthUserId } from '@/lib/auth';
+import { requireCanReadSessionById } from '@/lib/access-control';
 
 export async function GET(
   request: NextRequest,
@@ -14,8 +15,26 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const lapMeta = await (prisma as any).lap.findUnique({
+      where: { id: params.id },
+      select: {
+        id: true,
+        userId: true,
+        sessionId: true,
+      },
+    });
+
+    if (!lapMeta) {
+      return NextResponse.json({ error: 'Lap not found' }, { status: 404 });
+    }
+
+    await requireCanReadSessionById({
+      requesterUserId: userId,
+      sessionId: lapMeta.sessionId,
+    });
+
     const lap = await (prisma as any).lap.findFirst({
-      where: { id: params.id, userId },
+      where: { id: params.id, userId: lapMeta.userId },
       include: {
         session: {
           include: {
@@ -37,6 +56,12 @@ export async function GET(
 
     return NextResponse.json(lap);
   } catch (error) {
+    if ((error as any)?.code === 'NOT_FOUND') {
+      return NextResponse.json({ error: 'Lap not found' }, { status: 404 });
+    }
+    if ((error as any)?.code === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     console.error('Error fetching lap:', error);
     return NextResponse.json({ error: 'Failed to fetch lap' }, { status: 500 });
   }

@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { queryKeys } from '@/lib/queryKeys';
+import { mutationJson } from '@/lib/client-fetch';
 
 interface CreateVehicleDialogProps {
   open: boolean;
@@ -24,39 +27,40 @@ function CarIcon({ className }: { className?: string }) {
 }
 
 export function CreateVehicleDialog({ open, onOpenChange, onCreated }: CreateVehicleDialogProps) {
+  const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [creating, setCreating] = useState(false);
+
+  const createVehicleMutation = useMutation({
+    mutationFn: async () => {
+      return mutationJson<{ id: string; name: string }>('/api/vehicles', {
+        method: 'POST',
+        body: { name, description: description || null, tags: [] },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+    },
+  });
 
   function reset() {
     setName('');
     setDescription('');
-    setCreating(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setCreating(true);
     try {
-      const response = await fetch('/api/vehicles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description: description || null, tags: [] }),
-      });
-      if (response.ok) {
-        const vehicle = await response.json();
-        reset();
-        onOpenChange(false);
-        onCreated(vehicle);
-      } else {
-        console.error('Failed to create vehicle');
-      }
+      const vehicle = await createVehicleMutation.mutateAsync();
+      reset();
+      onOpenChange(false);
+      onCreated(vehicle);
     } catch (error) {
       console.error('Error creating vehicle:', error);
-    } finally {
-      setCreating(false);
     }
   }
+
+  const creating = createVehicleMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>

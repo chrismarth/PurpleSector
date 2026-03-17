@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Settings, Wrench, Edit, Trash2, Calendar } from 'lucide-react';
@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatTimestamp } from '@/lib/utils';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface VehicleConfiguration {
   id: string;
@@ -53,31 +55,53 @@ export default function VehiclePage() {
   const params = useParams();
   const vehicleId = params.id as string;
 
-  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchVehicle();
-  }, [vehicleId]);
+  const vehicleQuery = useQuery({
+    queryKey: queryKeys.vehicleDetail(vehicleId),
+    queryFn: async (): Promise<Vehicle> => {
+      return fetchJson<Vehicle>(`/api/vehicles/${vehicleId}`, {
+        unauthorized: { kind: 'redirect_to_login' },
+      });
+    },
+    enabled: !!vehicleId,
+  });
 
-  async function fetchVehicle() {
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}`);
-      const data = await response.json();
-      setVehicle(data);
-    } catch (error) {
-      console.error('Error fetching vehicle:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const deleteConfigurationMutation = useMutation({
+    mutationFn: async (configId: string) => {
+      await mutationJson(`/api/vehicles/${vehicleId}/configurations/${configId}`, {
+        method: 'DELETE',
+      });
+      return configId;
+    },
+    onSuccess: (configId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleDetail(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleConfigurations(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+      queryClient.removeQueries({ queryKey: queryKeys.vehicleConfigurationDetail(vehicleId, configId) });
+    },
+  });
+
+  const deleteSetupMutation = useMutation({
+    mutationFn: async (setupId: string) => {
+      await mutationJson(`/api/vehicles/${vehicleId}/setups/${setupId}`, {
+        method: 'DELETE',
+      });
+      return setupId;
+    },
+    onSuccess: (setupId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleDetail(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleSetups(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+      queryClient.removeQueries({ queryKey: queryKeys.vehicleSetupDetail(vehicleId, setupId) });
+    },
+  });
 
   async function deleteConfiguration(configId: string) {
     if (!confirm('Are you sure you want to delete this configuration?')) return;
 
     try {
-      await fetch(`/api/vehicles/${vehicleId}/configurations/${configId}`, { method: 'DELETE' });
-      fetchVehicle();
+      await deleteConfigurationMutation.mutateAsync(configId);
     } catch (error) {
       console.error('Error deleting configuration:', error);
     }
@@ -87,12 +111,14 @@ export default function VehiclePage() {
     if (!confirm('Are you sure you want to delete this setup?')) return;
 
     try {
-      await fetch(`/api/vehicles/${vehicleId}/setups/${setupId}`, { method: 'DELETE' });
-      fetchVehicle();
+      await deleteSetupMutation.mutateAsync(setupId);
     } catch (error) {
       console.error('Error deleting setup:', error);
     }
   }
+
+  const loading = vehicleQuery.isLoading;
+  const vehicle = vehicleQuery.data ?? null;
 
   if (loading) {
     return (

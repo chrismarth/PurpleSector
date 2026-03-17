@@ -4,49 +4,54 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Calendar } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { queryKeys } from '@/lib/queryKeys';
+import { mutationJson } from '@/lib/client-fetch';
 
 export default function NewEventPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [creating, setCreating] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setCreating(true);
-
-    try {
-      const response = await fetch('/api/events', {
+  const createEventMutation = useMutation({
+    mutationFn: async () => {
+      return mutationJson<{ id: string }>('/api/events', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           name,
           description: description || null,
           location: location || null,
           startDate: startDate || null,
           endDate: endDate || null,
-        }),
+        },
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+    },
+  });
 
-      if (response.ok) {
-        const event = await response.json();
-        router.push(`/event/${event.id}`);
-      } else {
-        console.error('Failed to create event');
-      }
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const created = await createEventMutation.mutateAsync();
+      router.push(`/event/${created.id}`);
     } catch (error) {
       console.error('Error creating event:', error);
     } finally {
-      setCreating(false);
     }
   }
+
+  const creating = createEventMutation.isPending;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">

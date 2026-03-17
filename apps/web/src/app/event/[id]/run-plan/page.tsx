@@ -1,14 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, X, Wifi, Play } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { queryKeys } from '@/lib/queryKeys';
+import { fetchJson, mutationJson } from '@/lib/client-fetch';
 
 interface Vehicle {
   id: string;
@@ -37,10 +40,7 @@ export default function CreateRunPlanPage() {
   const router = useRouter();
   const eventId = params.id as string;
 
-  const [loading, setLoading] = useState(false);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [allConfigurations, setAllConfigurations] = useState<Record<string, VehicleConfiguration[]>>({});
-  const [allSetups, setAllSetups] = useState<Record<string, VehicleSetup[]>>({});
+  const queryClient = useQueryClient();
   
   // Global settings for all sessions
   const [globalSource, setGlobalSource] = useState<'live' | 'demo'>('live');
@@ -50,45 +50,73 @@ export default function CreateRunPlanPage() {
     { name: '', vehicleConfigurationId: '', vehicleSetupId: '' }
   ]);
 
-  useEffect(() => {
-    fetchVehicles();
-  }, []);
+  const vehiclesQuery = useQuery({
+    queryKey: queryKeys.vehiclesList,
+    queryFn: async (): Promise<Vehicle[]> => {
+      return fetchJson<Vehicle[]>('/api/vehicles', {
+        unauthorized: { kind: 'redirect_to_login' },
+        fallback: [],
+      });
+    },
+    staleTime: 15_000,
+  });
 
-  async function fetchVehicles() {
-    try {
-      const response = await fetch('/api/vehicles');
-      const data = await response.json();
-      setVehicles(data);
-      
-      // Fetch configurations and setups for all vehicles
-      for (const vehicle of data) {
-        await fetchConfigurationsForVehicle(vehicle.id);
-        await fetchSetupsForVehicle(vehicle.id);
-      }
-    } catch (error) {
-      console.error('Error fetching vehicles:', error);
-    }
-  }
+  const configurationsQuery = useQuery({
+    queryKey: queryKeys.vehicleConfigurations(globalVehicleId),
+    queryFn: async (): Promise<VehicleConfiguration[]> => {
+      const data = await fetchJson<unknown>(`/api/vehicles/${globalVehicleId}/configurations`, {
+        unauthorized: { kind: 'redirect_to_login' },
+        fallback: [],
+      });
+      return Array.isArray(data) ? (data as VehicleConfiguration[]) : [];
+    },
+    enabled: !!globalVehicleId,
+    staleTime: 15_000,
+  });
 
-  async function fetchConfigurationsForVehicle(vehicleId: string) {
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/configurations`);
-      const data = await response.json();
-      setAllConfigurations(prev => ({ ...prev, [vehicleId]: data }));
-    } catch (error) {
-      console.error('Error fetching configurations:', error);
-    }
-  }
+  const setupsQuery = useQuery({
+    queryKey: queryKeys.vehicleSetups(globalVehicleId),
+    queryFn: async (): Promise<VehicleSetup[]> => {
+      const data = await fetchJson<unknown>(`/api/vehicles/${globalVehicleId}/setups`, {
+        unauthorized: { kind: 'redirect_to_login' },
+        fallback: [],
+      });
+      return Array.isArray(data) ? (data as VehicleSetup[]) : [];
+    },
+    enabled: !!globalVehicleId,
+    staleTime: 15_000,
+  });
 
-  async function fetchSetupsForVehicle(vehicleId: string) {
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/setups`);
-      const data = await response.json();
-      setAllSetups(prev => ({ ...prev, [vehicleId]: data }));
-    } catch (error) {
-      console.error('Error fetching setups:', error);
-    }
-  }
+  const vehicles = vehiclesQuery.data ?? [];
+  const configurations = configurationsQuery.data ?? [];
+  const setups = setupsQuery.data ?? [];
+
+  const createRunPlanMutation = useMutation({
+    mutationFn: async () => {
+      await Promise.all(
+        plannedSessions.map((session) =>
+          mutationJson('/api/sessions', {
+            method: 'POST',
+            body: {
+              eventId,
+              name: session.name,
+              source: globalSource,
+              vehicleId: globalVehicleId,
+              vehicleConfigurationId: session.vehicleConfigurationId || null,
+              vehicleSetupId: session.vehicleSetupId || null,
+              started: false,
+            },
+          })
+        )
+      );
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(eventId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+    },
+  });
 
   function addSession() {
     setPlannedSessions([
@@ -109,8 +137,8 @@ export default function CreateRunPlanPage() {
     if (field === 'vehicleConfigurationId' || field === 'vehicleSetupId') {
       const session = newSessions[index];
       if (globalVehicleId) {
-        const config = allConfigurations[globalVehicleId]?.find(c => c.id === session.vehicleConfigurationId);
-        const setup = allSetups[globalVehicleId]?.find(s => s.id === session.vehicleSetupId);
+        const config = configurations.find((c) => c.id === session.vehicleConfigurationId);
+        const setup = setups.find((s) => s.id === session.vehicleSetupId);
         
         if (config || setup) {
           const parts = [];
@@ -135,35 +163,22 @@ export default function CreateRunPlanPage() {
       return;
     }
 
-    setLoading(true);
-
     try {
-      // Create all sessions using global source and vehicle
-      const promises = plannedSessions.map(session =>
-        fetch('/api/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            eventId,
-            name: session.name,
-            source: globalSource,
-            vehicleId: globalVehicleId,
-            vehicleConfigurationId: session.vehicleConfigurationId || null,
-            vehicleSetupId: session.vehicleSetupId || null,
-            started: false, // Important: sessions are pre-created but not started
-          }),
-        })
-      );
-
-      await Promise.all(promises);
+      await createRunPlanMutation.mutateAsync();
       router.push(`/event/${eventId}`);
     } catch (error) {
       console.error('Error creating run plan:', error);
       alert('Failed to create run plan');
-    } finally {
-      setLoading(false);
     }
   }
+
+  const loading = createRunPlanMutation.isPending;
+
+  const isLoadingPrereqs = useMemo(() => {
+    if (vehiclesQuery.isLoading) return true;
+    if (globalVehicleId && (configurationsQuery.isLoading || setupsQuery.isLoading)) return true;
+    return false;
+  }, [vehiclesQuery.isLoading, globalVehicleId, configurationsQuery.isLoading, setupsQuery.isLoading]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
@@ -309,7 +324,7 @@ export default function CreateRunPlanPage() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">None</SelectItem>
-                            {(allConfigurations[globalVehicleId] || []).map((config) => (
+                            {configurations.map((config) => (
                               <SelectItem key={config.id} value={config.id}>
                                 {config.name}
                               </SelectItem>
@@ -336,7 +351,7 @@ export default function CreateRunPlanPage() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">None</SelectItem>
-                            {(allSetups[globalVehicleId] || []).map((setup) => (
+                            {setups.map((setup) => (
                               <SelectItem key={setup.id} value={setup.id}>
                                 {setup.name}
                                 {setup.vehicleConfiguration && (
