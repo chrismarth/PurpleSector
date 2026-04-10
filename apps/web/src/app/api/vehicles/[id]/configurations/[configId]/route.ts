@@ -15,7 +15,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const configuration = await (prisma as any).vehicleConfiguration.findFirst({
+    const configuration = await prisma.vehicleConfiguration.findFirst({
       where: { id: params.configId, vehicleId: params.id, userId },
       include: {
         vehicle: true,
@@ -66,7 +66,7 @@ export async function PATCH(
     if (description !== undefined) updateData.description = description;
     if (parts !== undefined) updateData.parts = JSON.stringify(parts);
 
-    const result = await (prisma as any).vehicleConfiguration.updateMany({
+    const result = await prisma.vehicleConfiguration.updateMany({
       where: { id: params.configId, vehicleId: params.id, userId },
       data: updateData,
     });
@@ -75,7 +75,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Configuration not found' }, { status: 404 });
     }
 
-    const configuration = await (prisma as any).vehicleConfiguration.findFirst({
+    const configuration = await prisma.vehicleConfiguration.findFirst({
       where: { id: params.configId, vehicleId: params.id, userId },
     });
 
@@ -105,7 +105,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const result = await (prisma as any).vehicleConfiguration.deleteMany({
+    const result = await prisma.vehicleConfiguration.deleteMany({
       where: { id: params.configId, vehicleId: params.id, userId },
     });
 

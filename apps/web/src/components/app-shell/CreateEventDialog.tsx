@@ -39,7 +39,7 @@ export function CreateEventDialog({ open, onOpenChange, onCreated }: CreateEvent
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
-      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
     },
   });
 

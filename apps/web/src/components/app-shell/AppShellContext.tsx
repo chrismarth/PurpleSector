@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from 'react';
 import { useRouter } from 'next/navigation';
 import type { TabDescriptor } from '@purplesector/plugin-api';
+import { fetchJson } from '@/lib/client-fetch';
 
 // ── State ──
 
@@ -120,7 +121,9 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Laps
-      if (type === 'lap-detail' && entityId) return router.push(`/lap/${entityId}`);
+      if (type === 'lap-detail' && entityId) {
+        return router.push(`/lap/${entityId}`);
+      }
 
       // Run plan
       if (type === 'run-plan-new' && entityId) return router.push(`/event/${entityId}/run-plan`);

@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { getAuthUserFromCookies } from '@/lib/auth';
-import type { AuthUser } from '@/lib/auth';
+
+type AuthUser = {
+  id: string;
+  username: string;
+  role: 'ORG_ADMIN' | 'USER';
+  fullName: string;
+  avatarUrl: string | null;
+};
 
 export async function GET() {
   const cookieUser = getAuthUserFromCookies();
@@ -9,9 +16,9 @@ export async function GET() {
     return NextResponse.json({ user: null }, { status: 401 });
   }
 
-  // Try to read from DB for up-to-date fullName / avatarUrl
+  // Cookie stores the user UUID; fetch the full user record.
   try {
-    const dbUser = await (prisma as any).user.findUnique({
+    const dbUser = await prisma.user.findUnique({
       where: { id: cookieUser.id },
       select: { id: true, username: true, role: true, fullName: true, avatarUrl: true },
     });
@@ -27,8 +34,8 @@ export async function GET() {
       return NextResponse.json({ user });
     }
   } catch {
-    // DB not available — fall through to cookie-based user
+    // DB not available
   }
 
-  return NextResponse.json({ user: cookieUser });
+  return NextResponse.json({ user: null }, { status: 401 });
 }

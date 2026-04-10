@@ -15,12 +15,12 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const vehicle = await (prisma as any).vehicle.findFirst({ where: { id: params.id, userId } });
+    const vehicle = await prisma.vehicle.findFirst({ where: { id: params.id, userId } });
     if (!vehicle) {
       return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 });
     }
 
-    const setups = await (prisma as any).vehicleSetup.findMany({
+    const setups = await prisma.vehicleSetup.findMany({
       where: { vehicleId: params.id, userId },
       include: {
         vehicleConfiguration: true,
@@ -56,7 +56,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const vehicle = await (prisma as any).vehicle.findFirst({ where: { id: params.id, userId } });
+    const vehicle = await prisma.vehicle.findFirst({ where: { id: params.id, userId } });
     if (!vehicle) {
       return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 });
     }
@@ -71,7 +71,7 @@ export async function POST(
       );
     }
 
-    const setup = await (prisma as any).vehicleSetup.create({
+    const setup = await prisma.vehicleSetup.create({
       data: {
         userId,
         vehicleId: params.id,

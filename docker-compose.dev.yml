@@ -202,8 +202,8 @@ services:
     image: quay.io/lakekeeper/catalog:latest
     container_name: ps-lakekeeper-migrate
     environment:
-      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://purplesector:devpassword@postgres:5432/purplesector
-      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://purplesector:devpassword@postgres:5432/purplesector
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://purplesector:devpassword@postgres:5432/lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://purplesector:devpassword@postgres:5432/lakekeeper
       LAKEKEEPER__PG_ENCRYPTION_KEY: my-secret-key-change-me-in-production
     command: ["migrate"]
     depends_on:
@@ -217,8 +217,8 @@ services:
     ports:
       - "8181:8181"
     environment:
-      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://purplesector:devpassword@postgres:5432/purplesector
-      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://purplesector:devpassword@postgres:5432/purplesector
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://purplesector:devpassword@postgres:5432/lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://purplesector:devpassword@postgres:5432/lakekeeper
       LAKEKEEPER__PG_ENCRYPTION_KEY: my-secret-key-change-me-in-production
       LAKEKEEPER__BASE_URI: http://lakekeeper:8181
       LAKEKEEPER__ENABLE_DEFAULT_PROJECT: "true"
@@ -264,30 +264,12 @@ services:
       POSTGRES_PASSWORD: devpassword
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "purplesector"]
       interval: 10s
       timeout: 3s
       retries: 3
-
-  # ── Time Ticker (provides deterministic NOW() for RisingWave) ───────
-  time-ticker:
-    build:
-      context: ./services
-      dockerfile: Dockerfile.time-ticker
-    container_name: ps-time-ticker
-    environment:
-      REDPANDA_BROKER: ps-redpanda:9092
-    depends_on:
-      redpanda:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f time-ticker.py || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
 
 volumes:
   redpanda-data:

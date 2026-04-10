@@ -5,3 +5,4 @@ export * from './analysisPanels';
 export * from './globalUI';
 export * from './agentTools';
 export * from './serverPlugin';
+export * from './telemetryHoverContext';

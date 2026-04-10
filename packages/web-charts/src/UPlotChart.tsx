@@ -42,16 +42,31 @@ export function UPlotChart({
   data,
   series,
   axes,
-  width,
-  height,
+  width: rawWidth,
+  height: rawHeight,
   onHover,
   syncedHoverIndex,
   className = '',
   onReady,
 }: UPlotChartProps) {
+  // Guard against very small/negative values during layout transitions.
+  const width = Math.max(rawWidth, 100);
+  const height = Math.max(rawHeight, 50);
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<uPlot | null>(null);
   const [darkMode, setDarkMode] = useState(false);
+
+  // Keep a ref so the cursor hook always calls the latest callback without
+  // requiring chart recreation on every render.
+  const onHoverRef = useRef(onHover);
+  useEffect(() => {
+    onHoverRef.current = onHover;
+  }, [onHover]);
+
+  // Suppress the setCursor hook when we're moving the cursor programmatically
+  // (in response to syncedHoverIndex) so we don't echo the value back up.
+  const isProgrammaticCursorMove = useRef(false);
+  const isRestoringCursor = useRef(false);
 
   // Detect dark mode changes
   useEffect(() => {
@@ -70,27 +85,23 @@ export function UPlotChart({
     return () => observer.disconnect();
   }, []);
 
-  // Create chart instance
-  useEffect(() => {
-    if (!containerRef.current || data.length === 0 || data[0].length === 0) return;
+  // Build series config - memoized to prevent unnecessary chart updates
+  const buildSeries = useCallback((s: UPlotSeries[]): uPlot.Series[] => [
+    {},
+    ...s.map((seriesItem) => ({
+      label: seriesItem.label,
+      stroke: seriesItem.color,
+      width: seriesItem.width || 2,
+      dash: seriesItem.dash,
+      points: seriesItem.points || { show: false },
+      scale: seriesItem.scale || 'y',
+      show: seriesItem.show !== false,
+      fill: 'rgba(0,0,0,0)',
+    })),
+  ], []);
 
-    const textColor = darkMode ? '#e5e7eb' : '#374151';
-    const gridColor = darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-
-    const uplotSeries: uPlot.Series[] = [
-      {},
-      ...series.map((s) => ({
-        label: s.label,
-        stroke: s.color,
-        width: s.width || 2,
-        dash: s.dash,
-        points: s.points || { show: false },
-        scale: s.scale || 'y',
-        show: s.show !== false,
-        fill: 'rgba(0,0,0,0)',
-      })),
-    ];
-
+  // Build axes config
+  const buildAxes = useCallback((textColor: string, gridColor: string, seriesData: UPlotSeries[], axesData?: UPlotAxis[]): uPlot.Axis[] => {
     const defaultAxes: uPlot.Axis[] = [
       {
         scale: 'x',
@@ -98,7 +109,7 @@ export function UPlotChart({
         grid: { show: true, stroke: gridColor },
         stroke: textColor,
         ticks: { stroke: textColor },
-        values: (u, vals) => vals.map((v) => v.toFixed(1)),
+        values: (_u, vals) => vals.map((v) => v.toFixed(1)),
       },
       {
         scale: 'y',
@@ -110,7 +121,7 @@ export function UPlotChart({
       },
     ];
 
-    const hasSecondaryAxis = series.some((s) => s.scale === 'y2');
+    const hasSecondaryAxis = seriesData.some((s) => s.scale === 'y2');
     if (hasSecondaryAxis) {
       defaultAxes.push({
         scale: 'y2',
@@ -122,8 +133,8 @@ export function UPlotChart({
       });
     }
 
-    const finalAxes = axes
-      ? axes.map((axis, idx) => {
+    return axesData
+      ? axesData.map((axis, idx) => {
           const baseAxis = defaultAxes[idx] || {};
           return {
             ...baseAxis,
@@ -133,11 +144,19 @@ export function UPlotChart({
             grid: axis.grid ? { ...axis.grid, stroke: gridColor } : baseAxis.grid,
             values:
               axis.scale === 'x' && !axis.values
-                ? (u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(1))
+                ? (_u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(1))
                 : axis.values,
           } as uPlot.Axis;
         })
       : defaultAxes;
+  }, []);
+
+  // Create chart instance - only when dimensions or darkMode change
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const textColor = darkMode ? '#e5e7eb' : '#374151';
+    const gridColor = darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
 
     const cursor: uPlot.Cursor = {
       drag: {
@@ -146,8 +165,23 @@ export function UPlotChart({
       },
     };
 
-    // Completely remove hooks to prevent infinite loop during high-frequency updates
     const hooks: uPlot.Hooks.Arrays = {
+      setCursor: [
+        (u) => {
+          // Skip the callback when we moved the cursor programmatically to
+          // avoid echoing the value back up to the parent.
+          if (isProgrammaticCursorMove.current || isRestoringCursor.current) return;
+          
+          // uPlot resets cursor to {left:-10, top:-10} when the mouse stops moving
+          // or leaves - ignore these reset events entirely to keep hover stable.
+          const left = u.cursor.left ?? -10;
+          const top = u.cursor.top ?? -10;
+          if (left < 0 || top < 0) return;
+
+          const idx = u.cursor.idx ?? null;
+          onHoverRef.current?.(idx);
+        },
+      ],
       setSelect: [
         (u) => {
           const select = u.select;
@@ -163,15 +197,13 @@ export function UPlotChart({
     const opts: uPlot.Options = {
       width,
       height,
-      series: uplotSeries,
-      axes: finalAxes,
+      series: buildSeries(series),
+      axes: buildAxes(textColor, gridColor, series, axes),
       cursor,
-      hooks: {}, // Empty hooks object to prevent infinite loop
+      hooks,
       legend: {
         show: false,
       },
-      // Enable the built-in selection rectangle for zooming. Styling is
-      // provided by the default uPlot CSS.
       select: {
         show: true,
         left: 0,
@@ -180,9 +212,9 @@ export function UPlotChart({
         height: 0,
       },
       scales: {
-        x: {},
-        y: {},
-        ...(hasSecondaryAxis ? { y2: {} } : {}),
+        x: { auto: true },
+        y: { auto: true },
+        ...(series.some((s) => s.scale === 'y2') ? { y2: { auto: true } } : {}),
       },
     };
 
@@ -192,21 +224,106 @@ export function UPlotChart({
       onReady(chart);
     }
 
+    // Use native mouseleave on the chart's over element to detect true mouse exit
+    // (distinct from uPlot's stop-moving reset which we ignore in setCursor)
+    const overEl = chart.over;
+    const handleMouseLeave = () => {
+      onHoverRef.current?.(null);
+    };
+    overEl.addEventListener('mouseleave', handleMouseLeave);
+
     return () => {
+      overEl.removeEventListener('mouseleave', handleMouseLeave);
       chart.destroy();
       chartRef.current = null;
     };
-  }, [series, axes, width, height, darkMode, onReady]);
+  }, [width, height, darkMode, series, axes, onReady]);
 
+  // Update data without recreating chart
+  // Preserve hover position from context across data updates
   useEffect(() => {
-    if (!chartRef.current) return;
-    chartRef.current.setData(data);
-  }, [data]);
+    const chart = chartRef.current;
+    if (!chart) return;
+    
+    chart.setData(data);
+    
+    // After data update, if we have a synced hover index, restore the cursor position
+    // This prevents data updates from clearing the hover state
+    if (syncedHoverIndex != null && isFinite(syncedHoverIndex)) {
+      // Use setTimeout to ensure uPlot has processed the data update
+      setTimeout(() => {
+        if (!chartRef.current) return;
+        const xData = chartRef.current.data[0] as number[];
+        if (xData && syncedHoverIndex < xData.length) {
+          const xValue = xData[syncedHoverIndex];
+          const x = chartRef.current.valToPos(xValue, 'x');
+          if (x != null && isFinite(x)) {
+            isRestoringCursor.current = true;
+            isProgrammaticCursorMove.current = true;
+            chartRef.current.setCursor({ left: x, top: 0 });
+            isProgrammaticCursorMove.current = false;
+            isRestoringCursor.current = false;
+          }
+        }
+      }, 0);
+    }
+  }, [data, syncedHoverIndex]);
 
+  // Update size without recreating chart
   useEffect(() => {
     if (!chartRef.current) return;
     chartRef.current.setSize({ width, height });
   }, [width, height]);
+
+  // Update series without recreating chart
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    
+    // Update each series (skip index 0 which is the x-axis)
+    series.forEach((s, i) => {
+      const seriesIndex = i + 1;
+      // Only update show property via setSeries - other props require chart recreation
+      // uPlot's setSeries only supports { show, focus } options
+      chart.setSeries(seriesIndex, {
+        show: s.show !== false,
+      });
+    });
+  }, [series]);
+
+  // Keep a ref to the latest data to avoid dependency issues in synced hover effect
+  const dataRef = useRef(data);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
+  // Move the crosshair to match the synced hover position from peer charts.
+  // Only runs when syncedHoverIndex changes, NOT when data changes (to prevent flickering).
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || syncedHoverIndex == null) return;
+    
+    const positionCursor = () => {
+      const xData = chart.data[0] as number[];
+      if (!xData || syncedHoverIndex >= xData.length) return;
+      const xValue = xData[syncedHoverIndex];
+      
+      // Ensure scales are computed before converting value to position
+      if (chart.scales.x.min == null || chart.scales.x.max == null) {
+        chart.redraw(true);
+      }
+      
+      const x = chart.valToPos(xValue, 'x');
+      if (x == null || !isFinite(x)) return;
+      
+      isProgrammaticCursorMove.current = true;
+      chart.setCursor({ left: x, top: 0 });
+      isProgrammaticCursorMove.current = false;
+    };
+    
+    // Defer to next frame to ensure chart is fully initialized
+    requestAnimationFrame(positionCursor);
+  }, [syncedHoverIndex]);
 
   return (
     <div ref={containerRef} className={`uplot-chart ${className}`} />

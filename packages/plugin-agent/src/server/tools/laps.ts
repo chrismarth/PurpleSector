@@ -67,7 +67,7 @@ export function createLapToolHandlers(prisma: any): Record<string, AgentToolHand
 
     async getLap(args: Record<string, unknown>, ctx: AgentToolContext): Promise<AgentToolResult> {
       const lap = await prisma.lap.findFirst({
-        where: { id: args.lapId as string, userId: ctx.userId },
+        where: { id: args.lapId as string },
         select: {
           id: true,
           lapNumber: true,
@@ -86,21 +86,14 @@ export function createLapToolHandlers(prisma: any): Record<string, AgentToolHand
 
     async getLapTelemetry(args: Record<string, unknown>, ctx: AgentToolContext): Promise<AgentToolResult> {
       const lap = await prisma.lap.findFirst({
-        where: { id: args.lapId as string, userId: ctx.userId },
-        select: { id: true, lapNumber: true, lapTime: true, telemetryData: true },
+        where: { id: args.lapId as string },
+        select: { id: true, lapNumber: true, lapTime: true, sessionId: true },
       });
       if (!lap) return { success: false, message: 'Lap not found.' };
 
-      let telemetry;
-      try {
-        telemetry = JSON.parse(lap.telemetryData);
-      } catch {
-        telemetry = [];
-      }
       return {
-        success: true,
-        data: { ...lap, telemetryData: undefined, telemetry, frameCount: telemetry.length },
-        message: `Lap ${lap.lapNumber} has ${telemetry.length} telemetry frames.`,
+        success: false,
+        message: 'Lap telemetry frames are stored in Iceberg and are not available via this tool yet.',
       };
     },
   };

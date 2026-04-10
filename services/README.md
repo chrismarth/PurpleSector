@@ -26,10 +26,10 @@ PM2 (ecosystem.dev.config.js):
 
 **File:** `redis-websocket-server.js`
 
-Reads telemetry from Redis Streams (populated by RisingWave materialized views)
+Reads telemetry from Redis Pub/Sub (populated by RisingWave Redis sinks)
 and pushes to frontend WebSocket clients in real-time.
 
-**Data flow:** `RisingWave → Redis Streams → This Server → WebSocket → Frontend`
+**Data flow:** `RisingWave → Redis Pub/Sub → This Server → WebSocket → Frontend`
 
 **Environment variables:**
 - `REDIS_URL` — Redis connection URL (default: `redis://localhost:6379`)

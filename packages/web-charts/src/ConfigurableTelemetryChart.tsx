@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import { useMemo, useState, useRef, useCallback, useEffect, useContext } from 'react';
 import uPlot from 'uplot';
 import { UPlotChart, type UPlotSeries, type UPlotAxis } from './UPlotChart';
 import { TelemetryFrame } from '@/types/telemetry';
@@ -15,6 +15,7 @@ import {
 } from '@purplesector/telemetry';
 import { Button } from '@/components/ui/button';
 import { PlotConfigDialog } from './PlotConfigDialog';
+import { TelemetryHoverContext } from '@purplesector/plugin-api';
 
 interface ConfigurableTelemetryChartProps {
   data: TelemetryFrame[];
@@ -23,8 +24,7 @@ interface ConfigurableTelemetryChartProps {
   onConfigChange: (config: PlotConfig) => void;
   onDelete?: () => void;
   height?: number;
-  syncedHoverValue?: number | null;
-  onHoverChange?: (value: number | null) => void;
+  // syncedHoverIndex and onHoverChange are now read from TelemetryHoverContext
   // Allow parent toolbars to trigger a zoom reset via changing token.
   externalResetZoomToken?: number;
   // Allow parent toolbars to open the config dialog via changing token.
@@ -39,12 +39,13 @@ export function ConfigurableTelemetryChart({
   onConfigChange,
   onDelete,
   height = 250,
-  syncedHoverValue,
-  onHoverChange,
   externalResetZoomToken,
   externalOpenConfigToken,
   mathChannels = [],
 }: ConfigurableTelemetryChartProps) {
+  // Read hover state from context for cross-chart synchronization
+  const { hoverIndex: syncedHoverIndex, setHoverIndex: onHoverChange } = useContext(TelemetryHoverContext);
+  
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(800);
@@ -52,15 +53,8 @@ export function ConfigurableTelemetryChart({
   const chartRef = useRef<uPlot | null>(null);
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [syncedHoverIndex, setSyncedHoverIndex] = useState<number | null>(null);
-  const lastSyncedHoverValueRef = useRef<number | null>(null);
-  const lastSyncedHoverIndexRef = useRef<number | null>(null);
-  const dataRef = useRef<TelemetryFrame[]>(data || []);
-
-  // Update dataRef when data changes
-  useEffect(() => {
-    dataRef.current = data || [];
-  }, [data]);
+  // Use syncedHoverIndex directly from context - same data array means same index
+  const effectiveSyncedHoverIndex = syncedHoverIndex ?? null;
 
   useEffect(() => {
     if (config.channels.length > 0) return;
@@ -113,6 +107,21 @@ export function ConfigurableTelemetryChart({
     resizeObserver.observe(containerRef.current);
     return () => resizeObserver.disconnect();
   }, []);
+
+  // Re-measure container width after layout shifts (e.g. exiting fullscreen).
+  // The height prop changes on fullscreen toggle, but the ResizeObserver may
+  // not fire if the old uPlot canvas prevents the container from shrinking.
+  // Scheduling a measurement on the next animation frame ensures the browser
+  // has finished reflowing.
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const raf = requestAnimationFrame(() => {
+      if (!containerRef.current) return;
+      const w = containerRef.current.getBoundingClientRect().width;
+      if (w > 0) setContainerWidth(w);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [height]);
 
   const getChannelValue = useCallback((frame: TelemetryFrame, channel: TelemetryChannel): number => {
     switch (channel) {
@@ -341,52 +350,32 @@ export function ConfigurableTelemetryChart({
     return { uplotData, series, axes };
   }, [data, compareData, config, getChannelValue, channelDefsById, interpolateOntoTimeAxis]);
 
-  // Disable synced hover during high-frequency updates to prevent performance issues
-  // useEffect(() => {
-  //   // Only recalculate when syncedHoverValue actually changes, not on every data update
-  //   if (syncedHoverValue === lastSyncedHoverValueRef.current) {
-  //     return;
-  //   }
-  //   
-  //   lastSyncedHoverValueRef.current = syncedHoverValue;
 
-  //   const currentData = dataRef.current;
-  //   if (syncedHoverValue == null || !currentData || currentData.length === 0) {
-  //     if (lastSyncedHoverIndexRef.current !== null) {
-  //       lastSyncedHoverIndexRef.current = null;
-  //       setSyncedHoverIndex(null);
-  //     }
-  //     return;
-  //   }
-
-  //   let bestIndex = 0;
-  //   let bestDiff = Math.abs(currentData[0].lapTime / 1000 - syncedHoverValue);
-
-  //   for (let i = 1; i < currentData.length; i++) {
-  //     const diff = Math.abs(currentData[i].lapTime / 1000 - syncedHoverValue);
-  //     if (diff < bestDiff) {
-  //       bestDiff = diff;
-  //       bestIndex = i;
-  //     }
-  //   }
-
-  //   if (lastSyncedHoverIndexRef.current !== bestIndex) {
-  //     lastSyncedHoverIndexRef.current = bestIndex;
-  //     setSyncedHoverIndex(bestIndex);
-  //   }
-  // }, [syncedHoverValue]);
-
+  // Debounce hover changes to prevent flickering when mouse stops
+  const hoverTimeoutRef = useRef<NodeJS.Timeout>();
+  
   const handleHover = useCallback(
     (index: number | null) => {
-      setHoveredIndex(index);
-      if (index == null || !data || data.length === 0) {
-        onHoverChange?.(null);
+      if (index === null) {
+        // Debounce null hover to prevent flickering when mouse stops
+        // Increased timeout to handle rapid data updates
+        hoverTimeoutRef.current = setTimeout(() => {
+          setHoveredIndex(null);
+          onHoverChange?.(null);
+        }, 200);
         return;
       }
-      const t = data[index].lapTime / 1000;
-      onHoverChange?.(t);
+      
+      // Clear any pending null timeout when we get a valid hover
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = undefined;
+      }
+      
+      setHoveredIndex(index);
+      onHoverChange?.(index);
     },
-    [data, onHoverChange]
+    [onHoverChange]
   );
 
   const chartDataRef = useRef(chartData);
@@ -394,6 +383,15 @@ export function ConfigurableTelemetryChart({
   useEffect(() => {
     chartDataRef.current = chartData;
   }, [chartData]);
+
+  // Cleanup hover timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const resetZoom = useCallback(() => {
     if (!chartRef.current) return;
@@ -427,8 +425,10 @@ export function ConfigurableTelemetryChart({
   const renderCustomLegend = () => {
     if (!data || data.length === 0 || chartData.series.length === 0) return null;
 
-    // hoveredIndex can sometimes be out of bounds (e.g. -1) depending on chart hover behavior.
-    let currentIndex = hoveredIndex ?? data.length - 1;
+    // hoveredIndex: local mouse hover (highest priority)
+    // effectiveSyncedHoverIndex: crosshair moved by a peer chart
+    // fallback: last frame
+    let currentIndex = hoveredIndex ?? effectiveSyncedHoverIndex ?? data.length - 1;
     if (currentIndex < 0 || currentIndex >= data.length) {
       currentIndex = data.length - 1;
     }
@@ -493,7 +493,7 @@ export function ConfigurableTelemetryChart({
   };
 
   return (
-    <div ref={containerRef} className="p-4 space-y-3">
+    <div ref={containerRef} className="p-4 space-y-3 overflow-hidden">
       {config.channels.length === 0 ? (
           <div
             className="flex items-center justify-center text-muted-foreground"
@@ -515,7 +515,7 @@ export function ConfigurableTelemetryChart({
               width={containerWidth - 32}
               height={height}
               onHover={handleHover}
-              syncedHoverIndex={syncedHoverIndex}
+              syncedHoverIndex={effectiveSyncedHoverIndex}
               onReady={handleChartReady}
             />
           </div>

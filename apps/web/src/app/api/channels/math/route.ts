@@ -30,7 +30,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const mathChannels = await (prisma as any).mathChannel.findMany({
+    const mathChannels = await prisma.mathChannel.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const mathChannel = await (prisma as any).mathChannel.create({
+    const mathChannel = await prisma.mathChannel.create({
       data: {
         userId,
         label,
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Get the count of existing channels to determine color
-    const existingCount = await (prisma as any).mathChannel.count({ where: { userId } });
+    const existingCount = await prisma.mathChannel.count({ where: { userId } });
     
     const channel: MathTelemetryChannel = {
       id: mathChannel.id,

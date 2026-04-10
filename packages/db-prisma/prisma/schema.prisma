@@ -6,13 +6,13 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model Event {
-  id              String   @id @default(cuid())
-  userId          String
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @db.Uuid
   name            String
   description     String?
   location        String?
@@ -20,7 +20,6 @@ model Event {
   endDate         DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions        Session[]
   runPlans        RunPlan[]
@@ -30,9 +29,9 @@ model Event {
 }
 
 model Session {
-  id                      String   @id @default(cuid())
-  userId                  String
-  eventId                 String
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                  String   @db.Uuid
+  eventId                 String   @db.Uuid
   name                    String
   source                  String   // "live" | "demo"
   status                  String   @default("active") // "active" | "paused" | "archived"
@@ -41,23 +40,18 @@ model Session {
   readAccessOrgId         String?
   tags                    String?  // JSON array of session tags
   plotConfigs             String?  // JSON array of plot configurations
-  vehicleId               String?
-  vehicleConfigurationId  String?
-  vehicleSetupId          String?
+  vehicleId               String?  @db.Uuid
+  vehicleConfigurationId  String?  @db.Uuid
+  vehicleSetupId          String?  @db.Uuid
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
-  
   user                    User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   event                   Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
   vehicle                 Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   vehicleConfiguration    VehicleConfiguration? @relation(fields: [vehicleConfigurationId], references: [id], onDelete: SetNull)
   vehicleSetup            VehicleSetup?         @relation(fields: [vehicleSetupId], references: [id], onDelete: SetNull)
   laps                    Lap[]
-
-  runPlanItems             RunPlanItem[]
-
-  // Plugin: agent
-  // runPlanItem             RunPlanItem?
+  runPlanItems            RunPlanItem[]
   
   @@index([eventId])
   @@index([userId])
@@ -65,76 +59,75 @@ model Session {
   @@index([createdAt])
 }
 
+model RunPlan {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @db.Uuid
+  eventId     String?  @db.Uuid
+  name        String
+  description String?
+  status      String   @default("draft")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event       Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  items       RunPlanItem[]
+
+  @@index([userId])
+  @@index([eventId])
+}
+
+model RunPlanItem {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  runPlanId               String   @db.Uuid
+  order                   Int
+  sessionName             String
+  vehicleId               String?  @db.Uuid
+  vehicleConfigurationId  String?  @db.Uuid
+  vehicleSetupId          String?  @db.Uuid
+  notes                   String?
+  sessionId               String?  @db.Uuid @unique
+  status                  String   @default("planned")
+  createdAt               DateTime @default(now())
+  runPlan                 RunPlan              @relation(fields: [runPlanId], references: [id], onDelete: Cascade)
+  vehicle                 Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vehicleConfiguration    VehicleConfiguration? @relation(fields: [vehicleConfigurationId], references: [id], onDelete: SetNull)
+  vehicleSetup            VehicleSetup?        @relation(fields: [vehicleSetupId], references: [id], onDelete: SetNull)
+  session                 Session?             @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([runPlanId, order])
+}
+
 model Lap {
-  id              String   @id @default(cuid())
-  userId          String
-  sessionId       String
-  lapNumber       Int
-  lapTime         Float?   // in seconds
-  // telemetryData removed - now stored in Iceberg and queried via Trino
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId       String   @db.Uuid  @map("session_id")
+  lapNumber       Int                @map("lap_number")
+  lapTime         Float?             @map("lap_time") // in seconds
   analyzed        Boolean  @default(false)
   suggestions     String?  // JSON array of AI suggestions
-  driverComments  String?  // Driver's notes about the lap
+  driverComments  String?  @map("driver_comments") // Driver's notes about the lap
   tags            String?  // JSON array of tags
-  plotConfigs     String?  // JSON array of plot configurations
+  plotConfigs     String?  @map("plot_configs") // JSON array of plot configurations
   createdAt       DateTime @default(now())
-  
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   chatMessages    ChatMessage[]
-  
+
   @@unique([sessionId, lapNumber])
   @@index([sessionId, lapNumber])
-  @@index([userId])
-}
-
-model ChatMessage {
-  id              String   @id @default(cuid())
-  userId          String
-  lapId           String
-  role            String   // "user" | "assistant"
-  content         String
-  createdAt       DateTime @default(now())
-  
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lap             Lap      @relation(fields: [lapId], references: [id], onDelete: Cascade)
-  
-  @@index([lapId, createdAt])
-  @@index([userId, createdAt])
-}
-
-model SavedPlotLayout {
-  id              String   @id @default(cuid())
-  userId          String
-  name            String
-  description     String?
-  plotConfigs     String   // JSON array of PlotConfig[]
-  layout          String   // JSON of PlotLayout
-  isDefault       Boolean  @default(false)
-  context         String   @default("global") // "global" | "session" | "lap"
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([isDefault, context])
-  @@index([createdAt])
-  @@index([userId])
+  @@map("laps")
 }
 
 model SavedAnalysisLayout {
-  id          String   @id @default(cuid())
-  userId      String
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @db.Uuid
   name        String
   description String?
   // JSON blob describing analysis panel instances and grid options
   layout      String
   // Arbitrary string context, e.g. "lap:<lapId>", "session:<sessionId>", "global:live"
-  context     String   @default("global")
+  context     String   @default("global") // "global" | "session" | "lap"
   isDefault   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([context, isDefault])
@@ -143,8 +136,8 @@ model SavedAnalysisLayout {
 }
 
 model Vehicle {
-  id                    String                 @id @default(cuid())
-  userId                String
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                String                 @db.Uuid
   name                  String
   description           String?
   inServiceDate         DateTime?
@@ -152,67 +145,52 @@ model Vehicle {
   tags                  String?                // JSON array of tags
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
-  
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   configurations        VehicleConfiguration[]
   setups                VehicleSetup[]
   sessions              Session[]
+  runPlanItems          RunPlanItem[]
 
-  runPlanItems           RunPlanItem[]
-
-  // Plugin: agent
-  // runPlanItems          RunPlanItem[]
-  
   @@index([createdAt])
   @@index([userId])
 }
 
 model VehicleConfiguration {
-  id              String   @id @default(cuid())
-  userId          String
-  vehicleId       String
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @db.Uuid
+  vehicleId       String   @db.Uuid
   name            String
   description     String?
   parts           String   // JSON object of parts (e.g., {"frontWing": "High Downforce", "rearWing": "Medium", ...})
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   vehicle         Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   setups          VehicleSetup[]
   sessions        Session[]
+  runPlanItems    RunPlanItem[]
 
-  runPlanItems     RunPlanItem[]
-
-  // Plugin: agent
-  // runPlanItems    RunPlanItem[]
-  
   @@index([vehicleId])
   @@index([createdAt])
   @@index([userId])
 }
 
 model VehicleSetup {
-  id                      String                @id @default(cuid())
-  userId                  String
-  vehicleId               String
-  vehicleConfigurationId  String?
+  id                      String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                  String                @db.Uuid
+  vehicleId               String                @db.Uuid
+  vehicleConfigurationId  String?               @db.Uuid
   name                    String
   description             String?
   parameters              String                // JSON object of setup parameters (e.g., {"weightDistribution": "52/48", "rideHeight": "50mm", ...})
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
-  
   user                    User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   vehicle                 Vehicle               @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   vehicleConfiguration    VehicleConfiguration? @relation(fields: [vehicleConfigurationId], references: [id], onDelete: SetNull)
   sessions                Session[]
-
   runPlanItems            RunPlanItem[]
 
-  // Plugin: agent
-  // runPlanItems            RunPlanItem[]
-  
   @@index([vehicleId])
   @@index([vehicleConfigurationId])
   @@index([createdAt])
@@ -220,8 +198,8 @@ model VehicleSetup {
 }
 
 model MathChannel {
-  id          String   @id @default(cuid())
-  userId      String
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @db.Uuid
   label       String
   unit        String
   expression  String   // mathjs expression
@@ -230,7 +208,6 @@ model MathChannel {
   comment     String?  // Optional description/documentation for the channel
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@index([createdAt])
@@ -238,64 +215,54 @@ model MathChannel {
 }
 
 model User {
-  id              String   @id
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   username        String   @unique
   fullName        String
   avatarUrl       String?  // URL or path to the user's avatar image
   role            String   // "ORG_ADMIN" | "USER" (stubbed for now)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-
   settings        UserSettings?
   events          Event[]
   sessions        Session[]
-  laps            Lap[]
   vehicles        Vehicle[]
   vehicleConfigurations VehicleConfiguration[]
   vehicleSetups    VehicleSetup[]
-  plotLayouts     SavedPlotLayout[]
   analysisLayouts SavedAnalysisLayout[]
   mathChannels    MathChannel[]
   chatMessages    ChatMessage[]
-
   apiTokens       ApiToken[]
-
   orgMemberships  OrganizationMember[]
   groupMemberships GroupMember[]
-
-  // Plugin: agent
-  // agentConversations AgentConversation[]
-  // runPlans           RunPlan[]
   agentConversations AgentConversation[]
-  runPlans           RunPlan[]
+  runPlans        RunPlan[]
 }
 
 model UserSettings {
-  userId    String  @id
+  userId    String  @id @db.Uuid
   theme     String? // "light" | "dark"
   data      String? // JSON blob for additional settings
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Organization {
-  id        String   @id @default(cuid())
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   members   OrganizationMember[]
   groups    Group[]
 }
 
 model OrganizationMember {
-  id             String   @id @default(cuid())
-  organizationId String
-  userId         String
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String   @db.Uuid
   role           String   // "ADMIN" | "MEMBER"
   createdAt      DateTime @default(now())
-
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -304,12 +271,11 @@ model OrganizationMember {
 }
 
 model Group {
-  id             String   @id @default(cuid())
-  organizationId String
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @db.Uuid
   name           String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members        GroupMember[]
 
@@ -317,11 +283,10 @@ model Group {
 }
 
 model GroupMember {
-  id      String @id @default(cuid())
-  groupId String
-  userId  String
+  id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  groupId String @db.Uuid
+  userId  String @db.Uuid
   createdAt DateTime @default(now())
-
   group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
   user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -330,15 +295,14 @@ model GroupMember {
 }
 
 model ApiToken {
-  id          String   @id @default(cuid())
-  userId      String
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @db.Uuid
   name        String
   tokenHash   String   @unique
   scopes      String?  // JSON array of scope strings
   createdAt   DateTime @default(now())
   lastUsedAt  DateTime?
   revokedAt   DateTime?
-
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])

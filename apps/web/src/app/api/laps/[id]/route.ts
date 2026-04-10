@@ -2,9 +2,46 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { requireAuthUserId } from '@/lib/auth';
 import { requireCanReadSessionById } from '@/lib/access-control';
+import type { Lap as LapDTO, SessionSummary, ChatMessage } from '@/types/core';
+
+function toLapDTO(row: any): LapDTO {
+  const dto: LapDTO = {
+    id: row.id,
+    sessionId: row.sessionId,
+    lapNumber: row.lapNumber,
+    lapTime: row.lapTime,
+    analyzed: row.analyzed,
+    tags: row.tags,
+    driverComments: row.driverComments,
+    suggestions: row.suggestions,
+    plotConfigs: row.plotConfigs ?? null,
+  };
+  if (row.session) {
+    dto.session = {
+      id: row.session.id,
+      eventId: row.session.eventId,
+      name: row.session.name,
+      source: row.session.source,
+      status: row.session.status,
+      started: row.session.started,
+      tags: row.session.tags,
+      createdAt: row.session.createdAt instanceof Date ? row.session.createdAt.toISOString() : row.session.createdAt,
+      lapCount: row.session._count?.laps ?? 0,
+    } as SessionSummary;
+  }
+  if (row.chatMessages) {
+    dto.chatMessages = row.chatMessages.map((m: any): ChatMessage => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      createdAt: m.createdAt instanceof Date ? m.createdAt.toISOString() : m.createdAt,
+    }));
+  }
+  return dto;
+}
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -15,11 +52,10 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const lapMeta = await (prisma as any).lap.findUnique({
+    const lapMeta = await prisma.lap.findUnique({
       where: { id: params.id },
       select: {
         id: true,
-        userId: true,
         sessionId: true,
       },
     });
@@ -33,16 +69,11 @@ export async function GET(
       sessionId: lapMeta.sessionId,
     });
 
-    const lap = await (prisma as any).lap.findFirst({
-      where: { id: params.id, userId: lapMeta.userId },
+    const lap = await prisma.lap.findFirst({
+      where: { id: params.id },
       include: {
         session: {
-          include: {
-            event: true,
-            vehicle: true,
-            vehicleConfiguration: true,
-            vehicleSetup: true,
-          },
+          include: { _count: { select: { laps: true } } },
         },
         chatMessages: {
           orderBy: { createdAt: 'asc' },
@@ -54,7 +85,7 @@ export async function GET(
       return NextResponse.json({ error: 'Lap not found' }, { status: 404 });
     }
 
-    return NextResponse.json(lap);
+    return NextResponse.json(toLapDTO(lap));
   } catch (error) {
     if ((error as any)?.code === 'NOT_FOUND') {
       return NextResponse.json({ error: 'Lap not found' }, { status: 404 });
@@ -79,6 +110,21 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Verify the lap exists and the caller has write access via its session.
+    const lapMeta = await prisma.lap.findFirst({
+      where: { id: params.id },
+      select: { id: true, sessionId: true },
+    });
+
+    if (!lapMeta) {
+      return NextResponse.json({ error: 'Lap not found' }, { status: 404 });
+    }
+
+    await requireCanReadSessionById({
+      requesterUserId: userId,
+      sessionId: lapMeta.sessionId,
+    });
+
     const body = await request.json();
     const { driverComments, tags, plotConfigs } = body;
 
@@ -87,18 +133,25 @@ export async function PATCH(
     if (tags !== undefined) updateData.tags = tags;
     if (plotConfigs !== undefined) updateData.plotConfigs = plotConfigs;
 
-    const result = await (prisma as any).lap.updateMany({
-      where: { id: params.id, userId },
+    // `id` is @unique on Lap, so update by id directly.
+    const lap = await prisma.lap.update({
+      where: { id: params.id },
       data: updateData,
+      include: {
+        session: {
+          include: { _count: { select: { laps: true } } },
+        },
+        chatMessages: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     });
 
-    if (!result.count) {
-      return NextResponse.json({ error: 'Lap not found' }, { status: 404 });
-    }
-
-    const lap = await (prisma as any).lap.findFirst({ where: { id: params.id, userId } });
-    return NextResponse.json(lap);
+    return NextResponse.json(toLapDTO(lap));
   } catch (error) {
+    if ((error as any)?.code === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     console.error('Error updating lap:', error);
     return NextResponse.json({ error: 'Failed to update lap' }, { status: 500 });
   }
@@ -106,7 +159,7 @@ export async function PATCH(
 
 // DELETE /api/laps/[id] - Delete a lap
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -117,20 +170,28 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const result = await (prisma as any).lap.deleteMany({
-      where: { id: params.id, userId },
+    const lapMeta = await prisma.lap.findFirst({
+      where: { id: params.id },
+      select: { id: true, sessionId: true },
     });
 
-    if (!result.count) {
+    if (!lapMeta) {
       return NextResponse.json({ error: 'Lap not found' }, { status: 404 });
     }
 
+    await requireCanReadSessionById({
+      requesterUserId: userId,
+      sessionId: lapMeta.sessionId,
+    });
+
+    await prisma.lap.delete({ where: { id: params.id } });
+
     return NextResponse.json({ success: true });
   } catch (error) {
+    if ((error as any)?.code === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     console.error('Error deleting lap:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete lap' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to delete lap' }, { status: 500 });
   }
 }

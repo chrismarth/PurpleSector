@@ -9,11 +9,17 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatLapTime } from '@/lib/utils';
 import { CreateEventDialog } from './CreateEventDialog';
+import { useLiveLapIndexStore } from '@/stores/liveLapIndexStore';
 
 export function EventsTree() {
   const router = useRouter();
-  const { events, loading, expandedNodes, toggleExpand, selectedNodeId, setSelectedNode, refresh: refreshNav } = useNav();
+  const {
+    events, loading, expandedNodes, toggleExpand, selectedNodeId, setSelectedNode, refresh: refreshNav,
+    sessionsByEventId, lapsBySessionId, sessionsLoading, lapsLoading,
+  } = useNav();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+
+  const bySessionId = useLiveLapIndexStore((s) => s.bySessionId);
 
   function handleEventCreated(event: { id: string; name: string }) {
     refreshNav();
@@ -22,7 +28,6 @@ export function EventsTree() {
 
   function handleCurrentLapClick(
     session: { id: string; name: string },
-    eventName: string
   ) {
     setSelectedNode(`session-current:${session.id}`);
     router.push(`/session/${session.id}`);
@@ -37,26 +42,23 @@ export function EventsTree() {
     setCreateDialogOpen(true);
   }
 
-  function handleAddSession(eventId: string, eventName: string) {
+  function handleAddSession(eventId: string) {
     router.push(`/session/new?eventId=${encodeURIComponent(eventId)}`);
   }
 
-  function handleAddRunPlan(eventId: string, eventName: string) {
+  function handleAddRunPlan(eventId: string) {
     router.push(`/event/${eventId}/run-plan`);
   }
 
   function handleSessionClick(
     session: { id: string; name: string },
-    eventName: string
   ) {
     setSelectedNode(`session:${session.id}`);
     router.push(`/session/${session.id}`);
   }
 
   function handleLapClick(
-    lap: { id: string; lapNumber: number },
-    sessionName: string,
-    eventName: string
+    lap: { id: string; lapNumber: number; sessionId: string },
   ) {
     setSelectedNode(`lap:${lap.id}`);
     router.push(`/lap/${lap.id}`);
@@ -110,6 +112,8 @@ export function EventsTree() {
           events.map((event) => {
             const eventExpanded = expandedNodes.has(`event:${event.id}`);
             const isSelected = selectedNodeId === `event:${event.id}`;
+            const sessions = sessionsByEventId[event.id] ?? [];
+            const isSessionsLoading = sessionsLoading[event.id] ?? false;
 
             return (
               <div key={event.id}>
@@ -148,7 +152,7 @@ export function EventsTree() {
                         className="h-6 text-xs px-2"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleAddSession(event.id, event.name);
+                          handleAddSession(event.id);
                         }}
                       >
                         <Plus className="h-3 w-3 mr-1" />
@@ -160,7 +164,7 @@ export function EventsTree() {
                         className="h-6 text-xs px-2"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleAddRunPlan(event.id, event.name);
+                          handleAddRunPlan(event.id);
                         }}
                       >
                         <ListChecks className="h-3 w-3 mr-1" />
@@ -168,12 +172,18 @@ export function EventsTree() {
                       </Button>
                     </div>
 
+                    {isSessionsLoading && (
+                      <div className="px-2 py-1 text-xs text-muted-foreground">Loading sessions…</div>
+                    )}
+
                     {/* Sessions */}
-                    {event.sessions.map((session) => {
+                    {sessions.map((session) => {
                       const sessionExpanded = expandedNodes.has(`session:${session.id}`);
                       const isSessionSelected = selectedNodeId === `session:${session.id}`;
                       const isLive = session.status === 'live' || session.status === 'recording' || session.status === 'active';
                       const isArchived = session.status === 'archived' || session.status === 'completed';
+                      const laps = lapsBySessionId[session.id] ?? [];
+                      const isLapsLoading = lapsLoading[session.id] ?? false;
 
                       return (
                         <div key={session.id}>
@@ -193,7 +203,7 @@ export function EventsTree() {
                               )}
                             </button>
                             <button
-                              onClick={() => handleSessionClick(session, event.name)}
+                              onClick={() => handleSessionClick(session)}
                               className="flex-1 text-left truncate cursor-pointer"
                             >
                               {session.name}
@@ -224,37 +234,110 @@ export function EventsTree() {
                           {/* Expanded session: laps */}
                           {sessionExpanded && (
                             <div className="ml-4">
-                              {session.laps.length === 0 && !isLive ? (
-                                <div className="px-2 py-1 text-xs text-muted-foreground">
-                                  No laps
-                                </div>
-                              ) : (
-                                session.laps.map((lap) => {
-                                  const isLapSelected = selectedNodeId === `lap:${lap.id}`;
+                              {(() => {
+                                // Always read store state so we can use it as a
+                                // fallback for recently-archived sessions before
+                                // the RisingWave JDBC sink has committed to Prisma.
+                                const storeState = bySessionId[session.id] ?? null;
+                                const completedLapNumbers = storeState?.completedLapNumbers ?? [];
 
+                                const lapTimeByNumber = new Map<number, number | null>();
+                                for (const lap of laps) {
+                                  lapTimeByNumber.set(lap.lapNumber, lap.lapTime ?? null);
+                                }
+
+                                // Build lapNumber→UUID from Prisma data (available for
+                                // laps the JDBC sink has already committed).
+                                const lapIdByNumber = new Map<number, string>();
+                                for (const lap of laps) {
+                                  lapIdByNumber.set(lap.lapNumber, lap.id);
+                                }
+
+                                if (isLapsLoading) {
                                   return (
-                                    <button
-                                      key={lap.id}
-                                      onClick={() => handleLapClick(lap, session.name, event.name)}
-                                      className={`flex items-center gap-1 w-full px-2 py-0.5 hover:bg-accent transition-colors text-left text-xs ${
-                                        isLapSelected ? 'bg-accent text-accent-foreground' : ''
-                                      }`}
-                                    >
-                                      <Flag className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
-                                      <span>Lap {lap.lapNumber}</span>
-                                      {lap.lapTime != null && (
-                                        <span className="text-muted-foreground ml-1">
-                                          {formatLapTime(lap.lapTime)}
-                                        </span>
-                                      )}
-                                    </button>
+                                    <div className="px-2 py-1 text-xs text-muted-foreground">Loading laps…</div>
                                   );
-                                })
-                              )}
+                                }
+
+                                // For live sessions use the real-time store.
+                                // For archived sessions prefer Prisma laps, but fall back
+                                // to the store if Prisma hasn't caught up yet.
+                                const lapsToRender = isLive
+                                  ? completedLapNumbers.map((lapNumber) => ({
+                                      // Use real UUID if already committed, otherwise a
+                                      // pending placeholder (not navigable yet).
+                                      id: lapIdByNumber.get(lapNumber) ?? `pending:${session.id}:${lapNumber}`,
+                                      lapNumber,
+                                      lapTime: lapTimeByNumber.get(lapNumber) ?? (null as number | null),
+                                    }))
+                                  : laps.length > 0
+                                    ? laps.map((lap) => ({
+                                        id: lap.id,
+                                        lapNumber: lap.lapNumber,
+                                        lapTime: lap.lapTime,
+                                      }))
+                                    : completedLapNumbers.map((lapNumber) => ({
+                                        id: `db:${session.id}:${lapNumber}`,
+                                        lapNumber,
+                                        lapTime: lapTimeByNumber.get(lapNumber) ?? (null as number | null),
+                                      }));
+
+                                if (lapsToRender.length === 0) {
+                                  return (
+                                    <div className="px-2 py-1 text-xs text-muted-foreground">
+                                      {isLive ? 'No laps yet' : 'No laps'}
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <>
+                                    {lapsToRender.map((lap) => {
+                                      const isLapSelected = selectedNodeId === `lap:${lap.id}`;
+
+                                      return (
+                                        <button
+                                          key={lap.id}
+                                          onClick={() => {
+                                            if (isLive) {
+                                              if (lap.id.startsWith('pending:')) return;
+                                              setSelectedNode(`lap:${lap.id}`);
+                                              router.push(`/lap/${lap.id}`);
+                                            } else {
+                                              handleLapClick(
+                                                { id: lap.id, lapNumber: lap.lapNumber, sessionId: session.id },
+                                              );
+                                            }
+                                          }}
+                                          className={`flex items-center gap-1 w-full px-2 py-0.5 transition-colors text-left text-xs ${
+                                            lap.id.startsWith('pending:')
+                                              ? 'opacity-50 cursor-not-allowed'
+                                              : 'hover:bg-accent cursor-pointer'
+                                          } ${isLapSelected ? 'bg-accent text-accent-foreground' : ''}`}
+                                        >
+                                          <Flag className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                          <span>Lap {lap.lapNumber}</span>
+                                          {lap.lapTime != null && (
+                                            <span className="text-muted-foreground ml-1">
+                                              {formatLapTime(lap.lapTime)}
+                                            </span>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+
+                                    {isLive && completedLapNumbers.length > 0 && (
+                                      <div className="px-2 py-0.5 text-[10px] text-muted-foreground">
+                                        {completedLapNumbers.length} completed
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
 
                               {isLive && (
                                 <button
-                                  onClick={() => handleCurrentLapClick(session, event.name)}
+                                  onClick={() => handleCurrentLapClick(session)}
                                   className={`flex items-center gap-1 w-full px-2 py-0.5 hover:bg-accent transition-colors text-left text-xs ${
                                     selectedNodeId === `session-current:${session.id}` ? 'bg-accent text-accent-foreground' : ''
                                   }`}

@@ -15,7 +15,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const layout = await (prisma as any).savedAnalysisLayout.findFirst({
+    const layout = await prisma.savedAnalysisLayout.findFirst({
       where: { id: params.id, userId },
     });
 
@@ -49,7 +49,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const result = await (prisma as any).savedAnalysisLayout.deleteMany({
+    const result = await prisma.savedAnalysisLayout.deleteMany({
       where: { id: params.id, userId },
     });
 
@@ -90,7 +90,7 @@ export async function PATCH(
     if (context !== undefined) updateData.context = context;
     if (isDefault !== undefined) updateData.isDefault = isDefault;
 
-    const result = await (prisma as any).savedAnalysisLayout.updateMany({
+    const result = await prisma.savedAnalysisLayout.updateMany({
       where: { id: params.id, userId },
       data: updateData,
     });
@@ -99,7 +99,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Analysis layout not found' }, { status: 404 });
     }
 
-    const updatedLayout = await (prisma as any).savedAnalysisLayout.findFirst({ where: { id: params.id, userId } });
+    const updatedLayout = await prisma.savedAnalysisLayout.findFirst({ where: { id: params.id, userId } });
     return NextResponse.json(updatedLayout);
   } catch (error) {
     console.error('Error updating analysis layout:', error);

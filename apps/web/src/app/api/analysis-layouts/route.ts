@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const context = searchParams.get('context');
 
-    const layouts = await (prisma as any).savedAnalysisLayout.findMany({
+    const layouts = await prisma.savedAnalysisLayout.findMany({
       where: context ? { userId, context } : { userId },
       orderBy: [
         { isDefault: 'desc' },
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const savedLayout = await (prisma as any).savedAnalysisLayout.create({
+    const savedLayout = await prisma.savedAnalysisLayout.create({
       data: {
         userId,
         name,

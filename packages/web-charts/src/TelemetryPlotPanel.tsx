@@ -24,8 +24,8 @@ import { MathTelemetryChannel } from '@purplesector/telemetry';
 import {
   PlotConfig,
   DEFAULT_PLOT_CONFIGS,
-  PlotLayout,
-  PlotLayoutItem,
+  AnalysisLayout,
+  AnalysisLayoutItem,
   generateDefaultLayout,
 } from '@/types/plotConfig';
 import { formatLapTime } from '@/lib/utils';
@@ -35,9 +35,9 @@ interface TelemetryPlotPanelProps {
   compareData?: TelemetryFrame[];
   compareLapId?: string | null;
   initialPlotConfigs?: PlotConfig[];
-  initialLayout?: PlotLayout;
+  initialLayout?: AnalysisLayout;
   onPlotConfigsChange?: (configs: PlotConfig[]) => void;
-  onLayoutChange?: (layout: PlotLayout) => void;
+  onLayoutChange?: (layout: AnalysisLayout) => void;
   showFullscreenToggle?: boolean;
   currentLapNumber?: number;
   showLapHeader?: boolean;
@@ -62,11 +62,10 @@ export function TelemetryPlotPanel({
   const [plotConfigs, setPlotConfigs] = useState<PlotConfig[]>(
     initialPlotConfigs || DEFAULT_PLOT_CONFIGS
   );
-  const [layout, setLayout] = useState<PlotLayout>(
+  const [layout, setLayout] = useState<AnalysisLayout>(
     initialLayout || generateDefaultLayout(initialPlotConfigs || DEFAULT_PLOT_CONFIGS)
   );
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [syncedHoverValue, setSyncedHoverValue] = useState<number | null>(null);
   const [resizing, setResizing] = useState<{
     type: 'width' | 'height';
     layoutIndex: number;
@@ -338,7 +337,7 @@ export function TelemetryPlotPanel({
           const item = newItems[layoutIndex];
           if (!item) return prev;
 
-          const updates: Partial<PlotLayoutItem> = {};
+          const updates: Partial<AnalysisLayoutItem> = {};
           if (preview.width !== undefined) updates.w = preview.width;
           if (preview.height !== undefined) updates.h = preview.height;
 
@@ -551,8 +550,6 @@ export function TelemetryPlotPanel({
                                 }
                                 onDelete={() => handleDelete(plotIndex)}
                                 height={plotHeight}
-                                syncedHoverValue={syncedHoverValue}
-                                onHoverChange={setSyncedHoverValue}
                                 mathChannels={mathChannels}
                               />
 

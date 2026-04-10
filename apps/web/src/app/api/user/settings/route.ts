@@ -2,37 +2,44 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { requireAuthUserId } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
-  let userId: string;
   try {
-    userId = requireAuthUserId();
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const settings = await prisma.userSettings.findUnique({
+      where: { userId },
+    });
+
+    return NextResponse.json({
+      theme: settings?.theme ?? null,
+      data: settings?.data ? JSON.parse(settings.data) : null,
+    });
+  } catch (error) {
+    console.error('Error fetching user settings:', error);
+    return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
   }
-
-  const settings = await (prisma as any).userSettings.findUnique({
-    where: { userId },
-  });
-
-  return NextResponse.json({
-    theme: settings?.theme ?? null,
-    data: settings?.data ? JSON.parse(settings.data) : null,
-  });
 }
 
 export async function PUT(request: NextRequest) {
-  let userId: string;
   try {
-    userId = requireAuthUserId();
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+    let userId: string;
+    try {
+      userId = requireAuthUserId();
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-  try {
     const body = await request.json();
     const { theme, data } = body as { theme?: string | null; data?: unknown };
 
-    const updated = await (prisma as any).userSettings.upsert({
+    const updated = await prisma.userSettings.upsert({
       where: { userId },
       update: {
         theme: theme ?? null,

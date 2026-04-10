@@ -30,8 +30,8 @@ export interface PlotConfig {
   channels: ChannelConfig[];
 }
 
-// Layout item for a single plot in the grid
-export interface PlotLayoutItem {
+// Layout item for a single analysis panel in the grid
+export interface AnalysisLayoutItem {
   plotId: string; // References PlotConfig.id
   x: number; // Column position (0-based)
   y: number; // Row position (0-based)
@@ -41,14 +41,14 @@ export interface PlotLayoutItem {
 }
 
 // Complete layout configuration
-export interface PlotLayout {
-  items: PlotLayoutItem[];
+export interface AnalysisLayout {
+  items: AnalysisLayoutItem[];
   cols: number; // Total columns in grid (default: 12)
 }
 
 // Helper function to generate default layout from plot configs
-export function generateDefaultLayout(plotConfigs: PlotConfig[]): PlotLayout {
-  const items: PlotLayoutItem[] = plotConfigs.map((config, index) => ({
+export function generateDefaultLayout(plotConfigs: PlotConfig[]): AnalysisLayout {
+  const items: AnalysisLayoutItem[] = plotConfigs.map((config, index) => ({
     plotId: config.id,
     x: 0,
     y: index,

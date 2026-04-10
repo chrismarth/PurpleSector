@@ -25,7 +25,6 @@
   - `channel_acceleration` - acceleration channel computation
 - ✅ Redis sinks created and operational:
   - `telemetry_redis_pubsub` - Pub/Sub for live UI updates
-  - `telemetry_redis_streams` - Redis Streams for buffering
   - `live_telemetry` - Direct live telemetry sink
 
 ### Application

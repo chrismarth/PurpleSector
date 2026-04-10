@@ -20,7 +20,7 @@
     "dev:stop": "./scripts/stop-dev.sh",
     "dev:stop-all": "./scripts/stop-dev.sh",
     "db:merge-schemas": "tsx scripts/merge-plugin-schemas.ts",
-    "db:push": "npm run db:merge-schemas && prisma db push --schema=packages/db-prisma/prisma/schema.generated.prisma",
+    "db:push": "npm run db:merge-schemas && prisma db push --accept-data-loss --schema=packages/db-prisma/prisma/schema.generated.prisma",
     "db:push:base": "prisma db push --schema=packages/db-prisma/prisma/schema.prisma",
     "db:studio": "prisma studio --schema=packages/db-prisma/prisma/schema.prisma",
     "db:reset": "./scripts/reset-db.sh",

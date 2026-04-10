@@ -41,17 +41,16 @@ const handler = createMcpHandler(
           };
         }
 
-        const { ownerUserId } = await requireCanReadSessionById({
+        await requireCanReadSessionById({
           requesterUserId,
           sessionId,
         });
 
-        const session = await (prisma as any).session.findFirst({
+        const session = await prisma.session.findFirst({
           where: { id: sessionId },
           include: {
             event: true,
             laps: {
-              where: { userId: ownerUserId },
               orderBy: { lapNumber: 'asc' },
             },
           },
@@ -84,7 +83,7 @@ const handler = createMcpHandler(
           };
         }
 
-        const sessions = await (prisma as any).session.findMany({
+        const sessions = await prisma.session.findMany({
           where: { userId: requesterUserId },
           include: {
             _count: {

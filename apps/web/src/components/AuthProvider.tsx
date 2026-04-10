@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     } finally {
       queryClient.setQueryData(queryKeys.authMe, null);
-      queryClient.removeQueries({ queryKey: queryKeys.navEventsTree });
+      queryClient.removeQueries({ queryKey: queryKeys.navEvents });
       router.replace('/login');
       router.refresh();
     }

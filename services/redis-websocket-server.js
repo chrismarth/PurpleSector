@@ -2,19 +2,18 @@
  * Redis-backed WebSocket Server (Cloud Pipeline)
  *
  * WebSocket server for the cloud pipeline.
- * Reads telemetry from Redis Streams (written by RisingWave) and pushes
+ * Reads telemetry from Redis Pub/Sub (written by RisingWave) and pushes
  * to connected frontend WebSocket clients.
  *
  * Architecture:
- * RisingWave → Redis Streams → This Server → WebSocket → Frontend Clients
+ * RisingWave → Redis Pub/Sub → This Server → WebSocket → Frontend Clients
  *
- * Redis Stream key format: telemetry:{user_id}:{session_id}
+ * Redis Pub/Sub channel format: telemetry:live:{user_id}:{session_id}
  *
  * Behavior:
  * 1. Client connects with userId + sessionId query params.
- * 2. Server backfills from Redis Stream (last N entries).
- * 3. Server polls Redis Stream for new entries in real-time.
- * 4. Pushes updates to client via WebSocket (JSON or Protobuf).
+ * 2. Server subscribes to Redis Pub/Sub for real-time streaming.
+ * 3. Pushes updates to client via WebSocket (JSON or Protobuf).
  *
  * Environment variables:
  *   REDIS_URL        — Redis connection URL (default: redis://localhost:6379)
@@ -214,9 +213,9 @@ class RedisWebSocketServer {
    * Backfill from Redis Stream, then subscribe to Pub/Sub for real-time streaming
    */
   async backfillAndPoll(ws, userId, sessionId) {
-    // userId and sessionId are already routed correctly by the UI based on session.source
-    // For demo sessions: userId='__demo__', sessionId='shared'
-    // For live sessions: userId=actual user, sessionId=actual session
+    // All sessions (demo and live) use the real userId and sessionId.
+    // RisingWave publishes to telemetry:live:{user_id}:{session_id} using the
+    // session owner's user_id from the active_sessions table.
     const streamKey = `telemetry:live:${userId}:${sessionId}`;
 
     // Backfill disabled temporarily to test Pub/Sub with temporal filtering

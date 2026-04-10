@@ -8,6 +8,8 @@ interface NavUiState {
   selectedNodeId: string | null;
 
   toggleExpand: (nodeId: string) => void;
+  expandNode: (nodeId: string) => void;
+  collapseNode: (nodeId: string) => void;
   setSelectedNode: (nodeId: string | null) => void;
   reset: () => void;
 }
@@ -29,6 +31,18 @@ export const useNavUiStore = create<NavUiState>()(
           ? prev.filter((id) => id !== nodeId)
           : [...prev, nodeId];
         set({ expandedNodeIds: next });
+      },
+
+      expandNode: (nodeId) => {
+        const prev = get().expandedNodeIds;
+        if (prev.includes(nodeId)) return;
+        set({ expandedNodeIds: [...prev, nodeId] });
+      },
+
+      collapseNode: (nodeId) => {
+        const prev = get().expandedNodeIds;
+        if (!prev.includes(nodeId)) return;
+        set({ expandedNodeIds: prev.filter((id) => id !== nodeId) });
       },
 
       setSelectedNode: (nodeId) => set({ selectedNodeId: nodeId }),

@@ -49,9 +49,9 @@ export function SaveLayoutDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Save Plot Layout</DialogTitle>
+          <DialogTitle>Save Analysis Layout</DialogTitle>
           <DialogDescription>
-            Save the current plot configuration and layout for future use.
+            Save the current analysis configuration and layout for future use.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">

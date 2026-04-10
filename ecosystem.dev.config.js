@@ -17,6 +17,9 @@
  * - Or just run: ./scripts/start-dev.sh
  */
 
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 module.exports = {
   apps: [
     // Next.js Application (Development Mode)
@@ -31,6 +34,7 @@ module.exports = {
       env: {
         NODE_ENV: 'development',
         PORT: '3000',
+        DATABASE_URL: process.env.DATABASE_URL,
       },
       error_file: 'logs/dev-nextjs-error.log',
       out_file: 'logs/dev-nextjs-out.log',

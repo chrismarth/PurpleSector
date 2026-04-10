@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { requireAuthUserId } from '@/lib/auth';
 import { registerActiveSession } from '@/lib/risingwave';
+import type { SessionSummary } from '@/types/core';
 
-// GET /api/sessions - List all sessions
-export async function GET() {
+// GET /api/sessions - List all sessions (returns SessionSummary[])
+export async function GET(request: NextRequest) {
   try {
     let userId: string;
     try {
@@ -13,17 +14,29 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const sessions = await (prisma as any).session.findMany({
-      where: { userId },
-      include: {
-        _count: {
-          select: { laps: true },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+    const url = new URL(request.url);
+    const eventId = url.searchParams.get('eventId');
+
+    const where: Record<string, unknown> = { userId };
+    if (eventId) where.eventId = eventId;
+
+    const rows = await prisma.session.findMany({
+      where,
+      include: { _count: { select: { laps: true } } },
+      orderBy: { createdAt: 'desc' },
     });
+
+    const sessions: SessionSummary[] = rows.map((s) => ({
+      id: s.id,
+      eventId: s.eventId,
+      name: s.name,
+      source: s.source,
+      status: s.status,
+      started: s.started,
+      tags: s.tags,
+      createdAt: s.createdAt.toISOString(),
+      lapCount: s._count.laps,
+    }));
 
     return NextResponse.json(sessions);
   } catch (error) {
@@ -59,7 +72,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const event = await (prisma as any).event.findFirst({ where: { id: eventId, userId } });
+    const event = await prisma.event.findFirst({ where: { id: eventId, userId } });
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
@@ -77,7 +90,7 @@ export async function POST(request: NextRequest) {
     };
     console.log('Creating session with data:', sessionData);
 
-    const session = await (prisma as any).session.create({
+    const session = await prisma.session.create({
       data: sessionData,
     });
 
@@ -89,14 +102,25 @@ export async function POST(request: NextRequest) {
     // Fire-and-forget: don't block the API response.
     registerActiveSession({
       sessionId: session.id,
-      userId: session.userId,
+      userId,
       source: session.source,
-      status: session.status,
+      status: session.status as 'active' | 'paused' | 'archived',
     }).catch((err) => {
       console.error('[risingwave] Background session registration failed:', err);
     });
 
-    return NextResponse.json(session, { status: 201 });
+    const dto: SessionSummary = {
+      id: session.id,
+      eventId: session.eventId,
+      name: session.name,
+      source: session.source,
+      status: session.status,
+      started: session.started,
+      tags: session.tags,
+      createdAt: session.createdAt.toISOString(),
+      lapCount: 0,
+    };
+    return NextResponse.json(dto, { status: 201 });
   } catch (error) {
     console.error('Error creating session:', error);
     return NextResponse.json(

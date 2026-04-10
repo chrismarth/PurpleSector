@@ -8,7 +8,6 @@
 
 -- Drop old sinks if they exist
 DROP SINK IF EXISTS telemetry_redis_pubsub CASCADE;
-DROP SINK IF EXISTS telemetry_redis_streams CASCADE;
 
 -- First, create a view with the channel name as a column for Pub/Sub
 -- Convert NULLs to 0 for numeric fields to avoid JSON parsing issues
@@ -28,6 +27,7 @@ SELECT
     ts.gear,
     ts.rpm,
     ts.normalized_position,
+    ts.source_lap_number,
     ts.lap_number,
     ts.lap_time,
     COALESCE(ts.session_time, 0) AS session_time,
@@ -35,8 +35,7 @@ SELECT
     COALESCE(ts.track_position, 0) AS track_position,
     COALESCE(ts.delta, 0) AS delta,
     -- Use session owner's user_id for channels (from active_sessions table)
-    'telemetry:live:' || s.user_id || ':' || ts.session_id AS pubsub_channel,
-    'telemetry:' || s.user_id || ':' || ts.session_id AS stream_key
+    'telemetry:live:' || s.user_id || ':' || ts.session_id AS pubsub_channel
 FROM telemetry_samples ts
 INNER JOIN active_sessions s ON ts.session_id = s.session_id;
 
@@ -56,25 +55,5 @@ FORMAT PLAIN ENCODE TEMPLATE (
   force_append_only = 'true',
   redis_value_type = 'pubsub',
   channel_column = 'pubsub_channel',
-  value_format = '\{"timestamp":{timestamp},"speed":{speed},"throttle":{throttle},"brake":{brake},"steering":{steering},"gear":{gear},"rpm":{rpm},"normalizedPosition":{normalized_position},"lapNumber":{lap_number},"lapTime":{lap_time},"sessionTime":{session_time},"sessionType":{session_type},"trackPosition":{track_position},"delta":{delta}\}'
-);
-
--- ── Sink 2: Redis Streams for backfill/history ───────────────────────
--- Writes telemetry samples to Redis Streams for historical data and backfill
--- Stream key format: telemetry:{user_id}:{session_id}
--- This allows WebSocket clients to backfill recent data on connection
-
-CREATE SINK telemetry_redis_streams
-FROM telemetry_with_channel
-WITH (
-  primary_key = 'user_id,session_id,timestamp',
-  connector = 'redis',
-  redis.url = 'redis://redis:6379/'
-)
-FORMAT PLAIN ENCODE TEMPLATE (
-  force_append_only = 'true',
-  redis_value_type = 'stream',
-  stream_column = 'stream_key',
-  key_format = '{user_id}:{session_id}:{timestamp}',
-  value_format = '\{"timestamp":{timestamp},"speed":{speed},"throttle":{throttle},"brake":{brake},"steering":{steering},"gear":{gear},"rpm":{rpm},"normalizedPosition":{normalized_position},"lapNumber":{lap_number},"lapTime":{lap_time},"sessionTime":{session_time},"sessionType":{session_type},"trackPosition":{track_position},"delta":{delta}\}'
+  value_format = '\{"timestamp":{timestamp},"speed":{speed},"throttle":{throttle},"brake":{brake},"steering":{steering},"gear":{gear},"rpm":{rpm},"normalizedPosition":{normalized_position},"sourceLapNumber":{source_lap_number},"lapNumber":{lap_number},"lapTime":{lap_time},"sessionTime":{session_time},"sessionType":{session_type},"trackPosition":{track_position},"delta":{delta}\}'
 );

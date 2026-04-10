@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { queryKeys } from '@/lib/queryKeys';
 import { fetchJson, mutationJson } from '@/lib/client-fetch';
+import { useNavUiStore } from '@/stores/navUiStore';
 
 interface Vehicle {
   id: string;
@@ -34,6 +35,9 @@ export function NewSessionClient() {
   const searchParams = useSearchParams();
   const eventId = searchParams.get('eventId');
   const queryClient = useQueryClient();
+
+  const expandNode = useNavUiStore((s) => s.expandNode);
+  const setSelectedNode = useNavUiStore((s) => s.setSelectedNode);
   
   const [name, setName] = useState('');
   const [source, setSource] = useState<'live' | 'demo' | null>(null);
@@ -116,7 +120,14 @@ export function NewSessionClient() {
     },
     onSuccess: async (session) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
+
+      if (eventId) {
+        expandNode(`event:${eventId}`);
+      }
+      expandNode(`session:${session.id}`);
+      setSelectedNode(`session:${session.id}`);
+
       router.push(`/session/${session.id}`);
     },
   });

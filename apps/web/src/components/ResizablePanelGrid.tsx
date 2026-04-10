@@ -2,11 +2,11 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { GripVertical } from 'lucide-react';
-import { PlotLayoutItem } from '@/types/plotConfig';
+import { AnalysisLayoutItem } from '@/types/plotConfig';
 
 interface ResizablePanelGridProps {
-  layout: PlotLayoutItem[];
-  onLayoutChange: (layout: PlotLayoutItem[]) => void;
+  layout: AnalysisLayoutItem[];
+  onLayoutChange: (layout: AnalysisLayoutItem[]) => void;
   children: React.ReactNode[];
 }
 
@@ -21,7 +21,7 @@ export function ResizablePanelGrid({ layout, onLayoutChange, children }: Resizab
     }
     acc[item.y].push({ ...item, index });
     return acc;
-  }, {} as Record<number, Array<PlotLayoutItem & { index: number }>>);
+  }, {} as Record<number, Array<AnalysisLayoutItem & { index: number }>>);
 
   const sortedRows = Object.entries(rows)
     .sort(([a], [b]) => parseInt(a) - parseInt(b))

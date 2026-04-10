@@ -1,50 +1,28 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Calendar, MapPin, Play, Archive, Trash2, Edit, ListChecks } from 'lucide-react';
+import { Plus, Calendar, MapPin, Play, Archive, Trash2, Edit, ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatTimestamp } from '@/lib/utils';
 import { queryKeys } from '@/lib/queryKeys';
 import { fetchJson, mutationJson } from '@/lib/client-fetch';
+import { Event } from '@/types/core';
 
-interface Session {
-  id: string;
-  name: string;
-  source: string;
-  status: string;
-  tags: string | null;
-  createdAt: string;
-  _count: {
-    laps: number;
-  };
-}
 
-interface Event {
-  id: string;
-  name: string;
-  description: string | null;
-  location: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  createdAt: string;
-  sessions: Session[];
-}
 
 export default function EventPage() {
   const params = useParams();
-  const router = useRouter();
   const eventId = params.id as string;
-
   const queryClient = useQueryClient();
 
   const eventQuery = useQuery({
     queryKey: queryKeys.eventDetail(eventId),
     queryFn: async (): Promise<Event> => {
-      return fetchJson<Event>(`/api/events/${eventId}`, {
+      return fetchJson<Event>(`/api/events/${eventId}?include=sessions`, {
         unauthorized: { kind: 'redirect_to_login' },
       });
     },
@@ -61,7 +39,7 @@ export default function EventPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(eventId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
-      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
     },
   });
 
@@ -76,6 +54,7 @@ export default function EventPage() {
 
   const loading = eventQuery.isLoading;
   const event = eventQuery.data ?? null;
+  const sessions = event?.sessions ?? [];
 
   if (loading) {
     return (
@@ -93,9 +72,6 @@ export default function EventPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-xl text-muted-foreground">Event not found</p>
-          <Link href="/">
-            <Button className="mt-4">Back to Events</Button>
-          </Link>
         </div>
       </div>
     );
@@ -108,11 +84,6 @@ export default function EventPage() {
         <Card className="mb-6">
           <CardHeader>
             <div className="flex items-center gap-4">
-              <Link href="/">
-                <Button variant="ghost" size="icon">
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-              </Link>
               <div className="flex-1">
                 <CardTitle className="text-2xl">{event.name}</CardTitle>
                 <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
@@ -143,12 +114,12 @@ export default function EventPage() {
               <div>
                 <CardTitle>Sessions</CardTitle>
                 <CardDescription>
-                  {event.sessions.length === 0
+                  {sessions.length === 0
                     ? 'No sessions yet. Create your first session to get started.'
-                    : `${event.sessions.length} session${event.sessions.length === 1 ? '' : 's'} in this event`}
+                    : `${sessions.length} session${sessions.length === 1 ? '' : 's'} in this event`}
                 </CardDescription>
               </div>
-              {event.sessions.length > 0 && (
+              {sessions.length > 0 && (
                 <div className="flex gap-2">
                   <Link href={`/event/${eventId}/run-plan`}>
                     <Button variant="outline" className="gap-2">
@@ -167,7 +138,7 @@ export default function EventPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {event.sessions.length === 0 ? (
+            {sessions.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-4">No sessions yet</p>
                 <div className="flex gap-3 justify-center">
@@ -187,7 +158,7 @@ export default function EventPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {event.sessions.map((session) => (
+                {sessions.map((session) => (
                   <Card key={session.id} className="hover:shadow-lg transition-shadow">
                     <CardHeader>
                       <div className="flex items-start justify-between">
@@ -211,7 +182,7 @@ export default function EventPage() {
                         </div>
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Laps:</span>
-                          <span className="font-semibold">{session._count.laps}</span>
+                          <span className="font-semibold">{session.lapCount ?? 0}</span>
                         </div>
 
                         {session.tags && (() => {

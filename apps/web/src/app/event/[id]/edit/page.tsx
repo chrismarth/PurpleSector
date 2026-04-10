@@ -69,7 +69,7 @@ export default function EditEventPage() {
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.eventDetail(eventId), updated);
       queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
-      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
     },
   });
 

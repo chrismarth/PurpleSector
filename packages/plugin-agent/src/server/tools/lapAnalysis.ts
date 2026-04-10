@@ -53,95 +53,50 @@ export function createLapAnalysisToolHandlers(prisma: any): Record<string, Agent
     async analyzeLap(args: Record<string, unknown>, ctx: AgentToolContext): Promise<AgentToolResult> {
       const lapId = args.lapId as string;
 
-      // Verify the lap belongs to the user
+      const lapMeta = await prisma.lap.findFirst({
+        where: { id: lapId },
+        select: { id: true, sessionId: true },
+      });
+      if (!lapMeta) return { success: false, message: 'Lap not found.' };
+
+      const session = await prisma.session.findFirst({
+        where: { id: lapMeta.sessionId, userId: ctx.userId },
+        select: { id: true },
+      });
+      if (!session) return { success: false, message: 'Lap not found.' };
+
       const lap = await prisma.lap.findFirst({
-        where: { id: lapId, userId: ctx.userId },
-        select: { id: true, lapNumber: true, lapTime: true, telemetryData: true, sessionId: true },
+        where: { id: lapId },
+        select: { id: true, lapNumber: true, lapTime: true, sessionId: true },
       });
       if (!lap) return { success: false, message: 'Lap not found.' };
 
-      let telemetryFrames: any[];
-      try {
-        telemetryFrames = JSON.parse(lap.telemetryData);
-      } catch {
-        return { success: false, message: 'Failed to parse telemetry data for this lap.' };
-      }
-
-      if (telemetryFrames.length === 0) {
-        return { success: false, message: 'Lap has no telemetry frames.' };
-      }
-
-      // Determine reference lap
-      let referenceLapId = args.referenceLapId as string | undefined;
-
-      // Create the analyzer via the factory
-      const analyzerType = (args.analyzer as string) || undefined;
-      const analyzer = createAnalyzer(analyzerType as any);
-
-      try {
-        const result = await analyzer.analyze({
-          lapId,
-          referenceLapId,
-          telemetryFrames,
-          lapTime: lap.lapTime || 0,
-        });
-
-        // Persist suggestions back to the lap
-        await prisma.lap.update({
-          where: { id: lapId },
-          data: {
-            analyzed: true,
-            suggestions: JSON.stringify(result.suggestions),
-          },
-        });
-
-        return {
-          success: true,
-          data: {
-            lapId,
-            lapNumber: lap.lapNumber,
-            lapTime: lap.lapTime,
-            analyzer: result.metadata?.analyzer || analyzer.getName(),
-            duration: result.metadata?.duration,
-            suggestions: result.suggestions,
-          },
-          message: `Analysis complete: ${result.suggestions.length} suggestions generated using "${analyzer.getName()}" analyzer.`,
-        };
-      } catch (error) {
-        return { success: false, message: `Analysis failed: ${String(error)}` };
-      }
+      return {
+        success: false,
+        message:
+          'Lap analysis via agent tools is not supported yet. Telemetry frames are stored in Iceberg and must be queried via Trino by (sessionId, lapNumber).',
+      };
     },
 
     async getLapTelemetrySummary(args: Record<string, unknown>, ctx: AgentToolContext): Promise<AgentToolResult> {
-      const lap = await prisma.lap.findFirst({
-        where: { id: args.lapId as string, userId: ctx.userId },
-        select: { id: true, lapNumber: true, lapTime: true, telemetryData: true },
+      const lapId = args.lapId as string;
+
+      const lapMeta = await prisma.lap.findFirst({
+        where: { id: lapId },
+        select: { id: true, sessionId: true, lapNumber: true, lapTime: true },
       });
-      if (!lap) return { success: false, message: 'Lap not found.' };
+      if (!lapMeta) return { success: false, message: 'Lap not found.' };
 
-      let telemetryFrames: any[];
-      try {
-        telemetryFrames = JSON.parse(lap.telemetryData);
-      } catch {
-        return { success: false, message: 'Failed to parse telemetry data.' };
-      }
-
-      if (telemetryFrames.length === 0) {
-        return { success: false, message: 'Lap has no telemetry frames.' };
-      }
-
-      const summary = analyzeTelemetryData(telemetryFrames);
+      const session = await prisma.session.findFirst({
+        where: { id: lapMeta.sessionId, userId: ctx.userId },
+        select: { id: true },
+      });
+      if (!session) return { success: false, message: 'Lap not found.' };
 
       return {
-        success: true,
-        data: {
-          lapId: lap.id,
-          lapNumber: lap.lapNumber,
-          lapTime: lap.lapTime,
-          frameCount: telemetryFrames.length,
-          summary,
-        },
-        message: `Lap ${lap.lapNumber}: ${summary.avgSpeed.toFixed(1)} km/h avg, ${summary.maxSpeed.toFixed(1)} km/h max, ${summary.brakingEvents.length} braking zones, ${summary.throttleApplication.fullThrottlePercent.toFixed(1)}% full throttle.`,
+        success: false,
+        message:
+          'Lap telemetry summary via agent tools is not supported yet. Telemetry frames are stored in Iceberg and must be queried via Trino by (sessionId, lapNumber).',
       };
     },
 

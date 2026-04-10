@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     const avatarUrl = `/images/avatars/uploads/${filename}`;
 
-    await (prisma as any).user.update({
+    await prisma.user.update({
       where: { id: userId },
       data: { avatarUrl },
     });

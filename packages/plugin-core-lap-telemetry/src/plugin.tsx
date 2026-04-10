@@ -110,8 +110,6 @@ const plugin: PluginModule = {
             <SimpleTelemetryPlotPanel
               data={props.telemetry}
               compareData={props.compareTelemetry}
-              syncedHoverValue={props.syncedHoverValue}
-              onHoverChange={props.onHoverChange}
               initialConfig={props.panelState as any}
               onTitleChange={(title) => props.host.setTitle?.(title)}
               onRegisterActions={(a) => {

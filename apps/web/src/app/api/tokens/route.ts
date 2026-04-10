@@ -22,7 +22,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const tokens = await (prisma as any).apiToken.findMany({
+  const tokens = await prisma.apiToken.findMany({
     where: { userId },
     select: {
       id: true,
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
   const token = randomToken();
   const tokenHash = sha256Hex(token);
 
-  const created = await (prisma as any).apiToken.create({
+  const created = await prisma.apiToken.create({
     data: {
       userId,
       name,

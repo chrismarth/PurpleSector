@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { requireAuthUserId } from '@/lib/auth';
+import { registerActiveSession } from '@/lib/risingwave';
 
 // POST /api/sessions/[id]/start - Start a session (enable telemetry collection)
 export async function POST(
@@ -15,20 +16,19 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const result = await (prisma as any).session.updateMany({
+    const result = await prisma.session.updateMany({
       where: { id: params.id, userId },
-      data: { started: true },
+      data: { started: true, status: 'active' },
     });
 
     if (!result.count) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
-    const session = await (prisma as any).session.findFirst({
+    const session = await prisma.session.findFirst({
       where: { id: params.id, userId },
       include: {
         laps: {
-          where: { userId },
           orderBy: { lapNumber: 'asc' },
         },
         event: {
@@ -36,6 +36,17 @@ export async function POST(
         },
       },
     });
+
+    if (session) {
+      registerActiveSession({
+        sessionId: session.id,
+        userId,
+        source: session.source,
+        status: session.status as 'active' | 'paused' | 'archived',
+      }).catch((err) => {
+        console.error('[risingwave] Background session registration failed:', err);
+      });
+    }
 
     return NextResponse.json(session);
   } catch (error) {

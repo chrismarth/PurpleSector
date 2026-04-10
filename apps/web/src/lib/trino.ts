@@ -50,21 +50,23 @@ export async function getLapFramesFromIceberg(
   // Filter by session_id (globally unique CUID) + lap_number only.
   // user_id is NOT used because the raw telemetry user_id (e.g. '__demo__')
   // may differ from the authenticated userId stored in Prisma.
+  // Deduplicate: the force_append_only Iceberg sink accumulates re-emitted
+  // frames with wrong lap_numbers when RisingWave watermark GC drops lap-
+  // boundary frames and triggers SUM() OVER() recomputation.  For each
+  // unique (session_id, ts) the row with MAX lap_number is the original
+  // (correct) emission — re-emissions always decrement lap_number.
   const query = `
-    SELECT 
-      ts,
-      speed,
-      throttle,
-      brake,
-      steering,
-      gear,
-      rpm,
-      normalized_position,
-      lap_number,
-      lap_time
-    FROM raw_samples
-    WHERE session_id = '${sessionId}'
-      AND lap_number = ${lapNumber}
+    WITH deduped AS (
+      SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY ts ORDER BY lap_number DESC
+      ) AS rn
+      FROM raw_samples
+      WHERE session_id = '${sessionId}'
+    )
+    SELECT ts, speed, throttle, brake, steering, gear, rpm,
+           normalized_position, lap_number, lap_time
+    FROM deduped
+    WHERE rn = 1 AND lap_number = ${lapNumber}
     ORDER BY ts ASC
   `;
 
@@ -90,11 +92,16 @@ export async function getSessionLapsFromIceberg(
   sessionId: string
 ): Promise<{ lapNumber: number; frameCount: number }[]> {
   const query = `
-    SELECT 
-      lap_number,
-      COUNT(*) as frame_count
-    FROM raw_samples
-    WHERE session_id = '${sessionId}'
+    WITH deduped AS (
+      SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY ts ORDER BY lap_number DESC
+      ) AS rn
+      FROM raw_samples
+      WHERE session_id = '${sessionId}'
+    )
+    SELECT lap_number, COUNT(*) as frame_count
+    FROM deduped
+    WHERE rn = 1
     GROUP BY lap_number
     ORDER BY lap_number ASC
   `;

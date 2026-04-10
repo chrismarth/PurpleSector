@@ -25,7 +25,7 @@ flowchart LR
         GW["ps-grpc-gateway<br/>(tonic + OIDC)"]
         RP["Redpanda<br/>(Kafka API)"]
         RW["RisingWave<br/>(stream SQL)"]
-        REDIS["Redis Streams<br/>(live state)"]
+        REDIS["Redis Pub/Sub<br/>(live state)"]
         ICE["Apache Iceberg<br/>(S3/MinIO)"]
         TRINO["Trino<br/>(query layer)"]
         UDF["Python UDF<br/>(math channels)"]
@@ -117,7 +117,7 @@ flowchart TD
     end
 
     subgraph Sinks["Sinks"]
-        S1["SINKS: telemetry_redis_*<br/>→ Redis Pub/Sub + Streams"]
+        S1["SINKS: telemetry_redis_*<br/>→ Redis Pub/Sub"]
         S2["SINK: archive_raw<br/>→ Iceberg raw_samples"]
     end
 
@@ -135,7 +135,7 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph Hot["Hot (< 60s)"]
-        REDIS2["Redis Streams<br/>MAXLEN trimmed<br/>telemetry:{user}:{session}"]
+        REDIS2["Redis Pub/Sub<br/>telemetry:live:{user}:{session}"]
     end
 
     subgraph Warm["Warm (24h buffer)"]

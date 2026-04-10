@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { chatAboutLap, analyzeTelemetryData } from '@purplesector/lap-analysis-base';
 import { requireAuthUserId } from '@/lib/auth';
+import { requireCanReadSessionById } from '@/lib/access-control';
 
 // POST /api/chat - Handle chat messages about a lap
 export async function POST(request: NextRequest) {
@@ -23,9 +24,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const lapMeta = await prisma.lap.findUnique({
+      where: { id: lapId },
+      select: { id: true, sessionId: true },
+    });
+
+    if (!lapMeta) {
+      return NextResponse.json(
+        { error: 'Lap not found' },
+        { status: 404 }
+      );
+    }
+
+    await requireCanReadSessionById({ requesterUserId: userId, sessionId: lapMeta.sessionId });
+
     // Get lap data
-    const lap = await (prisma as any).lap.findFirst({
-      where: { id: lapId, userId },
+    const lap = await prisma.lap.findFirst({
+      where: { id: lapId },
       include: {
         chatMessages: {
           orderBy: { createdAt: 'asc' },
@@ -41,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Save user message
-    await (prisma as any).chatMessage.create({
+    await prisma.chatMessage.create({
       data: {
         userId,
         lapId,
@@ -53,7 +68,7 @@ export async function POST(request: NextRequest) {
     // Fetch telemetry frames from Iceberg
     const { getLapFramesFromIceberg } = await import('@/lib/trino');
     const telemetryFrames = await getLapFramesFromIceberg(
-      lap.userId,
+      userId,
       lap.sessionId,
       lap.lapNumber
     );
@@ -69,9 +84,8 @@ export async function POST(request: NextRequest) {
     const suggestions = lap.suggestions ? JSON.parse(lap.suggestions) : [];
 
     // Find fastest lap in the same session for reference
-    const fastestLap = await (prisma as any).lap.findFirst({
+    const fastestLap = await prisma.lap.findFirst({
       where: {
-        userId,
         sessionId: lap.sessionId,
         lapTime: { not: null },
       },
@@ -84,7 +98,7 @@ export async function POST(request: NextRequest) {
     let referenceLap = undefined;
     if (fastestLap && fastestLap.id !== lap.id) {
       const referenceTelemetry = await getLapFramesFromIceberg(
-        fastestLap.userId,
+        userId,
         fastestLap.sessionId,
         fastestLap.lapNumber
       );
@@ -117,7 +131,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Save assistant message
-    const assistantMessage = await (prisma as any).chatMessage.create({
+    const assistantMessage = await prisma.chatMessage.create({
       data: {
         userId,
         lapId,

@@ -20,7 +20,7 @@ export function middleware(request: NextRequest) {
   }
 
   const userCookie = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  if (userCookie === 'admin' || userCookie === 'user') {
+  if (userCookie) {
     return NextResponse.next();
   }
 

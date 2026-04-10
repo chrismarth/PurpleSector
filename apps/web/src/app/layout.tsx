@@ -6,7 +6,7 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { ReactQueryProvider } from '@/components/ReactQueryProvider';
 import { AppShellRoot } from "@/components/app-shell/AppShellRoot";
 import { queryKeys } from '@/lib/queryKeys';
-import { getServerAuthMe, getServerNavEventsTree } from '@/lib/server-prefetch';
+import { getServerAuthMe, getServerNavEvents } from '@/lib/server-prefetch';
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
@@ -28,8 +28,8 @@ export default async function RootLayout({
   });
 
   await queryClient.prefetchQuery({
-    queryKey: queryKeys.navEventsTree,
-    queryFn: getServerNavEventsTree,
+    queryKey: queryKeys.navEvents,
+    queryFn: getServerNavEvents,
   });
 
   const dehydratedState = dehydrate(queryClient);

@@ -163,7 +163,19 @@ function startDemoMode(client) {
   clientState.frameIndex = 0; // Global frame index across all laps
   
   // Flatten all laps into a single continuous stream
-  const allFrames = laps.flatMap(lap => lap.frames);
+  const allFrames = laps.flatMap((lap, idx) => {
+    const fallbackLapNumber = (lap && typeof lap.lapNumber === 'number' && lap.lapNumber > 0)
+      ? lap.lapNumber
+      : idx + 1;
+    const frames = Array.isArray(lap?.frames) ? lap.frames : [];
+    return frames.map((frame) => ({
+      ...frame,
+      lapNumber:
+        typeof frame?.lapNumber === 'number' && frame.lapNumber > 0
+          ? frame.lapNumber
+          : fallbackLapNumber,
+    }));
+  });
   console.log(`Demo mode: ${allFrames.length} total frames across ${laps.length} laps`);
   
   clientState.interval = setInterval(() => {

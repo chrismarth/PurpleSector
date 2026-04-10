@@ -114,7 +114,7 @@ export default function CreateRunPlanPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(eventId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
-      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
     },
   });
 

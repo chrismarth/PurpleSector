@@ -12,7 +12,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const vehicles = await (prisma as any).vehicle.findMany({
+    const vehicles = await prisma.vehicle.findMany({
       where: { userId },
       include: {
         configurations: {
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const vehicle = await (prisma as any).vehicle.create({
+    const vehicle = await prisma.vehicle.create({
       data: {
         userId,
         name,

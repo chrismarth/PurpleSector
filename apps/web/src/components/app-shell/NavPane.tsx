@@ -41,16 +41,25 @@ export function NavPane() {
   const router = useRouter();
   const { state, openTab } = useAppShell();
   const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
-  const [width, setWidth] = useState(loadWidth);
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [isDragging, setIsDragging] = useState(false);
   const widthRef = useRef(width);
   widthRef.current = width;
+  const hasMounted = useRef(false);
 
   const pluginNavTabs = getNavTabs();
 
-  // Persist width
+  // Load persisted width after mount to avoid SSR/client hydration mismatch.
+  // Server always renders DEFAULT_WIDTH; client corrects it after hydration.
   useEffect(() => {
-    saveWidth(width);
+    hasMounted.current = true;
+    setWidth(loadWidth());
+  }, []);
+
+  // Persist width changes, but skip the initial DEFAULT_WIDTH from useState()
+  // to avoid overwriting a valid persisted value before loadWidth() runs.
+  useEffect(() => {
+    if (hasMounted.current) saveWidth(width);
   }, [width]);
 
   const bindDrag = useDrag(

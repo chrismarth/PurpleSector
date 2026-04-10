@@ -59,7 +59,7 @@ export default function EditSessionPage() {
       queryClient.setQueryData(queryKeys.sessionDetail(sessionId), updated);
       queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(updated.eventId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
-      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
     },
   });
 

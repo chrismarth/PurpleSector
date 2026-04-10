@@ -21,25 +21,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    await (prisma as any).user.upsert({
-      where: { id: username },
+    const dbUser = await prisma.user.upsert({
+      where: { username },
       update: {
-        username,
         role: username === 'admin' ? 'ORG_ADMIN' : 'USER',
         fullName: username === 'admin' ? 'Admin User' : 'Regular User',
       },
       create: {
-        id: username,
         username,
         role: username === 'admin' ? 'ORG_ADMIN' : 'USER',
         fullName: username === 'admin' ? 'Admin User' : 'Regular User',
       },
+      select: { id: true },
     });
 
     const response = NextResponse.json({ ok: true });
     response.cookies.set({
       name: AUTH_COOKIE_NAME,
-      value: username,
+      value: dbUser.id,
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',

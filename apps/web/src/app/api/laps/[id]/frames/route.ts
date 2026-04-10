@@ -16,13 +16,12 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const lap = await (prisma as any).lap.findFirst({
+    const lap = await prisma.lap.findFirst({
       where: { id: params.id },
       select: {
         id: true,
         sessionId: true,
         lapNumber: true,
-        userId: true,
       },
     });
 
@@ -45,7 +44,7 @@ export async function GET(
     }
 
     const frames = await getLapFramesFromIceberg(
-      lap.userId,
+      userId,
       lap.sessionId,
       lap.lapNumber
     );

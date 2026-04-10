@@ -19,14 +19,21 @@ fi
 
 echo ""
 echo "🗑️  Removing existing database..."
-rm -f prisma/dev.db
-rm -f prisma/dev.db-journal
+
+echo "🔧 Ensuring Postgres extension pgcrypto exists (for gen_random_uuid)..."
+docker exec ps-postgres psql -U purplesector -d purplesector -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;" > /dev/null
+
+echo "🧩 Merging plugin Prisma schemas..."
+npx tsx scripts/merge-plugin-schemas.ts > /dev/null
 
 echo "📊 Pushing schema to database..."
-npx prisma db push --force-reset
+npx prisma db push --force-reset --schema=packages/db-prisma/prisma/schema.generated.prisma
 
 echo "🔄 Generating Prisma Client..."
-npx prisma generate
+npx prisma generate --schema=packages/db-prisma/prisma/schema.generated.prisma
+
+echo "🔧 Applying Postgres SQL migrations (triggers, functions)..."
+./scripts/init-postgres.sh
 
 echo ""
 echo "✅ Database reset complete!"

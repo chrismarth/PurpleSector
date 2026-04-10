@@ -6,6 +6,15 @@
 import { PrismaClient } from '@prisma/client';
 import type { TelemetryRepository, DbContext } from '@purplesector/db-base';
 
+const rawDatabaseUrl = process.env.DATABASE_URL;
+if (rawDatabaseUrl) {
+  const cleanedDatabaseUrl = rawDatabaseUrl
+    .replace(/\x1b\[[0-9;]*m/g, '')
+    .replace(/^"|"$/g, '')
+    .trim();
+  process.env.DATABASE_URL = cleanedDatabaseUrl;
+}
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };

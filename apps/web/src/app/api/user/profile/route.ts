@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@purplesector/db-prisma';
 import { requireAuthUserId } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   let userId: string;
   try {
@@ -10,7 +12,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const user = await (prisma as any).user.findUnique({
+  const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, username: true, fullName: true, avatarUrl: true, role: true },
   });
@@ -42,7 +44,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
-    const updated = await (prisma as any).user.update({
+    const updated = await prisma.user.update({
       where: { id: userId },
       data,
       select: { id: true, username: true, fullName: true, avatarUrl: true, role: true },

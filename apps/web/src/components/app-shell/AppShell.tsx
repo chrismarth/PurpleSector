@@ -25,7 +25,7 @@ export function AppShell(props: { children?: React.ReactNode }) {
 
             {/* Content Pane */}
             {children ? (
-              <div className="flex-1 min-w-0 overflow-hidden">{children}</div>
+              <div className="flex-1 min-w-0 min-h-0 overflow-auto">{children}</div>
             ) : (
               <div className="flex-1 min-w-0 overflow-hidden flex items-center justify-center text-muted-foreground">
                 <p className="text-sm">No route content</p>

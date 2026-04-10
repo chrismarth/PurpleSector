@@ -57,6 +57,10 @@ else
     sleep 2
   done
 
+  echo -e "${YELLOW}⏳ Pushing Prisma schema to Postgres...${NC}"
+  npm run db:push > /dev/null
+  echo -e "${GREEN}✓ Prisma schema applied${NC}"
+
   # Wait for WebSocket server
   for i in $(seq 1 15); do
     if docker exec ps-ws-server node -e "const s=require('net').connect(8080,'localhost',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))" > /dev/null 2>&1; then
@@ -67,22 +71,11 @@ else
     sleep 2
   done
 
-  # Wait for Time Ticker
-  for i in $(seq 1 15); do
-    if docker exec ps-time-ticker pgrep -f time-ticker.py > /dev/null 2>&1; then
-      echo -e "${GREEN}✓ Time Ticker is healthy${NC}"
-      break
-    fi
-    [ "$i" -eq 15 ] && echo -e "${RED}⚠ Time Ticker health check timed out${NC}"
-    sleep 2
-  done
-
   echo -e "${GREEN}✓ Docker infrastructure started${NC}"
   
   # Create Redpanda topics before RisingWave initialization
   echo -e "${YELLOW}⏳ Creating Redpanda topics...${NC}"
   docker exec ps-redpanda rpk topic create telemetry-batches --partitions 3 --replicas 1 || true
-  docker exec ps-redpanda rpk topic create time-heartbeat --partitions 1 --replicas 1 || true
   echo -e "${GREEN}✓ Redpanda topics ready${NC}"
   
   # Initialize Iceberg tables before RisingWave initialization
@@ -90,14 +83,26 @@ else
   ./scripts/init-iceberg.sh
   echo -e "${GREEN}✓ Iceberg tables initialized${NC}"
   
-  # Initialize RisingWave schema after first startup
-  echo -e "${YELLOW}⏳ Initializing RisingWave schema...${NC}"
-  ./scripts/init-risingwave.sh
-  echo -e "${GREEN}✓ RisingWave schema initialized${NC}"
 fi
 
 # ── Step 2: Database check ─────────────────────────────────────────────
 
+# ── Step 2: RisingWave schema ──────────────────────────────────────────
+# Always (re-)apply the schema so changes to SQL files take effect
+# without needing to tear down Docker. All scripts use DROP IF EXISTS
+# and CREATE ... IF NOT EXISTS so they are safe to run repeatedly.
+echo -e "${YELLOW}⏳ Initializing RisingWave schema...${NC}"
+./scripts/init-risingwave.sh
+echo -e "${GREEN}✓ RisingWave schema initialized${NC}"
+
+# ── Step 3: Postgres SQL migrations ───────────────────────────────────
+# Apply triggers and functions that can't be expressed in the Prisma schema.
+# Runs after db:push so application tables exist.
+echo -e "${YELLOW}⏳ Applying Postgres SQL migrations...${NC}"
+./scripts/init-postgres.sh
+echo -e "${GREEN}✓ Postgres SQL migrations applied${NC}"
+
+# ── Step 5: Database check ─────────────────────────────────────────────
 echo -e "${YELLOW}⏳ Checking database...${NC}"
 if npm run db:check > /dev/null 2>&1; then
   echo -e "${GREEN}✓ Database is ready${NC}"
@@ -105,7 +110,7 @@ else
   echo -e "${YELLOW}⚠ Database check failed. You may need to run: npm run db:push${NC}"
 fi
 
-# ── Step 3: Build demo replay binary ───────────────────────────────────
+# ── Step 6: Build demo replay binary ───────────────────────────────────
 
 if [ ! -f "rust/target/release/ps-demo-replay" ]; then
   echo -e "${YELLOW}⏳ Building demo replay binary (first time only)...${NC}"
@@ -115,7 +120,7 @@ else
   echo -e "${GREEN}✓ Demo replay binary exists${NC}"
 fi
 
-# ── Step 4: PM2 services ──────────────────────────────────────────────
+# ── Step 7: PM2 services ──────────────────────────────────────────────
 
 mkdir -p logs
 
@@ -129,6 +134,11 @@ if [ -f "telemetry-wal.db" ]; then
 fi
 
 echo -e "${YELLOW}⏳ Starting PM2 services...${NC}"
+if [ -f ".env" ]; then
+  set -a
+  source .env
+  set +a
+fi
 npx pm2 start ecosystem.dev.config.js
 
 # ── Done ──────────────────────────────────────────────────────────────

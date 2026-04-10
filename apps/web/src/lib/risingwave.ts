@@ -213,6 +213,63 @@ export async function updateActiveSessionStatus(
 }
 
 /**
+ * Return the highest in-progress lap for a session from telemetry_samples.
+ * This is the lap that is currently being driven and has no boundary crossing yet.
+ * Must be called BEFORE updateActiveSessionStatus so the session is still in the join.
+ */
+export async function snapshotInProgressLap(
+  sessionId: string
+): Promise<{ lapNumber: number; lapTime: number | null } | null> {
+  if (!process.env.RISINGWAVE_HOST) return null;
+
+  try {
+    const pg = getPool();
+    const result = await pg.query<{ lap_number: number; lap_time: number | null }>(
+      `SELECT lap_number, MAX(lap_time) / 1000.0 AS lap_time
+       FROM telemetry_samples
+       WHERE session_id = $1
+       GROUP BY lap_number
+       ORDER BY lap_number DESC
+       LIMIT 1`,
+      [sessionId]
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return { lapNumber: row.lap_number, lapTime: row.lap_time ?? null };
+  } catch (err) {
+    console.error('[risingwave] Failed to snapshot in-progress lap:', err);
+    return null;
+  }
+}
+
+/**
+ * Read the current completed_laps materialized view for a session and return
+ * them as plain objects.  Call this BEFORE changing the session status to
+ * 'archived' — once the status changes the streaming join retracts all rows
+ * and the MV (and the JDBC sink) will have nothing left for this session.
+ */
+export async function snapshotCompletedLaps(
+  sessionId: string
+): Promise<{ lapNumber: number; lapTime: number | null }[]> {
+  if (!process.env.RISINGWAVE_HOST) return [];
+
+  try {
+    const pg = getPool();
+    const result = await pg.query<{ lap_number: number; lap_time: number | null }>(
+      `SELECT lap_number, lap_time FROM completed_laps WHERE session_id = $1 ORDER BY lap_number`,
+      [sessionId]
+    );
+    return result.rows.map((r) => ({
+      lapNumber: r.lap_number,
+      lapTime: r.lap_time ?? null,
+    }));
+  } catch (err) {
+    console.error('[risingwave] Failed to snapshot completed laps:', err);
+    return [];
+  }
+}
+
+/**
  * Remove a session from RisingWave's active_sessions table.
  * Called when a session is deleted from the UI.
  */

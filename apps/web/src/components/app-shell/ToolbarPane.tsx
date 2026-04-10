@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { UserMenu } from '@/components/UserMenu';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 
-const ChannelEditorContent = lazy(() => import('@/components/content/ChannelEditorContent'));
+const ChannelEditorContent = lazy(() => import('@/components/channel-editor/ChannelEditorContent'));
 
 export function ToolbarPane() {
   const { state, toggleAgentPanel, openTab } = useAppShell();

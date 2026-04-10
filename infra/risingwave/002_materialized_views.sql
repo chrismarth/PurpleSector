@@ -23,6 +23,13 @@ CREATE TABLE IF NOT EXISTS active_sessions (
 -- Since created_at is static (set once at insert), this does NOT cause re-emission
 -- like the ticker-based approach did. It simply prevents old accumulated frames
 -- from joining when a new session is created.
+
+-- Drop materialized views so definition changes apply on re-init.
+-- Order matters due to dependencies.
+DROP MATERIALIZED VIEW IF EXISTS telemetry_samples CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS telemetry_with_prev_position CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS telemetry_with_sessions CASCADE;
+
 CREATE MATERIALIZED VIEW IF NOT EXISTS telemetry_with_sessions AS
 SELECT
     s.user_id,
@@ -37,6 +44,10 @@ SELECT
     (tf.frame).gear,
     (tf.frame).rpm,
     (tf.frame).normalized_position,
+    CASE
+        WHEN tf.source = 'demo' THEN 0
+        ELSE (tf.frame).lap_number
+    END AS source_lap_number,
     (tf.frame).lap_time,
     (tf.frame).session_time,
     (tf.frame).session_type,
@@ -74,6 +85,7 @@ SELECT
     rpm,
     normalized_position,
     LAG(normalized_position) OVER w AS prev_position,
+    source_lap_number,
     lap_time,
     session_time,
     session_type,
@@ -97,23 +109,22 @@ SELECT
     gear,
     rpm,
     normalized_position,
+    source_lap_number,
     lap_time,
     session_time,
     session_type,
     track_position,
     delta,
     -- Detect lap boundary: position wraps from >0.9 to <0.1
-    CASE 
-        WHEN prev_position > 0.9 AND normalized_position < 0.1 
-        THEN 1 
-        ELSE 0 
+    CASE
+        WHEN prev_position > 0.9 AND normalized_position < 0.1 THEN 1
+        ELSE 0
     END AS lap_boundary,
-    -- Calculate cumulative lap number per session (starts at 1)
+    -- Compute monotonic lap number within a session from position wraps.
     1 + SUM(
-        CASE 
-            WHEN prev_position > 0.9 AND normalized_position < 0.1 
-            THEN 1 
-            ELSE 0 
+        CASE
+            WHEN prev_position > 0.9 AND normalized_position < 0.1 THEN 1
+            ELSE 0
         END
     ) OVER (PARTITION BY user_id, session_id ORDER BY ts ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS lap_number
 FROM telemetry_with_prev_position;

@@ -14,7 +14,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const result = await (prisma as any).apiToken.updateMany({
+  const result = await prisma.apiToken.updateMany({
     where: {
       id: params.id,
       userId,

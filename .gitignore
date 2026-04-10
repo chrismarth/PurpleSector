@@ -37,6 +37,7 @@ packages/db-prisma/prisma/schema.generated.prisma
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~

@@ -44,7 +44,12 @@ export function AppShellRoot({ children }: { children?: React.ReactNode }) {
   }
 
   if (!user) {
-    return null;
+    // Redirect is pending in the useEffect above — show spinner instead of blank.
+    return (
+      <div className="flex items-center justify-center h-screen w-screen bg-background">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600" />
+      </div>
+    );
   }
 
   return <AppShell>{children}</AppShell>;

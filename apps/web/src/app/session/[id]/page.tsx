@@ -14,49 +14,18 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { decodeMessage, createStopDemoMessage, createPingMessage } from '@/lib/telemetry-proto-browser';
 import type { AnalysisLayoutJSON } from '@/lib/analysisLayout';
 import { DEFAULT_ANALYSIS_LAYOUT } from '@/lib/analysisLayout';
+import { formatLapTime } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
 import { TelemetryDataPanel } from '@/components/TelemetryDataPanel';
 import { queryKeys } from '@/lib/queryKeys';
 import { fetchJson, mutationJson } from '@/lib/client-fetch';
 import { useSessionUiStore } from '@/stores/sessionUiStore';
+import { useLiveLapIndexStore } from '@/stores/liveLapIndexStore';
+import { useNavUiStore } from '@/stores/navUiStore';
+import { Session, LapSummary, DEFAULT_SESSION_TAGS } from '@/types/core';
 
-const SESSION_TAGS = [
-  'Testing',
-  'Practice',
-  'Qualifying',
-  'Race',
-  'Setup Development',
-  'Baseline',
-  'Wet Weather',
-  'Dry Weather',
-];
-
-interface Session {
-  id: string;
-  eventId: string;
-  name: string;
-  source: string;
-  status: string;
-  started: boolean;
-  tags: string | null;
-  laps: Lap[];
-  event?: {
-    name: string;
-  };
-}
-
-interface Lap {
-  id: string;
-  lapNumber: number;
-  lapTime: number | null;
-  analyzed: boolean;
-  tags?: string | null;
-  driverComments?: string | null;
-}
 
 export default function SessionPage() {
-  console.log('🔵 SessionPage component loaded');
-  
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
@@ -75,6 +44,7 @@ export default function SessionPage() {
       });
     },
     enabled: !!sessionId,
+    refetchInterval: false,
   });
 
   const [session, setSession] = useState<Session | null>(null);
@@ -90,19 +60,60 @@ export default function SessionPage() {
   const [analysisLayoutId, setAnalysisLayoutId] = useState<string | null>(null);
   const [analysisLayout, setAnalysisLayout] = useState<AnalysisLayoutJSON | null>(null);
 
+  const liveSessionState = useLiveLapIndexStore((s) => s.bySessionId[sessionId]);
+  const setDbLapSummaries = useLiveLapIndexStore((s) => s.setDbLapSummaries);
+  const observeFrameLapNumber = useLiveLapIndexStore((s) => s.observeFrameLapNumber);
+
+  const expandedNodeIds = useNavUiStore((s) => s.expandedNodeIds);
+  const expandNode = useNavUiStore((s) => s.expandNode);
+
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const currentLapFramesRef = useRef<TelemetryFrame[]>([]);
   const currentLapNumberRef = useRef(1); // Track current lap number in ref for WebSocket closure
   const lastUpdateTimeRef = useRef(0);
-  const savingLapRef = useRef(false); // Prevent duplicate saves
-  const isPausedRef = useRef(false); // Track pause state in ref for WebSocket closure
+  const isPausedRef = useRef(getIsPaused(sessionId)); // Track pause state in ref for WebSocket closure
   const isMountedRef = useRef(true); // Track if component is mounted
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null); // Heartbeat to keep connection alive
   const lastSavedTagsRef = useRef<string>('[]'); // Track last saved tags to prevent duplicate saves
-  const lastLapTimeRef = useRef(0); // Track last lapTime to detect resets (new lap)
-  const seenLapBoundaryRef = useRef(false); // True once we've seen a lap-time reset; prevents saving a partial first lap
+
+  const sessionLapsQuery = useQuery({
+    queryKey: queryKeys.sessionLaps(sessionId),
+    queryFn: async () => {
+      return fetchJson<{ laps: LapSummary[] }>(
+        `/api/laps?sessionId=${sessionId}`,
+        { unauthorized: { kind: 'return_fallback' }, fallback: { laps: [] } },
+      );
+    },
+    enabled: !!sessionId,
+    staleTime: 15_000,
+    refetchInterval: (query) => {
+      const data = sessionQuery.data;
+      return data?.status === 'active' ? 15_000 : false;
+    },
+  });
+
+  useEffect(() => {
+    const laps = sessionLapsQuery.data?.laps;
+    if (!laps) return;
+    setDbLapSummaries(sessionId, laps);
+  }, [sessionId, sessionLapsQuery.data, setDbLapSummaries]);
+
+  // When the live lap index advances (a lap completes), refresh session detail
+  // and nav tree so completed laps show their times and appear in the nav pane.
+  const completedLapCount = liveSessionState?.completedLapNumbers.length ?? 0;
+  useEffect(() => {
+    if (completedLapCount === 0) return;
+    queryClient.invalidateQueries({ queryKey: queryKeys.sessionDetail(sessionId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
+    // Retry after a short delay to handle RisingWave JDBC sink write latency.
+    const timer = setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessionDetail(sessionId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [completedLapCount, queryClient, sessionId]);
 
   const analysisLayoutsQuery = useQuery({
     queryKey: ['analysis-layouts', 'session', sessionId] as const,
@@ -135,8 +146,20 @@ export default function SessionPage() {
     },
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.sessionDetail(sessionId), updated);
-      queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(updated.eventId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+      // If this session was previously ended on this page, endSession() sets
+      // isMountedRef.current=false to stop reconnect loops. Starting again
+      // should re-enable message processing and reconnect logic.
+      isMountedRef.current = true;
+      if (updated.event?.id) queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(updated.event.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
+
+      // Proactively connect now; the effect will also connect once `session`
+      // state updates from sessionQuery.
+      setTimeout(() => {
+        if (!wsRef.current && updated.status === 'active' && updated.started) {
+          connectWebSocket();
+        }
+      }, 0);
     },
   });
 
@@ -149,25 +172,27 @@ export default function SessionPage() {
     },
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.sessionDetail(sessionId), updated);
-      queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(updated.eventId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessionDetail(sessionId) });
+      if (updated.event?.id) queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(updated.event.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
-      queryClient.invalidateQueries({ queryKey: queryKeys.navEventsTree });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
     },
   });
 
-  const saveLapMutation = useMutation({
-    mutationFn: async (payload: { frames: TelemetryFrame[]; lapNumber: number }): Promise<Lap> => {
-      return mutationJson<Lap>(`/api/laps`, {
-        method: 'POST',
-        body: {
-          sessionId,
-          lapNumber: payload.lapNumber,
-          telemetryData: JSON.stringify(payload.frames),
-        },
+  const deleteSessionMutation = useMutation({
+    mutationFn: async () => {
+      return mutationJson<{ success: true }>(`/api/sessions/${sessionId}`, {
+        method: 'DELETE',
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessionDetail(sessionId) });
+      queryClient.removeQueries({ queryKey: queryKeys.sessionDetail(sessionId) });
+      queryClient.removeQueries({ queryKey: queryKeys.sessionLaps(sessionId) });
+      if (session?.event?.id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(session.event.id) });
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
     },
   });
 
@@ -178,9 +203,7 @@ export default function SessionPage() {
     setCurrentLapFrames([]);
     currentLapNumberRef.current = 1;
     setCurrentLapNumber(1);
-    lastLapTimeRef.current = 0;
     lastUpdateTimeRef.current = 0;
-    seenLapBoundaryRef.current = false;
   }, [sessionId]);
 
   useEffect(() => {
@@ -212,9 +235,10 @@ export default function SessionPage() {
     const data = sessionQuery.data;
     setSession(data);
 
-    // Set current lap number based on saved laps
-    const nextLapNumber = (data.laps?.length || 0) + 1;
-    setCurrentLapNumber(nextLapNumber);
+    if (data.event?.id) {
+      expandNode(`event:${data.event.id}`);
+    }
+    expandNode(`session:${sessionId}`);
 
     // Load session tags (only if different from current)
     if (data.tags) {
@@ -228,19 +252,11 @@ export default function SessionPage() {
     }
 
     setLoading(false);
-  }, [router, sessionId, sessionQuery.data, sessionQuery.isError]);
+  }, [expandNode, router, sessionId, sessionQuery.data, sessionQuery.isError]);
 
   // Connect WebSocket when session becomes active and started
   useEffect(() => {
-    console.log('WebSocket connection check:', {
-      hasSession: !!session,
-      status: session?.status,
-      started: session?.started,
-      hasWsRef: !!wsRef.current
-    });
-    
     if (session && session.status === 'active' && session.started && !wsRef.current) {
-      console.log('Session is active and started, connecting WebSocket...');
       // Initialize isPausedRef to match isPaused state
       isPausedRef.current = isPaused;
       connectWebSocket();
@@ -318,7 +334,7 @@ export default function SessionPage() {
 
     setAnalysisLayoutId(null);
     setAnalysisLayout(DEFAULT_ANALYSIS_LAYOUT);
-  }, [session, sessionId]);
+  }, [session, sessionId, analysisLayoutsQuery.data]);
 
   // Persist analysis layout changes to backend for this session
   useEffect(() => {
@@ -342,21 +358,13 @@ export default function SessionPage() {
       heartbeatIntervalRef.current = null;
     }
 
-    console.log('Connecting to WebSocket...');
-    console.log('Session source:', session?.source);
-    
     // All sessions (demo and live) use the actual session ID for WebSocket connection
     // RisingWave publishes to session-specific channels: telemetry:live:{user_id}:{session_id}
     const userId = user?.id;
-    const effectiveSessionId = session?.id;
-    console.log('WebSocket params:', { userId, sessionId: effectiveSessionId, source: session?.source });
+    const effectiveSessionId = sessionId;
     
     if (!userId) {
       console.error('Cannot connect WebSocket: no authenticated user');
-      return;
-    }
-    if (!effectiveSessionId) {
-      console.error('Cannot connect WebSocket: no session ID');
       return;
     }
     const ws = new WebSocket(`ws://localhost:8080?userId=${userId}&sessionId=${effectiveSessionId}`);
@@ -385,15 +393,10 @@ export default function SessionPage() {
       // All sessions (including demo) receive telemetry through the Kafka
       // pipeline.  The demo collector publishes generated data to Kafka, so
       // there is no need to request the bridge's built-in demo playback.
-      console.log('Session source:', session?.source, '- waiting for live telemetry via Kafka');
     };
 
     ws.onmessage = (event) => {
-      // Check if component is still mounted before processing
-      if (!isMountedRef.current) {
-        console.log('Ignoring WebSocket message - component unmounted');
-        return;
-      }
+      if (!isMountedRef.current) return;
       
       try {
         // All messages should be protobuf (ArrayBuffer)
@@ -404,11 +407,6 @@ export default function SessionPage() {
         
         // Decode protobuf message
         const decoded = decodeMessage(event.data);
-        
-        // Log telemetry messages
-        if (decoded.type === 'telemetry') {
-          console.log('Received telemetry:', decoded.data?.speed, 'km/h, lapTime:', decoded.data?.lapTime);
-        }
         
         handleDecodedMessage(decoded);
       } catch (error) {
@@ -422,91 +420,48 @@ export default function SessionPage() {
       try {
         if (message.type === 'demo_complete') {
           console.log('Demo playback completed');
-          // Save final lap if any frames exist
-          if (currentLapFramesRef.current.length > 0 && !savingLapRef.current) {
-            savingLapRef.current = true;
-            saveLap(currentLapFramesRef.current, currentLapNumberRef.current).finally(() => {
-              savingLapRef.current = false;
-            });
-          }
           return;
         }
 
         if (message.type === 'telemetry') {
-          console.log('Telemetry message, paused:', isPausedRef.current);
-          
           if (isPausedRef.current) {
-            console.log('Skipping telemetry - session is paused');
             return;
           }
           
           const frame: TelemetryFrame = message.data;
 
-          // Detect lap change: lapTime resets to a small value (new lap started)
-          const isNewLap = frame.lapTime < lastLapTimeRef.current && lastLapTimeRef.current > 1000;
-          
-          if (isNewLap) {
-            if (!seenLapBoundaryRef.current && session?.source === 'demo') {
-              // First boundary since connecting to a demo session — the frames
-              // collected so far are a partial lap (we joined mid-playback).
-              // Discard them so only complete laps get saved.
-              console.log(`Demo: discarding partial first lap (${currentLapFramesRef.current.length} frames)`);
-              seenLapBoundaryRef.current = true;
-
-              // Reset to lap 1 with the new frame
-              currentLapNumberRef.current = 1;
-              currentLapFramesRef.current = [frame];
-
-              if (isMountedRef.current) {
-                setCurrentLapFrames([frame]);
-                setCurrentLapNumber(1);
-              }
-
-              lastUpdateTimeRef.current = Date.now();
-            } else {
-              seenLapBoundaryRef.current = true;
-              // Lap boundary detected and we have a complete lap — save it
-              if (currentLapFramesRef.current.length > 0) {
-                console.log(`Lap ${currentLapNumberRef.current} completed! ${currentLapFramesRef.current.length} frames`);
-                
-                if (!savingLapRef.current) {
-                  savingLapRef.current = true;
-                  const lapToSave = currentLapFramesRef.current;
-                  const lapNum = currentLapNumberRef.current;
-                  
-                  saveLap(lapToSave, lapNum).finally(() => {
-                    savingLapRef.current = false;
-                  });
-                }
-              }
-              
-              // Start new lap
-              const nextLapNumber = currentLapNumberRef.current + 1;
-              currentLapNumberRef.current = nextLapNumber;
-              currentLapFramesRef.current = [frame];
-              
-              if (isMountedRef.current) {
-                setCurrentLapFrames([frame]);
-                setCurrentLapNumber(nextLapNumber);
-              }
-              
-              lastUpdateTimeRef.current = Date.now();
-            }
-          } else {
-            // Same lap, add frame
-            currentLapFramesRef.current = [...currentLapFramesRef.current, frame];
-            
-            // Throttle state updates to 15 FPS (every ~67ms) to reduce re-renders
-            // But always update on first frame to ensure UI shows data immediately
-            const now = Date.now();
-            const isFirstFrame = currentLapFramesRef.current.length === 1;
-            if ((isFirstFrame || now - lastUpdateTimeRef.current >= 67) && isMountedRef.current) {
-              setCurrentLapFrames([...currentLapFramesRef.current]);
-              lastUpdateTimeRef.current = now;
-            }
+          const frameLapNumber = frame.lapNumber;
+          if (typeof frameLapNumber === 'number') {
+            observeFrameLapNumber(sessionId, frameLapNumber);
           }
 
-          lastLapTimeRef.current = frame.lapTime;
+          const shouldStartNewLap =
+            typeof frameLapNumber === 'number' && frameLapNumber !== currentLapNumberRef.current;
+
+          if (shouldStartNewLap) {
+            currentLapNumberRef.current = frameLapNumber;
+            currentLapFramesRef.current = [frame];
+
+            if (isMountedRef.current) {
+              setCurrentLapNumber(frameLapNumber);
+              setCurrentLapFrames([frame]);
+            }
+
+            lastUpdateTimeRef.current = Date.now();
+            return;
+          }
+
+          currentLapFramesRef.current.push(frame);
+
+          const now = Date.now();
+          const isFirstFrame = currentLapFramesRef.current.length === 1;
+          if ((isFirstFrame || now - lastUpdateTimeRef.current >= 67) && isMountedRef.current) {
+            // Cap the display window to avoid O(n) growth in React state over long laps.
+            const buf = currentLapFramesRef.current;
+            const LIVE_WINDOW = 2000;
+            setCurrentLapFrames(buf.length > LIVE_WINDOW ? buf.slice(-LIVE_WINDOW) : [...buf]);
+            lastUpdateTimeRef.current = now;
+          }
         }
       } catch (error) {
         console.error('Error handling decoded message:', error);
@@ -562,50 +517,6 @@ export default function SessionPage() {
     };
   }
 
-  async function saveLap(frames: TelemetryFrame[], lapNumber: number) {
-    if (frames.length === 0) {
-      console.warn('No frames to save');
-      return;
-    }
-
-    console.log(`Saving lap ${lapNumber} with ${frames.length} frames to database...`);
-
-    try {
-      const savedLap = await saveLapMutation.mutateAsync({ frames, lapNumber });
-      console.log('Lap saved successfully:', savedLap);
-
-      // Update session state directly instead of fetching
-      // This prevents cascading re-renders
-      if (isMountedRef.current && session) {
-        setSession(prev => {
-          if (!prev) return prev;
-          
-          // Check if lap already exists to prevent duplicates
-          const lapExists = prev.laps?.some(lap => lap.lapNumber === savedLap.lapNumber);
-          if (lapExists) {
-            console.log(`Lap ${savedLap.lapNumber} already in session, skipping duplicate`);
-            return prev;
-          }
-          
-          return {
-            ...prev,
-            laps: [...(prev.laps || []), savedLap],
-          };
-        });
-      }
-
-      // Keep query cache in sync too.
-      queryClient.setQueryData(queryKeys.sessionDetail(sessionId), (prev: Session | undefined) => {
-        if (!prev) return prev;
-        const lapExists = prev.laps?.some((lap) => lap.lapNumber === savedLap.lapNumber);
-        if (lapExists) return prev;
-        return { ...prev, laps: [...(prev.laps || []), savedLap] };
-      });
-    } catch (error) {
-      console.error('Error saving lap:', error);
-    }
-  }
-
   async function startSession() {
     try {
       const updatedSession = await startSessionMutation.mutateAsync();
@@ -616,13 +527,24 @@ export default function SessionPage() {
       setCurrentLapFrames([]);
       currentLapNumberRef.current = 1;
       setCurrentLapNumber(1);
-      lastLapTimeRef.current = 0;
       lastUpdateTimeRef.current = 0;
-      seenLapBoundaryRef.current = false;
 
       // WebSocket will connect automatically via useEffect when session.started becomes true
     } catch (error) {
       console.error('Error starting session:', error);
+    }
+  }
+
+  async function deleteSession() {
+    const confirmed = window.confirm('Delete this session? This cannot be undone.');
+    if (!confirmed) return;
+
+    const returnTo = session?.event?.id ? `/event/${session.event.id}` : '/';
+    router.replace(returnTo);
+    try {
+      deleteSessionMutation.mutate();
+    } catch (error) {
+      console.error('Error deleting session:', error);
     }
   }
 
@@ -669,7 +591,6 @@ export default function SessionPage() {
       // Reset current lap frames and lapTime tracking
       currentLapFramesRef.current = [];
       setCurrentLapFrames([]);
-      lastLapTimeRef.current = 0;
       
       // Sync the ref with current state
       currentLapNumberRef.current = currentLapNumber;
@@ -755,19 +676,21 @@ export default function SessionPage() {
         wsRef.current = null;
       }
 
-      // Save current lap in background (don't wait for it)
-      if (currentLapFrames.length > 0) {
-        saveLap(currentLapFrames, currentLapNumberRef.current).catch(err => {
-          console.error('Error saving final lap:', err);
-        });
-      }
-
       // Update session status
       await patchSessionMutation.mutateAsync({ status: 'archived' });
 
+      // Invalidate immediately, then retry after a delay so the RisingWave
+      // JDBC sink has time to commit any remaining laps to Postgres.
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessionDetail(sessionId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.sessionDetail(sessionId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
+      }, 2000);
+
       // Navigate back to event page (session list)
-      if (session?.eventId) {
-        router.push(`/event/${session.eventId}`);
+      if (session?.event?.id) {
+        router.push(`/event/${session.event.id}`);
       } else {
         router.push('/');
       }
@@ -814,7 +737,7 @@ export default function SessionPage() {
               {session.event && (
                 <Breadcrumbs 
                   items={[
-                    { label: session.event.name, href: `/event/${session.eventId}` },
+                    { label: session.event.name, href: `/event/${session.event.id}` },
                     { label: session.name, href: `/session/${session.id}` },
                   ]}
                 />
@@ -829,6 +752,9 @@ export default function SessionPage() {
                   <Badge variant="secondary">Archived</Badge>
                 )}
                 <Badge variant="outline">{session.source}</Badge>
+                {session.status === 'active' && (
+                  <Badge variant="outline">Lap {currentLapNumber}</Badge>
+                )}
               </div>
               
               {/* Session Tags */}
@@ -857,7 +783,7 @@ export default function SessionPage() {
                 ) : (
                   <div className="flex gap-1">
                     <div className="flex flex-wrap gap-1">
-                      {SESSION_TAGS.map((tag) => (
+                      {DEFAULT_SESSION_TAGS.map((tag) => (
                         <Badge
                           key={tag}
                           variant={sessionTags.includes(tag) ? "default" : "outline"}
@@ -928,6 +854,19 @@ export default function SessionPage() {
                 </Button>
               </div>
             )}
+
+            {session.status !== 'active' && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="destructive"
+                  onClick={deleteSession}
+                  className="gap-2"
+                  disabled={deleteSessionMutation.isPending}
+                >
+                  Delete Session
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -944,18 +883,17 @@ export default function SessionPage() {
                     <div className="flex items-start gap-3">
                       <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
                       <div>
-                        <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                          Session Not Started
-                        </h3>
+                        <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Session Not Started</h3>
                         <p className="text-sm text-blue-700 dark:text-blue-300">
-                          This session has been pre-configured but telemetry collection hasn't started yet. 
-                          Click the <strong>"Start Session"</strong> button above to begin collecting telemetry data.
+                          This session has been pre-configured but telemetry collection hasn&apos;t started yet.
+                          Click the <strong>&quot;Start Session&quot;</strong> button above to begin collecting telemetry data.
                         </p>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               )}
+
               {session.started && analysisLayout && (
                 <TelemetryDataPanel
                   context="live"
@@ -969,56 +907,91 @@ export default function SessionPage() {
             </div>
           )}
 
-          {/* Lap Archive */}
+          {/* Completed Laps */}
           <div className={session.status === 'active' ? 'space-y-4' : 'w-full max-w-6xl mx-auto'}>
             <Card>
               <CardHeader>
                 <CardTitle>Completed Laps</CardTitle>
               </CardHeader>
               <CardContent>
-                {session.laps.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    No laps completed yet
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {session.laps.map((lap) => {
-                      const lapTags = lap.tags ? JSON.parse(lap.tags) : [];
-                      return (
-                        <Link 
-                          key={lap.id} 
-                          href={`/lap/${lap.id}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          onClick={() => {
-                            // Mark that this lap was opened in a new tab (use localStorage for cross-tab)
-                            localStorage.setItem(`lap-${lap.id}-opened-in-tab`, 'true');
-                          }}
-                        >
-                          <div className="p-3 rounded-lg border hover:bg-accent transition-colors cursor-pointer">
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold">Lap {lap.lapNumber}</span>
-                              {lap.analyzed && (
-                                <Badge variant="secondary" className="text-xs">
-                                  Analyzed
-                                </Badge>
+                {(() => {
+                  const isLive = session.status === 'active';
+                  const storeState = liveSessionState;
+                  const storeCompletedLapNumbers = storeState?.completedLapNumbers ?? [];
+                  const laps = sessionLapsQuery.data?.laps ?? [];
+
+                  const lapsByNumber = new Map<number, typeof laps[number]>();
+                  for (const lap of laps) {
+                    lapsByNumber.set(lap.lapNumber, lap);
+                  }
+
+                  // For live sessions: use the real-time store.
+                  // For archived sessions: union DB and store so that stubs
+                  // created for individual laps don't hide the rest (the JDBC
+                  // sink may still be catching up on the remaining laps).
+                  const listLapNumbers = isLive
+                    ? storeCompletedLapNumbers
+                    : Array.from(new Set([
+                        ...laps.map((l) => l.lapNumber),
+                        ...storeCompletedLapNumbers,
+                      ])).sort((a, b) => a - b);
+
+                  // Build a lapTime lookup from dbLapSummaries for store-fallback rows.
+                  const storeLapTimeByNumber = new Map<number, number | null>();
+                  for (const s of storeState?.dbLapSummaries ?? []) {
+                    storeLapTimeByNumber.set(s.lapNumber, s.lapTime ?? null);
+                  }
+
+                  if (listLapNumbers.length === 0) {
+                    return (
+                      <div className="text-sm text-muted-foreground">
+                        No completed laps yet.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-2">
+                      {listLapNumbers.map((lapNumber) => {
+                        const persisted = lapsByNumber.get(lapNumber);
+                        const lapTime = persisted?.lapTime ?? storeLapTimeByNumber.get(lapNumber) ?? null;
+                        const lapTags = persisted?.tags ? JSON.parse(persisted.tags) : [];
+
+                        const lapId = persisted?.id;
+                        return (
+                          <Link
+                            key={lapNumber}
+                            href={lapId ? `/lap/${lapId}` : '#'}
+                            className="block"
+                          >
+                            <div className="p-3 rounded-lg border hover:bg-accent transition-colors cursor-pointer">
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold">Lap {lapNumber}</span>
+                                <div className="flex items-center gap-2">
+                                  {persisted?.analyzed && (
+                                    <Badge variant="secondary" className="text-xs">Analyzed</Badge>
+                                  )}
+                                  <span className="text-sm text-muted-foreground">
+                                    {lapTime != null ? formatLapTime(lapTime) : isLive ? 'Live' : '—'}
+                                  </span>
+                                </div>
+                              </div>
+                              {lapTags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {lapTags.map((tag: string) => (
+                                    <Badge key={tag} variant="outline" className="text-xs">
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                </div>
                               )}
                             </div>
-                            {lapTags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-2">
-                                {lapTags.map((tag: string) => (
-                                  <Badge key={tag} variant="outline" className="text-xs">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </div>

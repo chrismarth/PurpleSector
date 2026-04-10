@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useContext } from 'react';
 import { ConfigurableTelemetryChart } from './ConfigurableTelemetryChart';
 import type { TelemetryFrame } from '@/types/telemetry';
 import { type PlotConfig } from '@/types/plotConfig';
 import { RAW_CHANNELS, MathTelemetryChannel } from '@purplesector/telemetry';
+import { TelemetryHoverContext } from '@purplesector/plugin-api';
 
 const DEFAULT_CONFIG: PlotConfig = {
   id: `plot_default`,
@@ -30,8 +31,6 @@ const DEFAULT_CONFIG: PlotConfig = {
 interface SimpleTelemetryPlotPanelProps {
   data: TelemetryFrame[];
   compareData?: TelemetryFrame[];
-  syncedHoverValue?: number | null;
-  onHoverChange?: (value: number | null) => void;
   // Optional initial plot configuration (overrides the default Throttle & Brake).
   initialConfig?: PlotConfig;
   // Called when the plot title changes so an outer toolbar can reflect it.
@@ -48,14 +47,15 @@ interface SimpleTelemetryPlotPanelProps {
 export function SimpleTelemetryPlotPanel({
   data,
   compareData,
-  syncedHoverValue,
-  onHoverChange,
   initialConfig,
   onTitleChange,
   onRegisterActions,
   mathChannels = [],
   height,
 }: SimpleTelemetryPlotPanelProps) {
+  // Read hover state from context - this allows the panel to re-render on hover
+  // without requiring the parent AnalysisPanelGrid to re-render the provider
+  const { hoverIndex: syncedHoverIndex, setHoverIndex: onHoverChange } = useContext(TelemetryHoverContext);
   const [config, setConfig] = useState<PlotConfig>(
     initialConfig ?? { ...DEFAULT_CONFIG, id: `plot_${Date.now()}` },
   );
@@ -121,8 +121,6 @@ export function SimpleTelemetryPlotPanel({
       compareData={compareData}
       config={config}
       onConfigChange={handleConfigChange}
-      syncedHoverValue={syncedHoverValue}
-      onHoverChange={onHoverChange}
       externalResetZoomToken={resetZoomToken}
       externalOpenConfigToken={openConfigToken}
       mathChannels={mathChannels}

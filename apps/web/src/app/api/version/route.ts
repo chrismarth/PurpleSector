@@ -1,20 +1,7 @@
 import { NextResponse } from 'next/server';
-import { readFileSync } from 'fs';
-import path from 'path';
-
-function readRootPackageVersion(): string {
-  try {
-    const pkgPath = path.join(process.cwd(), 'package.json');
-    const raw = readFileSync(pkgPath, 'utf8');
-    const pkg = JSON.parse(raw) as { version?: string };
-    return pkg.version || 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
 
 export async function GET() {
-  const version = readRootPackageVersion();
+  const version = process.env.PURPLESECTOR_VERSION || process.env.npm_package_version || 'unknown';
 
   return NextResponse.json({
     frontend: {

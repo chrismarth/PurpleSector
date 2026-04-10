@@ -28,7 +28,7 @@ export async function PUT(
       );
     }
 
-    const updateResult = await (prisma as any).mathChannel.updateMany({
+    const updateResult = await prisma.mathChannel.updateMany({
       where: { id, userId },
       data: {
         label,
@@ -53,10 +53,10 @@ export async function PUT(
       inputs: JSON.stringify(inputs),
     });
 
-    const mathChannel = await (prisma as any).mathChannel.findFirst({ where: { id, userId } });
+    const mathChannel = await prisma.mathChannel.findFirst({ where: { id, userId } });
 
     // Get all channels to determine index for color
-    const allChannels = await (prisma as any).mathChannel.findMany({
+    const allChannels = await prisma.mathChannel.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
@@ -70,15 +70,15 @@ export async function PUT(
     const defaultColor = MATH_CHANNEL_COLORS[channelIndex % MATH_CHANNEL_COLORS.length];
     
     const channel: MathTelemetryChannel = {
-      id: mathChannel.id,
-      label: mathChannel.label,
-      unit: mathChannel.unit,
+      id: mathChannel!.id,
+      label: mathChannel!.label,
+      unit: mathChannel!.unit,
       kind: 'math',
       isTimeAxis: false,
-      expression: mathChannel.expression,
-      inputs: JSON.parse(mathChannel.inputs) as MathChannelInput[],
-      validated: mathChannel.validated,
-      comment: mathChannel.comment ?? undefined,
+      expression: mathChannel!.expression,
+      inputs: JSON.parse(mathChannel!.inputs) as MathChannelInput[],
+      validated: mathChannel!.validated,
+      comment: mathChannel!.comment ?? undefined,
       defaultColor,
     };
 
@@ -107,7 +107,7 @@ export async function DELETE(
 
     const { id } = params;
 
-    const result = await (prisma as any).mathChannel.deleteMany({
+    const result = await prisma.mathChannel.deleteMany({
       where: { id, userId },
     });
 

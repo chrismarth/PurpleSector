@@ -23,10 +23,7 @@ export interface AnalysisPanelProps {
   panelId?: string;
   // Optional per-panel state from the layout definition.
   panelState?: unknown;
-  // Optional cross-panel hover synchronization value (e.g. time in seconds).
-  syncedHoverValue?: number | null;
-  // Called by a panel when its local hover changes so the host can sync others.
-  onHoverChange?: (value: number | null) => void;
+  // Note: hover synchronization is now handled via TelemetryHoverContext
   // Math channels available for plotting
   mathChannels?: MathTelemetryChannel[];
 }
