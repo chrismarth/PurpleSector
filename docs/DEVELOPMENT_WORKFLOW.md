@@ -18,10 +18,10 @@
 ./scripts/rebuild-services.sh all
 ```
 
-**For PM2 services (Next.js, Demo Replay):**
+**For PM2 services (Vite dev server, Demo Replay):**
 ```bash
 # Restart specific service
-npx pm2 restart nextjs-dev
+npx pm2 restart vite-dev
 npx pm2 restart demo-replay
 
 # Or restart all PM2 services

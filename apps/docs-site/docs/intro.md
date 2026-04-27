@@ -20,16 +20,16 @@ Purple Sector is an AI-powered telemetry analysis platform for Assetto Corsa and
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│                    Browser (Next.js App)                     │
+│                Browser (React + Vite SPA)                   │
 │  ┌──────────┐  ┌────────────┐  ┌──────────┐  ┌───────────┐ │
 │  │ Toolbar   │  │  Nav Pane   │  │ Content  │  │  Agent    │ │
 │  │ Pane      │  │ (Events /   │  │ Pane     │  │  Panel    │ │
 │  │           │  │  Vehicles)  │  │ (Tabs)   │  │  (Chat)   │ │
 │  └──────────┘  └────────────┘  └──────────┘  └───────────┘ │
 └──────────────────────┬──────────────────────────────────────┘
-                       │  REST API + WebSocket
+                       │  REST API + WebSocket (Inertia.js)
 ┌──────────────────────▼──────────────────────────────────────┐
-│                  Next.js Backend (API Routes)                │
+│                Django Backend (ASGI)                         │
 │         Auth · Events · Sessions · Laps · Vehicles           │
 │         Analysis Layouts · Plot Layouts · Agent Chat          │
 │         Plugin API Route Dispatcher                          │
@@ -38,8 +38,8 @@ Purple Sector is an AI-powered telemetry analysis platform for Assetto Corsa and
           ┌────────────┼────────────┐
           ▼            ▼            ▼
    ┌────────────┐ ┌────────────┐ ┌──────────────┐
-   │  SQLite /   │ │  Redpanda  │ │  OpenAI API  │
-   │  PostgreSQL │ │ + RisingWave│ │  (GPT-4)    │
+   │ PostgreSQL │ │  Redpanda  │ │  OpenAI API  │
+   │             │ │ + RisingWave│ │  (GPT-4)    │
    └────────────┘ └────┬───────┘ └──────────────┘
                        │
         ┌──────────────┼───────────────────────────────┐

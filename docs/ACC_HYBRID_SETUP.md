@@ -52,7 +52,7 @@ docker compose -f docker-compose.dev.yml up -d
 
 Wait for the WS server container to be healthy.
 
-#### Terminal 2: Next.js Frontend
+#### Terminal 2: Django + Vite Frontend
 
 ```bash
 npm run dev

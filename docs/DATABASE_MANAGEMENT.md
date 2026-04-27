@@ -47,7 +47,7 @@ This will:
 
 After resetting the database:
 1. Hard refresh: `Ctrl+Shift+R` (Linux/Windows) or `Cmd+Shift+R` (Mac)
-2. Or clear `.next/` cache: `rm -rf .next/`
+2. Or clear Vite cache: `rm -rf packages/web-core/dist/`
 3. Restart dev server
 
 ## Prevention Strategies
@@ -70,8 +70,8 @@ When starting fresh:
 # 1. Reset database
 npm run db:reset
 
-# 2. Clear Next.js cache
-rm -rf .next/
+# 2. Clear Vite cache
+rm -rf packages/web-core/dist/
 
 # 3. Start servers
 npm run dev          # Terminal 1
@@ -144,7 +144,7 @@ npm run dev
 1. **Start Clean:**
    ```bash
    npm run db:reset
-   rm -rf .next/
+   rm -rf packages/web-core/dist/
    ```
 
 2. **Start Services:**
@@ -204,12 +204,12 @@ npm run db:push       # Push schema changes
 npm run db:studio     # Open Prisma Studio
 
 # Development
-npm run dev           # Start Next.js
+npm run dev           # Start Django + Vite dev server
 # WebSocket server runs via Docker Compose (ps-ws-server container)
 cd rust && cargo run -p ps-tray-app  # Start telemetry capture (select sim type)
 
 # Cleanup
-rm -rf .next/         # Clear Next.js cache
+rm -rf packages/web-core/dist/         # Clear Vite cache
 rm -f prisma/dev.db   # Delete database
 ```
 

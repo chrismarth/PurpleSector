@@ -7,7 +7,7 @@ Purple Sector uses an Nx monorepo to organize the web app, desktop app, document
 ```text
 PurpleSector/
 ├── apps/
-│   ├── web/                          # Next.js app (frontend + API routes)
+│   ├── web/                          # Django web app (backend API + serves React SPA)
 │   ├── desktop/                      # Tauri desktop app wrapping the web app
 │   │   └── src-tauri/                # Tauri config & Rust side
 │   ├── docs-site/                    # Docusaurus documentation site
@@ -21,32 +21,21 @@ PurpleSector/
 │   └── Dockerfile.ws-server          # Docker build for the WS server
 │
 ├── packages/                         # Shared packages
-│   ├── core/                         # @purplesector/core — domain types (TelemetryFrame, etc.)
-│   ├── telemetry/                    # @purplesector/telemetry — parsing & helpers, MathTelemetryChannel
-│   ├── config/                       # @purplesector/config — configuration utilities
-│   ├── logger/                       # @purplesector/logger — structured logging
-│   ├── proto/                        # @purplesector/proto — Protobuf helpers + telemetry.proto
-│   ├── db-base/                      # @purplesector/db-base — DB interfaces
-│   ├── db-prisma/                    # @purplesector/db-prisma — Prisma implementation + schema
+│   ├── proto/                        # @purplesector/proto — Protobuf types + telemetry.proto
+│   ├── web-telemetry/                # @purplesector/web-telemetry — parsing & helpers, MathTelemetryChannel
 │   ├── web-charts/                   # @purplesector/web-charts — chart components (uPlot)
 │   │                                 #   SimpleTelemetryPlotPanel, ConfigurableTelemetryChart
 │   │
+│   ├── web-core/                     # @purplesector/web-core — React SPA core (pages, components, stores)
 │   ├── plugin-api/                   # @purplesector/plugin-api — plugin type definitions
 │   │                                 #   PluginManifest, PluginClientContext, PluginServerContext,
 │   │                                 #   AnalysisPanelProvider, GlobalPanelRegistration,
 │   │                                 #   NavTabRegistration, ContentTabRegistration, etc.
-│   ├── plugin-registry/              # @purplesector/plugin-registry — central loader & accessors
-│   │                                 #   loadClientPlugins(), loadServerPlugins(), plugins.config.ts
-│   ├── plugin-core-lap-telemetry/    # @purplesector/plugin-core-lap-telemetry — telemetry plot panels
-│   ├── plugin-vehicles/              # @purplesector/plugin-vehicles — vehicle management UI
 │   ├── plugin-agent/                 # @purplesector/plugin-agent — AI agent (premium tier)
 │   │                                 #   Split entry: plugin.ts (client), plugin.server.ts (server)
 │   │                                 #   Subpath export: @purplesector/plugin-agent/server
-│   │
-│   ├── lap-analysis-base/            # @purplesector/lap-analysis-base — LapAnalyzer interface
-│   ├── lap-analysis-simple/          # @purplesector/lap-analysis-simple — single-call analyzer
-│   ├── lap-analysis-langgraph/       # @purplesector/lap-analysis-langgraph — agentic DAG analyzer
-│   └── lap-analysis-factory/         # @purplesector/lap-analysis-factory — createAnalyzer() factory
+│   ├── plugin-core-lap-telemetry/    # @purplesector/plugin-core-lap-telemetry — telemetry plot panels
+│   └── plugin-vehicles/              # @purplesector/plugin-vehicles — vehicle management UI
 │
 ├── scripts/                          # Operational scripts
 │   ├── dev-start.sh / dev-stop.sh    # One-command dev environment
@@ -56,7 +45,7 @@ PurpleSector/
 ├── docker-compose.dev.yml            # Full dev infrastructure (Redpanda, RisingWave, Redis, etc.)
 ├── ecosystem.config.js               # PM2 config (production)
 ├── ecosystem.dev.config.js           # PM2 config (development)
-├── next.config.mjs                   # Next.js configuration
+├── vite.config.ts                    # Vite configuration (in packages/web-core/)
 ├── nx.json                           # Nx workspace configuration
 ├── package.json                      # Root package.json with scripts
 └── tsconfig.json                     # Root TypeScript configuration
@@ -66,13 +55,24 @@ PurpleSector/
 
 ### `apps/web/`
 
-The Next.js application — both the React frontend and the API routes. Key subdirectories:
+The Django web application — serves the React SPA via Inertia.js and provides REST API endpoints. Key subdirectories:
 
-- `src/app/` — Next.js App Router pages and API routes.
-- `src/components/app-shell/` — App shell components (AppShell, NavPane, ContentPane, ToolbarPane, etc.).
+- `purplesector/` — Django app with models, views, URLs, and middleware.
+- `templates/` — Django templates for Inertia.js rendering.
+- `static/` — Static files served by Django.
+- `requirements.txt` — Python dependencies.
+- `asgi.py` — ASGI application entry point.
+
+### `packages/web-core/`
+
+The React SPA core — contains all the frontend pages, components, and stores. Key subdirectories:
+
+- `src/pages/` — React page components (Home, Sessions, Laps, etc.).
 - `src/components/` — Shared UI components (AuthProvider, AnalysisPanelGrid, dialogs, etc.).
-- `src/plugins/index.ts` — Client-side plugin loader.
-- `src/lib/` — Server utilities (auth, plugin-server loader, API auth helpers).
+- `src/stores/` — Zustand state stores.
+- `src/lib/` — Frontend utilities and helpers.
+- `vite.config.ts` — Vite build configuration.
+- `src/inertia.tsx` — Inertia.js app entry point.
 
 ### `packages/plugin-api/`
 
