@@ -2,32 +2,37 @@
 
 ## System Overview
 
-Purple Sector is a full-stack telemetry analysis application built with Next.js, featuring real-time data streaming, AI-powered analysis, and an interactive coaching interface.
+Purple Sector is a full-stack motorsport telemetry analysis platform. It combines a React/Vite frontend served by a Django backend (Inertia.js) with a real-time stream processing pipeline and an AI-powered coaching agent.
 
 ## Technology Stack
 
 ### Frontend
-- **Next.js 14** - React framework with App Router
-- **React 18** - UI library
-- **TypeScript** - Type safety
-- **TailwindCSS** - Styling
-- **shadcn/ui** - UI component library
-- **Recharts** - Data visualization
-- **Lucide React** - Icons
+- **React 18** + **Vite** — SPA served via Inertia.js (no SSR)
+- **TypeScript** — type safety throughout
+- **TailwindCSS** + **shadcn/ui** — styling and components
+- **Custom web-charts** — telemetry plot panels (canvas-based)
+- **Lucide React** — icons
 
 ### Backend
-- **Next.js API Routes** - REST API endpoints
-- **Prisma** - ORM for database access
-- **SQLite** - Local database (development)
-- **WebSocket (ws)** - Real-time communication
+- **Django 5** + **Inertia-Django** — serves React SPA and REST API
+- **uvicorn** — ASGI server
+- **Django ORM** + **psycopg2** — database access (Postgres)
+- **LangChain + LangGraph** — AI agent runtime (optional `[ai]` extras)
+- **OpenAI GPT-4** — language model for agent + lap analysis
 
-### Services
-- **Node.js** - Telemetry collector & WebSocket server
-- **UDP Socket** - Assetto Corsa telemetry receiver
+### Telemetry Pipeline
+- **Rust (ps-grpc-gateway)** — gRPC ingress, forwards to Redpanda
+- **Redpanda** — Kafka-compatible message buffer
+- **RisingWave** — stream processing, materialized views, Redis sinks
+- **Redis** — live telemetry state (pub/sub)
+- **WebSocket server (Node.js)** — Redis → WebSocket → browser
+- **MinIO** — S3-compatible storage for Iceberg tables
+- **Trino** — semantic query layer over Iceberg + Redis
+- **LakeKeeper** — REST catalog for Iceberg
 
-### AI/ML
-- **OpenAI GPT-4** - Lap analysis and coaching
-- **Vercel AI SDK** - AI integration utilities
+### Database
+- **PostgreSQL 16** — single database for all app data
+- **Prisma** — ORM for Next.js-era migrations (transitional)
 
 ## Architecture Diagram
 
@@ -35,49 +40,62 @@ Purple Sector is a full-stack telemetry analysis application built with Next.js,
 ┌─────────────────────────────────────────────────────────────────┐
 │                        CLIENT LAYER                              │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │              Next.js Frontend (React)                     │   │
-│  │  • Session Management UI                                  │   │
-│  │  • Real-time Telemetry Charts (Recharts)                 │   │
-│  │  • Lap Analysis Dashboard                                │   │
-│  │  • AI Chat Interface                                     │   │
+│  │              React 18 + Vite SPA                          │   │
+│  │  • Session / Event / Vehicle Management UI                │   │
+│  │  • Real-time Telemetry Charts (canvas)                    │   │
+│  │  • Lap Analysis Dashboard                                 │   │
+│  │  • AI Agent Chat Panel (LangGraph)                        │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └────────────────────────┬────────────────────────────────────────┘
-                         │
-                         │ HTTP/REST + WebSocket
-                         │
+                         │  Inertia.js + REST (HTTP)
+                         │  WebSocket (ws://localhost:8080)
 ┌────────────────────────┴────────────────────────────────────────┐
 │                     APPLICATION LAYER                            │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │              Next.js Backend (API Routes)                 │   │
-│  │  • /api/sessions - Session CRUD                          │   │
-│  │  • /api/laps - Lap management                            │   │
-│  │  • /api/laps/[id]/analyze - AI analysis                  │   │
-│  │  • /api/chat - AI coaching chat                          │   │
+│  │        Django 5 + uvicorn  (:8000)                        │   │
+│  │  • /api/events, /api/sessions, /api/laps                  │   │
+│  │  • /api/vehicles                                          │   │
+│  │  • /api/analysis-layouts                                  │   │
+│  │  • /api/agent/chat  (LangGraph AI agent)                  │   │
+│  │  • /api/agent/conversations                               │   │
+│  │  • Inertia page routes (SPA shell)                        │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └────────────────────────┬────────────────────────────────────────┘
-                         │
-                         │ Prisma ORM
-                         │
+                         │  Django ORM (psycopg2)
 ┌────────────────────────┴────────────────────────────────────────┐
 │                      DATA LAYER                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │                   SQLite Database                         │   │
-│  │  • sessions - Practice sessions                          │   │
-│  │  • laps - Completed laps with telemetry                  │   │
-│  │  • chatMessages - AI coaching conversations              │   │
+│  │                  PostgreSQL 16  (:5432)                   │   │
+│  │  • events, sessions, laps, vehicles                       │   │
+│  │  • agent_conversations, agent_messages                    │   │
+│  │  • saved_analysis_layouts, run_plans                      │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TELEMETRY PIPELINE                            │
 │                                                                  │
-│  ┌──────────────┐   UDP    ┌──────────────┐   WS   ┌────────┐  │
-│  │  Assetto     │ ───────> │  Telemetry   │ ─────> │  WS    │  │
-│  │  Corsa       │  :9996   │  Collector   │        │ Server │  │
-│  │  (Game)      │          │  (Node.js)   │        │        │  │
-│  └──────────────┘          └──────────────┘        └────┬───┘  │
-│                                                          │       │
-│                                                          │       │
+│  ┌──────────────┐  gRPC  ┌──────────────┐  Kafka  ┌─────────┐  │
+│  │  AC / ACC    │ ─────> │  ps-grpc-    │ ──────> │Redpanda │  │
+│  │  (Game)      │ :50051 │  gateway     │  :9092  │         │  │
+│  └──────────────┘        └──────────────┘         └────┬────┘  │
+│                                                         │        │
+│                                                    ┌────┴─────┐  │
+│                                                    │RisingWave│  │
+│                                                    │:4566     │  │
+│                                                    └────┬─────┘  │
+│                                              Redis sink │        │
+│                                                    ┌────┴─────┐  │
+│                                                    │  Redis   │  │
+│                                                    │  :6379   │  │
+│                                                    └────┬─────┘  │
+│                                               Pub/Sub  │        │
+│                                                    ┌────┴─────┐  │
+│                                                    │  WS Srv  │  │
+│                                                    │  :8080   │  │
+│                                                    └────┬─────┘  │
+│                                                         │ WS     │
+└─────────────────────────────────────────────────────────────────┘
 │                                                          v       │
 │                                                    ┌──────────┐  │
 │                                                    │ Frontend │  │
@@ -364,7 +382,7 @@ localhost:9996 - UDP telemetry receiver
 
 ### Current Limitations
 - Single WebSocket server
-- SQLite database (single-writer)
+- Single Django API instance (no clustering yet)
 - No horizontal scaling
 - In-memory telemetry buffering
 

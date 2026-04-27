@@ -7,7 +7,7 @@
 #      Redis, MinIO, Trino, Postgres) via docker-compose.dev.yml
 #   2. RisingWave schema initialization
 #   3. Demo replay binary build (if needed)
-#   4. PM2 services (Next.js frontend + demo replay)
+#   4. PM2 services (Vite frontend + Django API + demo replay)
 #
 # Usage: ./scripts/start-dev.sh
 
@@ -57,10 +57,6 @@ else
     sleep 2
   done
 
-  echo -e "${YELLOW}⏳ Pushing Prisma schema to Postgres...${NC}"
-  npm run db:push > /dev/null
-  echo -e "${GREEN}✓ Prisma schema applied${NC}"
-
   # Wait for WebSocket server
   for i in $(seq 1 15); do
     if docker exec ps-ws-server node -e "const s=require('net').connect(8080,'localhost',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))" > /dev/null 2>&1; then
@@ -72,7 +68,7 @@ else
   done
 
   echo -e "${GREEN}✓ Docker infrastructure started${NC}"
-  
+
   # Create Redpanda topics before RisingWave initialization
   echo -e "${YELLOW}⏳ Creating Redpanda topics...${NC}"
   docker exec ps-redpanda rpk topic create telemetry-batches --partitions 3 --replicas 1 || true
@@ -102,12 +98,66 @@ echo -e "${YELLOW}⏳ Applying Postgres SQL migrations...${NC}"
 ./scripts/init-postgres.sh
 echo -e "${GREEN}✓ Postgres SQL migrations applied${NC}"
 
-# ── Step 5: Database check ─────────────────────────────────────────────
-echo -e "${YELLOW}⏳ Checking database...${NC}"
-if npm run db:check > /dev/null 2>&1; then
-  echo -e "${GREEN}✓ Database is ready${NC}"
+# ── Step 3b: Django migrations ────────────────────────────────────────
+if [ -d "apps/web/.venv" ]; then
+  echo -e "${YELLOW}⏳ Running Django migrations...${NC}"
+  (cd apps/web && .venv/bin/python manage.py migrate --run-syncdb 2>&1 | tail -5)
+  echo -e "${GREEN}✓ Django migrations applied${NC}"
+
+  echo -e "${YELLOW}⏳ Seeding dev users...${NC}"
+  (cd apps/web && .venv/bin/python manage.py seed_dev_users)
+  echo -e "${GREEN}✓ Dev users ready${NC}"
+
+  # ── Step 3c: Create RisingWave sink to Postgres ────────────────────
+  # This must run AFTER Django migrations because the sink validates that
+  # the target table (laps) exists in Postgres.
+  echo -e "${YELLOW}⏳ Creating RisingWave sink to Postgres...${NC}"
+  (cd apps/web && .venv/bin/python -c "
+import psycopg2
+import time
+for i in range(10):
+    try:
+        conn = psycopg2.connect(host='localhost', port=4566, user='root', dbname='dev', connect_timeout=5)
+        break
+    except:
+        time.sleep(1)
+        if i == 9:
+            print('⚠ Could not connect to RisingWave, skipping sink creation')
+            exit(0)
+cur = conn.cursor()
+
+# Check if sink already exists
+cur.execute(\"SHOW SINKS;\")
+sinks = [r[0] for r in cur.fetchall()]
+if 'public.laps_postgres_upsert' in sinks or 'laps_postgres_upsert' in sinks:
+    print('✓ Sink already exists')
+    conn.close()
+    exit(0)
+
+# Create the sink
+try:
+    cur.execute('''
+CREATE SINK IF NOT EXISTS laps_postgres_upsert
+FROM completed_laps
+WITH (
+  connector = \"jdbc\",
+  jdbc.url = \"jdbc:postgresql://postgres:5432/purplesector\",
+  user = \"purplesector\",
+  password = \"devpassword\",
+  table.name = \"laps\",
+  type = \"append-only\",
+  force_append_only = \"true\"
+);
+''')
+    conn.commit()
+    print('✓ RisingWave sink created')
+except Exception as e:
+    print(f\"⚠ Failed to create sink: {e}\")
+conn.close()
+" 2>&1)
 else
-  echo -e "${YELLOW}⚠ Database check failed. You may need to run: npm run db:push${NC}"
+  echo -e "${YELLOW}⚠ Django venv not found at apps/web/.venv — skipping migrations${NC}"
+  echo -e "${YELLOW}  Run: cd apps/web && uv venv && uv pip install -e '.[ai]'${NC}"
 fi
 
 # ── Step 6: Build demo replay binary ───────────────────────────────────
@@ -159,7 +209,9 @@ echo "  ./scripts/stop-dev.sh            - Stop everything"
 echo "  ./scripts/stop-dev.sh --keep-docker  - Stop PM2 only"
 echo ""
 echo "🌐 Access Points:"
-echo "  Frontend:           http://localhost:3000"
+echo "  Vite dev server:    http://localhost:5173"
+echo "  Django API:         http://localhost:8000"
+echo "  Django Admin:       http://localhost:8000/admin"
 echo "  gRPC Gateway:       localhost:50051"
 echo "  Redpanda Console:   http://localhost:8090"
 echo "  RisingWave SQL:     localhost:4566"

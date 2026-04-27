@@ -1,8 +1,8 @@
 #!/bin/bash
 # Initialize Postgres with application-level SQL (triggers, functions, etc.)
-# that cannot be expressed in the Prisma schema.
+# that cannot be expressed in Django migrations.
 #
-# Run this AFTER `prisma db push` so that application tables already exist.
+# Run this AFTER `manage.py migrate` so that application tables already exist.
 # Safe to re-run: all statements use CREATE OR REPLACE / DROP IF EXISTS.
 
 set -e

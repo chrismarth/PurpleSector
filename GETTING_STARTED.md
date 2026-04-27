@@ -4,51 +4,53 @@
 
 Before you begin, make sure you have:
 
-- [ ] Node.js 18 or higher installed
+- [ ] Node.js 20 or higher installed
+- [ ] Python 3.12 or higher installed
+- [ ] [uv](https://docs.astral.sh/uv/) installed (`pip install uv`)
+- [ ] Docker + Docker Compose installed and running
 - [ ] OpenAI API key ready ([get one here](https://platform.openai.com/api-keys))
-- [ ] Terminal/command line access
-- [ ] Text editor (VS Code recommended)
 - [ ] (Optional) Assetto Corsa installed for live telemetry
 
-## 🚀 Quick Start (5 Minutes)
+## 🚀 Quick Start
 
-### Step 1: Install Everything
+### Step 1: Install Node.js dependencies
 ```bash
-npm run setup
+npm install
 ```
-This installs dependencies, creates the database, and generates demo data.
 
-### Step 2: Configure OpenAI
+### Step 2: Set up the Python API
 ```bash
-cp .env.example .env.local
+npm run api:setup
 ```
-Edit `.env.local` and add your OpenAI API key:
+This creates a virtualenv at `apps/web/.venv` and installs Django + AI dependencies.
+
+### Step 3: Configure environment
+```bash
+cp .env.example .env
+```
+Edit `.env` and set your OpenAI API key:
 ```env
 OPENAI_API_KEY=sk-your-actual-key-here
 ```
 
-### Step 3: Start the Services
-
-Open **3 terminal windows** in the project directory:
-
-**Terminal 1: Frontend & API**
+### Step 4: Start the full stack
 ```bash
-npm run dev
+./scripts/start-dev.sh
 ```
-Wait for: `✓ Ready in X.Xs`
+This starts Docker infrastructure (Postgres, Redis, Redpanda, etc.), runs Django migrations, and launches PM2 processes (Django API + demo replay).
 
-**Terminal 2: (WebSocket server starts automatically via Docker Compose)**
-
-**Terminal 3: Telemetry (optional - only for live AC)**
+### Step 5: Start the frontend (separate terminal)
 ```bash
-cd rust && cargo run -p ps-tray-app
+npm run dev:vite
 ```
-Select "Assetto Corsa" as sim type in settings.
+Wait for: `VITE ready`
 
-### Step 4: Open the App
-Open your browser to: **http://localhost:3000**
+### Step 6: Open the App
+- **App**: http://localhost:8000
+- **Django Admin**: http://localhost:8000/admin
+- **Vite dev server**: http://localhost:5173 (for hot reload)
 
-### Step 5: Create Your First Session
+### Step 7: Create Your First Session
 1. Click **"New Session"**
 2. Name it: `Test Session 1`
 3. Select: **"Demo Mode"**
@@ -125,16 +127,17 @@ docker compose -f docker-compose.dev.yml restart ws-server
 ### Problem: "Analyze Lap" doesn't work
 
 **Check:**
-- [ ] `.env.local` file exists
-- [ ] `OPENAI_API_KEY` is set correctly
+- [ ] `.env` file exists with `OPENAI_API_KEY` set
 - [ ] API key has credits available
+- [ ] Django API is running (`npx pm2 logs django-api`)
 
 **Fix:**
 ```bash
 # Verify environment variable
-cat .env.local | grep OPENAI_API_KEY
+grep OPENAI_API_KEY .env
 
-# Check Next.js terminal (Terminal 1) for errors
+# Check Django API logs
+npx pm2 logs django-api --lines 50
 ```
 
 ### Problem: No live telemetry from Assetto Corsa
@@ -166,7 +169,7 @@ lsof -i :3000
 # Kill the process
 kill -9 <PID>
 
-# Or use different ports in .env.local:
+# Or use different ports in .env:
 WS_PORT=8081
 TELEMETRY_UDP_PORT=9997
 ```
@@ -181,10 +184,11 @@ TELEMETRY_UDP_PORT=9997
 5. ✅ Chat with AI coach
 
 ### Explore the Code
-- `src/app/` - Frontend pages and API routes
-- `services/` - WebSocket and telemetry services
-- `src/components/` - React components
-- `src/lib/ai/` - AI analysis logic
+- `apps/web/src/` - React frontend (components, pages, stores)
+- `apps/web/apps/` - Django apps (events, sessions, vehicles, agent, etc.)
+- `services/` - WebSocket server (Node.js)
+- `rust/` - gRPC gateway and demo replay binary
+- `infra/` - RisingWave, Trino, Postgres SQL migrations
 
 ### Read the Documentation
 - **QUICKSTART.md** - This guide
@@ -194,23 +198,30 @@ TELEMETRY_UDP_PORT=9997
 - **README.md** - Full feature overview
 
 ### Customize & Extend
-- Modify AI prompts in `src/lib/ai/analysis.ts`
+- Modify AI agent in `apps/web/apps/agent/runtime.py`
 - Add new telemetry channels
 - Customize UI colors in `tailwind.config.ts`
 - Add new analysis metrics
 
 ## 🎯 Common Tasks
 
-### View Database
+### View Database (Prisma Studio)
 ```bash
 npm run db:studio
 ```
 Opens Prisma Studio at http://localhost:5555
 
+### View Database (Django Admin)
+Open http://localhost:8000/admin in your browser.
+
 ### Reset Database
 ```bash
-rm dev.db
-npm run db:push
+npm run db:reset
+```
+
+### Run Django Migrations
+```bash
+npm run api:migrate
 ```
 
 ### Regenerate Demo Data
@@ -219,9 +230,9 @@ npm run generate-demo
 ```
 
 ### Check Logs
-- **Frontend/API logs**: Terminal 1
-- **WebSocket logs**: Terminal 2
-- **Telemetry logs**: Terminal 3
+- **Django API logs**: `npx pm2 logs django-api`
+- **Demo replay logs**: `npx pm2 logs demo-replay`
+- **Docker logs**: `docker compose -f docker-compose.dev.yml logs -f`
 - **Browser logs**: F12 → Console tab
 
 ### Stop All Services
@@ -252,7 +263,7 @@ Press `Ctrl+C` in each terminal window
 1. **Terminal outputs** - Look for error messages
 2. **Browser console** (F12) - Check for JavaScript errors
 3. **Documentation** - SETUP.md has detailed troubleshooting
-4. **Environment variables** - Verify `.env.local` is correct
+4. **Environment variables** - Verify `.env` is correct
 
 ### Common Issues & Solutions
 
@@ -262,7 +273,7 @@ Press `Ctrl+C` in each terminal window
 | No telemetry data | Check Terminal 2 is running |
 | AI not responding | Verify OpenAI API key |
 | Database errors | Run `npm run db:push` |
-| Port conflicts | Change ports in `.env.local` |
+| Port conflicts | Change ports in `.env` |
 
 ## 🎊 Success!
 

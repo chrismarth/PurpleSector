@@ -49,8 +49,7 @@ PurpleSector/
 │   └── types/                        # TypeScript definitions
 │       └── telemetry.ts             # Data types
 ├── services/                         # Node.js services
-│   ├── telemetry-collector.js       # AC UDP listener
-│   └── websocket-server.js          # WebSocket relay
+│   └── redis-websocket-server.js    # RisingWave → Redis → WebSocket → Frontend
 ├── prisma/
 │   └── schema.prisma                # Database schema
 ├── scripts/

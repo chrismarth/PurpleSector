@@ -51,7 +51,7 @@ export function AgentPanel() {
 
   const loadConversation = useCallback(async (id: string) => {
     try {
-      const res = await fetch(`/api/plugins/agent/conversations/${id}`);
+      const res = await fetch(`/api/agent/conversations/${id}`);
       if (!res.ok) return;
       const data = await res.json();
       setConversationId(id);
@@ -91,7 +91,7 @@ export function AgentPanel() {
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      const res = await fetch('/api/plugins/agent/chat', {
+      const res = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -141,7 +141,7 @@ export function AgentPanel() {
     setExecuting(true);
 
     try {
-      const res = await fetch('/api/plugins/agent/plan/approve', {
+      const res = await fetch('/api/agent/plan/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversationId, plan }),
@@ -174,7 +174,7 @@ export function AgentPanel() {
     if (!conversationId) return;
 
     try {
-      await fetch('/api/plugins/agent/plan/reject', {
+      await fetch('/api/agent/plan/reject', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversationId }),

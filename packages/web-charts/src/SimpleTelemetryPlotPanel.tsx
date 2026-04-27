@@ -4,8 +4,8 @@ import { useState, useCallback, useMemo, useEffect, useContext } from 'react';
 import { ConfigurableTelemetryChart } from './ConfigurableTelemetryChart';
 import type { TelemetryFrame } from '@/types/telemetry';
 import { type PlotConfig } from '@/types/plotConfig';
-import { RAW_CHANNELS, MathTelemetryChannel } from '@purplesector/telemetry';
-import { TelemetryHoverContext } from '@purplesector/plugin-api';
+import { RAW_CHANNELS, MathTelemetryChannel } from '@purplesector/web-telemetry';
+import { TelemetryHoverContext } from '@purplesector/web-telemetry';
 
 const DEFAULT_CONFIG: PlotConfig = {
   id: `plot_default`,

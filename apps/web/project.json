@@ -1,18 +1,27 @@
 {
-  "name": "web",
+  "name": "api",
   "projectType": "application",
   "root": "apps/web",
-  "sourceRoot": "apps/web/src",
-  "tags": ["type:app", "scope:web"],
+  "sourceRoot": "apps/web",
+  "tags": ["type:app", "scope:api", "lang:python"],
   "targets": {
     "serve": {
-      "command": "next dev apps/web -H 0.0.0.0"
+      "command": "source $HOME/.local/bin/env && uv run python manage.py runserver 0.0.0.0:8000",
+      "options": {
+        "cwd": "apps/web"
+      }
     },
-    "build": {
-      "command": "next build apps/web"
+    "check": {
+      "command": "source $HOME/.local/bin/env && uv run python manage.py check",
+      "options": {
+        "cwd": "apps/web"
+      }
     },
-    "start": {
-      "command": "next start apps/web"
+    "migrate": {
+      "command": "source $HOME/.local/bin/env && uv run python manage.py migrate",
+      "options": {
+        "cwd": "apps/web"
+      }
     }
   }
 }

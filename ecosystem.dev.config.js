@@ -22,22 +22,50 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 module.exports = {
   apps: [
-    // Next.js Application (Development Mode)
+    // Django API (uvicorn with hot reload)
     {
-      name: 'nextjs-dev',
+      name: 'django-api',
+      script: path.join(__dirname, 'apps/web/.venv/bin/uvicorn'),
+      args: 'purplesector.asgi:application --host 0.0.0.0 --port 8000 --reload',
+      cwd: path.join(__dirname, 'apps/web'),
+      instances: 1,
+      exec_mode: 'fork',
+      watch: false,
+      interpreter: path.join(__dirname, 'apps/web/.venv/bin/python'),
+      env: {
+        DJANGO_DEBUG: 'true',
+        POSTGRES_HOST: 'localhost',
+        POSTGRES_PORT: '5432',
+        POSTGRES_DB: 'purplesector',
+        POSTGRES_USER: 'purplesector',
+        POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD || 'devpassword',
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+        TRINO_HOST: 'localhost',
+        TRINO_PORT: '8083',
+        RISINGWAVE_HOST: 'localhost',
+        RISINGWAVE_PORT: '4566',
+      },
+      error_file: path.join(__dirname, 'logs/dev-django-error.log'),
+      out_file: path.join(__dirname, 'logs/dev-django-out.log'),
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+
+    // Vite dev server for web-core (React/Inertia frontend)
+    {
+      name: 'vite-dev',
       script: 'npm',
-      args: 'run dev',
+      args: 'run dev:vite',
+      cwd: path.join(__dirname),
       instances: 1,
       exec_mode: 'fork',
       watch: false,
       max_memory_restart: '1G',
       env: {
         NODE_ENV: 'development',
-        PORT: '3000',
-        DATABASE_URL: process.env.DATABASE_URL,
       },
-      error_file: 'logs/dev-nextjs-error.log',
-      out_file: 'logs/dev-nextjs-out.log',
+      error_file: 'logs/dev-vite-error.log',
+      out_file: 'logs/dev-vite-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },

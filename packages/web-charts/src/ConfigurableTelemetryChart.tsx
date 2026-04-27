@@ -12,10 +12,10 @@ import {
   MathTelemetryChannel,
   evaluateMathChannelSeries,
   TimeSeries,
-} from '@purplesector/telemetry';
+} from '@purplesector/web-telemetry';
 import { Button } from '@/components/ui/button';
 import { PlotConfigDialog } from './PlotConfigDialog';
-import { TelemetryHoverContext } from '@purplesector/plugin-api';
+import { TelemetryHoverContext } from '@purplesector/web-telemetry';
 
 interface ConfigurableTelemetryChartProps {
   data: TelemetryFrame[];
@@ -38,7 +38,7 @@ export function ConfigurableTelemetryChart({
   config,
   onConfigChange,
   onDelete,
-  height = 250,
+  height: heightProp,
   externalResetZoomToken,
   externalOpenConfigToken,
   mathChannels = [],
@@ -47,10 +47,25 @@ export function ConfigurableTelemetryChart({
   const { hoverIndex: syncedHoverIndex, setHoverIndex: onHoverChange } = useContext(TelemetryHoverContext);
   
   const [showConfigDialog, setShowConfigDialog] = useState(false);
+  const [resetZoomToken, setResetZoomToken] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(800);
+  const [containerHeight, setContainerHeight] = useState(0);
 
   const chartRef = useRef<uPlot | null>(null);
+
+  // Compute chart height: heightProp is total component height (includes padding),
+  // containerHeight from ResizeObserver is contentRect (excludes padding).
+  let chartHeight: number;
+  if (heightProp) {
+    // heightProp includes padding (32px) + gap (12px) + legend (~28px) = 72px overhead
+    chartHeight = Math.max(heightProp - 72, 50);
+  } else if (containerHeight > 0) {
+    // contentRect excludes padding; only gap (12px) + legend (~28px) = 40px overhead
+    chartHeight = Math.max(containerHeight - 40, 50);
+  } else {
+    chartHeight = 178; // sensible default
+  }
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   // Use syncedHoverIndex directly from context - same data array means same index
@@ -101,6 +116,9 @@ export function ConfigurableTelemetryChart({
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setContainerWidth(entry.contentRect.width);
+        if (entry.contentRect.height > 0) {
+          setContainerHeight(entry.contentRect.height);
+        }
       }
     });
 
@@ -121,7 +139,7 @@ export function ConfigurableTelemetryChart({
       if (w > 0) setContainerWidth(w);
     });
     return () => cancelAnimationFrame(raf);
-  }, [height]);
+  }, [heightProp]);
 
   const getChannelValue = useCallback((frame: TelemetryFrame, channel: TelemetryChannel): number => {
     switch (channel) {
@@ -394,16 +412,7 @@ export function ConfigurableTelemetryChart({
   }, []);
 
   const resetZoom = useCallback(() => {
-    if (!chartRef.current) return;
-
-    const xVals = chartDataRef.current.uplotData[0];
-    if (!xVals || xVals.length === 0) return;
-
-    const min = xVals[0] as number;
-    const max = xVals[xVals.length - 1] as number;
-
-    chartRef.current.setScale('x', { min, max });
-    chartRef.current.setSelect({ left: 0, top: 0, width: 0, height: 0 });
+    setResetZoomToken((prev) => prev + 1);
   }, []);
 
   useEffect(() => {
@@ -493,11 +502,10 @@ export function ConfigurableTelemetryChart({
   };
 
   return (
-    <div ref={containerRef} className="p-4 space-y-3 overflow-hidden">
+    <div ref={containerRef} className="p-4 space-y-3 overflow-hidden flex flex-col" style={heightProp ? { height: `${heightProp}px` } : { flex: '1 1 0', minHeight: 0 }}>
       {config.channels.length === 0 ? (
           <div
-            className="flex items-center justify-center text-muted-foreground"
-            style={{ height: `${height}px` }}
+            className="flex items-center justify-center text-muted-foreground flex-1"
           >
             <div className="text-center">
               <p className="mb-2">No channels configured</p>
@@ -507,16 +515,17 @@ export function ConfigurableTelemetryChart({
             </div>
           </div>
         ) : (
-          <div style={{ height: `${height}px` }} className="overflow-hidden">
+          <div className="overflow-hidden flex flex-col flex-1 min-h-0">
             <UPlotChart
               data={chartData.uplotData as uPlot.AlignedData}
               series={chartData.series}
               axes={chartData.axes}
               width={containerWidth - 32}
-              height={height}
+              height={chartHeight}
               onHover={handleHover}
               syncedHoverIndex={effectiveSyncedHoverIndex}
               onReady={handleChartReady}
+              resetZoomToken={resetZoomToken}
             />
           </div>
         )}
