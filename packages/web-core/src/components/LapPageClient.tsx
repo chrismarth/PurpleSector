@@ -553,8 +553,8 @@ export function LapPageClient({ lapId }: { lapId: string }) {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
-      <header className="border-b bg-white/80 backdrop-blur-sm dark:bg-gray-900/80">
+    <div className="h-full w-full flex flex-col bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
+      <header className="border-b bg-white/80 backdrop-blur-sm dark:bg-gray-900/80 flex-shrink-0">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div>
@@ -594,11 +594,11 @@ export function LapPageClient({ lapId }: { lapId: string }) {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-4 flex-1 min-h-0 overflow-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-stretch h-full">
-          <div className="lg:col-span-2 flex flex-col gap-6">
+      <main className="container mx-auto px-4 py-4 flex-1 min-h-0 overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-stretch h-full min-h-0">
+          <div className="lg:col-span-2 flex flex-col gap-6 min-h-0 overflow-hidden">
             {analysisLayout && (
-              <div className="flex-1 flex flex-col">
+              <div className="flex-1 min-h-0 flex flex-col">
                 <TelemetryDataPanel
                   context={compareLapId ? 'lapComparison' : 'singleLap'}
                   telemetry={telemetryFrames}
@@ -633,7 +633,7 @@ export function LapPageClient({ lapId }: { lapId: string }) {
               </div>
             )}
 
-            <Card>
+            <Card className="flex-shrink-0">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
@@ -667,7 +667,7 @@ export function LapPageClient({ lapId }: { lapId: string }) {
                 </div>
               </CardHeader>
               {showLapSelector && (
-                <CardContent>
+                <CardContent className="max-h-48 overflow-y-auto">
                   <div className="space-y-2">
                     {availableLaps.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">
@@ -707,8 +707,8 @@ export function LapPageClient({ lapId }: { lapId: string }) {
             </Card>
           </div>
 
-          <div className="space-y-6 flex flex-col lg:h-full">
-            <Card>
+          <div className="space-y-6 flex flex-col min-h-0 overflow-hidden">
+            <Card className="flex-shrink-0">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
@@ -726,7 +726,7 @@ export function LapPageClient({ lapId }: { lapId: string }) {
                   )}
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="max-h-64 overflow-y-auto">
                 {!lap.analyzed && (
                   <div className="mb-4 p-3 bg-muted/50 rounded-lg space-y-3">
                     <div className="flex items-center gap-2">
@@ -820,7 +820,7 @@ export function LapPageClient({ lapId }: { lapId: string }) {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="flex-shrink-0">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Tag className="h-5 w-5" />
@@ -887,8 +887,8 @@ export function LapPageClient({ lapId }: { lapId: string }) {
               />
             )}
 
-            <Card className="flex-1 flex flex-col">
-              <CardHeader>
+            <Card className="flex-1 min-h-0 flex flex-col">
+              <CardHeader className="flex-shrink-0">
                 <CardTitle className="flex items-center gap-2">
                   <MessageSquare className="h-5 w-5" />
                   Driver Comments
@@ -900,12 +900,12 @@ export function LapPageClient({ lapId }: { lapId: string }) {
                   )}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex-1">
+              <CardContent className="flex-1 min-h-0 overflow-hidden">
                 <textarea
                   value={driverComments}
                   onChange={(e) => setDriverComments(e.target.value)}
                   placeholder="Example: Tried softer front springs. Car felt more responsive but had oversteer in Turn 3..."
-                  className="w-full h-full min-h-[150px] p-3 rounded-md border border-input bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full h-full p-3 rounded-md border border-input bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </CardContent>
             </Card>

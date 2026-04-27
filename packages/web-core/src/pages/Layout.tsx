@@ -9,6 +9,8 @@ import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/components/AuthProvider";
 import { AppShellRoot } from "@/components/app-shell/AppShellRoot";
+import { ToastProvider } from "@/components/ui/toast-provider";
+import { ToastInitializer } from "@/components/ui/toast-initializer";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +26,8 @@ export default function Layout({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AppShellRoot>{children}</AppShellRoot>
+        <ToastProvider />
+        <ToastInitializer />
       </AuthProvider>
     </QueryClientProvider>
   );

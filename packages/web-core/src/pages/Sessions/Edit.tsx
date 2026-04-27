@@ -1,6 +1,6 @@
 
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useOptimistic } from 'react';
 import { usePage, router, Link } from '@inertiajs/react';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -24,6 +24,13 @@ export default function SessionEditPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [formData, setFormData] = useState({ name: '' });
 
+  // Optimistic update for session name changes
+  const [optimisticSession, updateOptimisticSession] = useOptimistic(
+    session,
+    (state, updatedData: Partial<Session>) => 
+      state ? { ...state, ...updatedData } : null
+  );
+
   const sessionQuery = useQuery({
     queryKey: queryKeys.sessionDetail(sessionId),
     queryFn: async (): Promise<Session> => {
@@ -43,6 +50,9 @@ export default function SessionEditPage() {
 
   const updateSessionMutation = useMutation({
     mutationFn: async (payload: typeof formData) => {
+      // Apply optimistic update immediately
+      updateOptimisticSession({ name: payload.name });
+      
       return mutationJson<Session, typeof formData>(`/api/sessions/${sessionId}`, {
         method: 'PUT',
         body: payload,
@@ -54,6 +64,10 @@ export default function SessionEditPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.eventsList });
       queryClient.invalidateQueries({ queryKey: queryKeys.navEvents });
     },
+    onError: () => {
+      // Optimistic update will be automatically reverted on error
+      console.error('Failed to update session');
+    },
   });
 
   async function handleSubmit(e: React.FormEvent) {
@@ -62,7 +76,6 @@ export default function SessionEditPage() {
       const updatedSession = await updateSessionMutation.mutateAsync(formData);
       router.visit(`/event/${updatedSession.eventId}`);
     } catch (error) {
-      console.error('Error updating session:', error);
       alert('Failed to update session');
     }
   }
@@ -94,9 +107,15 @@ export default function SessionEditPage() {
     );
   }
 
+  // Use optimistic session for display
+  const displaySession = optimisticSession || session;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
-      <main className="container mx-auto px-4 py-8">
+    <>
+      <title>Edit {displaySession.name} - Purple Sector</title>
+      <meta name="description" content={`Edit session "${displaySession.name}" in Purple Sector telemetry application`} />
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
+        <main className="container mx-auto px-4 py-8">
         <Card>
           <CardHeader>
             <div className="flex items-center gap-4">
@@ -128,14 +147,15 @@ export default function SessionEditPage() {
                   <Save className="h-4 w-4" />
                   {saving ? 'Saving...' : 'Save Changes'}
                 </Button>
-                <Link href={session ? `/event/${session.eventId}` : '/'}>
+                <Link href={displaySession ? `/event/${displaySession.eventId}` : '/'}>
                   <Button type="button" variant="outline">Cancel</Button>
                 </Link>
               </div>
             </form>
           </CardContent>
         </Card>
-      </main>
-    </div>
+        </main>
+      </div>
+    </>
   );
 }

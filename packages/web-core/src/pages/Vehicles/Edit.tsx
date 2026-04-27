@@ -1,6 +1,6 @@
 
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useOptimistic } from 'react';
 import { usePage, router, Link } from '@inertiajs/react';
 import { ArrowLeft, Plus, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +20,14 @@ export default function VehicleEditPage() {
   const [formData, setFormData] = useState({ name: '', description: '', inServiceDate: '', outOfServiceDate: '' });
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  const [vehicle, setVehicle] = useState<any>(null);
+
+  // Optimistic update for vehicle changes
+  const [optimisticVehicle, updateOptimisticVehicle] = useOptimistic(
+    vehicle,
+    (state, updatedData: any) => 
+      state ? { ...state, ...updatedData } : null
+  );
 
   const vehicleQuery = useQuery({
     queryKey: queryKeys.vehicleDetail(vehicleId),
@@ -30,6 +38,7 @@ export default function VehicleEditPage() {
   useEffect(() => {
     if (!vehicleQuery.data) return;
     const data = vehicleQuery.data;
+    setVehicle(data);
     setFormData({
       name: data.name,
       description: data.description || '',
@@ -40,10 +49,19 @@ export default function VehicleEditPage() {
   }, [vehicleQuery.data]);
 
   const updateVehicleMutation = useMutation({
-    mutationFn: async () => mutationJson<any>(`/api/vehicles/${vehicleId}`, { method: 'PATCH', body: { ...formData, tags } }),
+    mutationFn: async () => {
+      // Apply optimistic update immediately
+      updateOptimisticVehicle({ ...formData, tags: JSON.stringify(tags) });
+      
+      return mutationJson<any>(`/api/vehicles/${vehicleId}`, { method: 'PATCH', body: { ...formData, tags } });
+    },
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.vehicleDetail(vehicleId), updated);
       queryClient.invalidateQueries({ queryKey: queryKeys.vehiclesList });
+    },
+    onError: () => {
+      // Optimistic update will be automatically reverted on error
+      console.error('Failed to update vehicle');
     },
   });
 
@@ -77,9 +95,15 @@ export default function VehicleEditPage() {
     );
   }
 
+  // Use optimistic vehicle for display
+  const displayVehicle = optimisticVehicle || vehicle;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
-      <main className="container mx-auto px-4 py-8">
+    <>
+      <title>Edit {displayVehicle?.name || 'Vehicle'} - Purple Sector</title>
+      <meta name="description" content={`Edit vehicle "${displayVehicle?.name || 'Vehicle'}" in Purple Sector telemetry application`} />
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
+        <main className="container mx-auto px-4 py-8">
         <Card className="max-w-2xl mx-auto">
           <CardHeader>
             <div className="flex items-center gap-4">
@@ -136,7 +160,8 @@ export default function VehicleEditPage() {
             </form>
           </CardContent>
         </Card>
-      </main>
-    </div>
+        </main>
+      </div>
+    </>
   );
 }
