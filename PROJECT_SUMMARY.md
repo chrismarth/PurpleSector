@@ -15,46 +15,45 @@ A complete, production-ready racing telemetry analysis application that connects
 - **Demo Mode** - Pre-recorded telemetry for testing without Assetto Corsa
 
 ### ✅ Technical Implementation
-- **Full-stack Next.js 14** - Modern React with App Router
+- **React + Vite SPA** - Modern frontend with Django backend
+- **Django + Inertia.js** - Serves React SPA with REST API
 - **WebSocket Streaming** - Real-time bidirectional communication
 - **UDP Telemetry Collector** - Assetto Corsa integration
-- **SQLite Database** - Prisma ORM for data persistence
+- **PostgreSQL Database** - Django ORM for data persistence
 - **TypeScript** - Type-safe codebase
 - **Modern UI** - TailwindCSS + shadcn/ui components
-- **Data Visualization** - Recharts for telemetry plots
+- **Data Visualization** - uPlot for telemetry plots
 
 ## Project Structure
 
 ```
 PurpleSector/
-├── src/
-│   ├── app/                          # Next.js pages & API routes
-│   │   ├── page.tsx                 # Session list homepage
-│   │   ├── session/
-│   │   │   ├── new/page.tsx        # Create new session
-│   │   │   └── [id]/page.tsx       # Live session view
-│   │   ├── lap/[id]/page.tsx       # Lap analysis view
-│   │   └── api/                     # Backend API endpoints
-│   │       ├── sessions/            # Session CRUD
-│   │       ├── laps/                # Lap management
-│   │       └── chat/                # AI chat
-│   ├── components/                   # React components
-│   │   ├── ui/                      # shadcn/ui base components
-│   │   ├── TelemetryChart.tsx       # Recharts visualization
-│   │   └── ChatInterface.tsx        # AI chat UI
-│   ├── lib/                          # Utilities & services
-│   │   ├── db.ts                    # Prisma client
-│   │   ├── utils.ts                 # Helper functions
-│   │   └── ai/analysis.ts           # AI analysis logic
-│   └── types/                        # TypeScript definitions
-│       └── telemetry.ts             # Data types
-├── services/                         # Node.js services
-│   ├── telemetry-collector.js       # AC UDP listener
-│   └── websocket-server.js          # WebSocket relay
-├── prisma/
-│   └── schema.prisma                # Database schema
-├── scripts/
-│   └── generate-demo-telemetry.js    # Demo data generator
+├── apps/
+│   ├── web/                          # Django web application
+│   │   ├── purplesector/            # Django app (models, views, urls)
+│   │   ├── templates/               # Inertia.js templates
+│   │   └── static/                  # Static files
+│   ├── desktop/                     # Tauri desktop app
+│   └── docs-site/                   # Docusaurus documentation
+├── packages/
+│   ├── web-core/                    # React SPA core
+│   │   ├── src/pages/               # React page components
+│   │   ├── src/components/          # UI components
+│   │   ├── src/stores/              # Zustand stores
+│   │   └── vite.config.ts           # Vite config
+│   ├── web-charts/                  # Chart components (uPlot)
+│   ├── web-telemetry/               # Telemetry parsing
+│   ├── plugin-api/                  # Plugin interfaces
+│   ├── plugin-agent/                # AI agent plugin
+│   └── proto/                       # Protobuf types
+├── rust/                            # Rust workspace
+│   ├── ps-grpc-gateway/             # gRPC ingress
+│   ├── ps-demo-replay/              # Demo data replay
+│   └── ps-tray-app/                 # System tray app
+├── services/                        # Node.js services
+│   └── redis-websocket-server.js    # WebSocket server
+├── docs/                            # Developer docs
+├── scripts/                         # Utility scripts
 ├── public/
 │   └── demo-telemetry.json          # Pre-recorded telemetry
 └── Documentation

@@ -1,0 +1,150 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { useDrag } from '@use-gesture/react';
+import { router as inertiaRouter } from '@inertiajs/react';
+import { useAppShell } from './AppShellContext';
+import { NavTabBar } from './NavTabBar';
+import { EventsTree } from './EventsTree';
+import { CreateVehicleDialog } from './CreateVehicleDialog';
+import { getNavTabs } from '@/plugins';
+
+const MIN_WIDTH = 180;
+const MAX_WIDTH = 500;
+const DEFAULT_WIDTH = 260;
+const NAV_WIDTH_KEY = 'ps:navWidth';
+
+function loadWidth(): number {
+  if (typeof window === 'undefined') return DEFAULT_WIDTH;
+  try {
+    const v = localStorage.getItem(NAV_WIDTH_KEY);
+    if (v) {
+      const n = parseInt(v, 10);
+      if (n >= MIN_WIDTH && n <= MAX_WIDTH) return n;
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_WIDTH;
+}
+
+function saveWidth(w: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(NAV_WIDTH_KEY, String(w));
+  } catch {
+    // ignore
+  }
+}
+
+export function NavPane() {
+  const { state, openTab } = useAppShell();
+  const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const [isDragging, setIsDragging] = useState(false);
+  const widthRef = useRef(width);
+  widthRef.current = width;
+  const hasMounted = useRef(false);
+
+  const pluginNavTabs = getNavTabs();
+
+  // Load persisted width after mount to avoid SSR/client hydration mismatch.
+  // Server always renders DEFAULT_WIDTH; client corrects it after hydration.
+  useEffect(() => {
+    hasMounted.current = true;
+    setWidth(loadWidth());
+  }, []);
+
+  // Persist width changes, but skip the initial DEFAULT_WIDTH from useState()
+  // to avoid overwriting a valid persisted value before loadWidth() runs.
+  useEffect(() => {
+    if (hasMounted.current) saveWidth(width);
+  }, [width]);
+
+  const bindDrag = useDrag(
+    ({ movement: [mx], first, last, memo }) => {
+      if (first) {
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        setIsDragging(true);
+        memo = widthRef.current;
+      }
+      const base = memo as number;
+      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, base + mx)));
+      if (last) {
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        setIsDragging(false);
+      }
+      return memo;
+    },
+    { pointer: { touch: true }, filterTaps: true },
+  );
+
+  // Listen for plugin create-entity requests
+  useEffect(() => {
+    function handleCreateVehicle() {
+      setVehicleDialogOpen(true);
+    }
+    window.addEventListener('appshell:createVehicle', handleCreateVehicle);
+    return () => window.removeEventListener('appshell:createVehicle', handleCreateVehicle);
+  }, []);
+
+  function handleVehicleCreated(vehicle: { id: string; name: string }) {
+    window.dispatchEvent(new Event('agent:data-mutated'));
+    inertiaRouter.visit(`/vehicle/${vehicle.id}`);
+  }
+
+  // Determine which tree to render
+  function renderTree() {
+    if (state.activeNavTab === 'events') {
+      return <EventsTree />;
+    }
+    // Check plugin nav tabs
+    const pluginTab = pluginNavTabs.find((t) => t.id === state.activeNavTab);
+    if (pluginTab && !pluginTab.disabled) {
+      return pluginTab.renderTree({
+        openTab,
+        refreshNav: () => {
+          window.dispatchEvent(new Event('agent:data-mutated'));
+        },
+      });
+    }
+    return (
+      <div className="p-3 text-sm text-muted-foreground">
+        Select a navigation tab
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex shrink-0">
+      {/* Vertical tab bar (always visible) */}
+      <NavTabBar />
+
+      {/* Tree panel (collapsible) */}
+      <div
+        className={`relative overflow-hidden border-r ${isDragging ? '' : 'transition-[width] duration-200 ease-in-out'}`}
+        style={{ width: state.navCollapsed ? 0 : width }}
+      >
+        {!state.navCollapsed && (
+          <div className="h-full overflow-hidden" style={{ width }}>
+            {renderTree()}
+          </div>
+        )}
+
+        {/* Drag handle */}
+        {!state.navCollapsed && (
+          <div
+            {...bindDrag()}
+            className="absolute top-0 right-0 w-3 h-full cursor-col-resize hover:bg-purple-500/30 active:bg-purple-500/50 transition-colors z-10"
+            style={{ touchAction: 'none' }}
+          />
+        )}
+      </div>
+      <CreateVehicleDialog
+        open={vehicleDialogOpen}
+        onOpenChange={setVehicleDialogOpen}
+        onCreated={handleVehicleCreated}
+      />
+    </div>
+  );
+}

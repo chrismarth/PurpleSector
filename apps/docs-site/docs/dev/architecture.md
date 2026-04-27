@@ -6,7 +6,7 @@ This page describes the high-level architecture of Purple Sector: how telemetry 
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│                    Browser (Next.js App)                     │
+│                Browser (React + Vite SPA)                   │
 │                                                             │
 │  AuthProvider → AppShellRoot → AppShell                     │
 │  ┌──────────┐  ┌────────────┐  ┌──────────────────────────┐│
@@ -18,9 +18,9 @@ This page describes the high-level architecture of Purple Sector: how telemetry 
 │                                  │  Agent Panel (slide-over) ││
 │                                  └──────────────────────────┘│
 └──────────────────────┬──────────────────────────────────────┘
-                       │  REST API + WebSocket
+                       │  REST API + WebSocket (Inertia.js)
 ┌──────────────────────▼──────────────────────────────────────┐
-│                  Next.js Backend (API Routes)                │
+│                Django Backend (ASGI)                         │
 │  /api/auth/*  /api/events/*  /api/sessions/*  /api/laps/*    │
 │  /api/vehicles/*  /api/plot-layouts/*  /api/analysis-layouts/*│
 │  /api/channels/math/*  /api/plugins/[...path]  /api/chat     │
@@ -29,8 +29,8 @@ This page describes the high-level architecture of Purple Sector: how telemetry 
           ┌────────────┼────────────┐
           ▼            ▼            ▼
    ┌────────────┐ ┌────────────┐ ┌──────────────┐
-   │  SQLite /   │ │  Redpanda  │ │  OpenAI API  │
-   │  PostgreSQL │ │ + RisingWave│ │  (GPT-4)    │
+   │ PostgreSQL │ │  Redpanda  │ │  OpenAI API  │
+   │             │ │ + RisingWave│ │  (GPT-4)    │
    └────────────┘ └────┬───────┘ └──────────────┘
                        │
         ┌──────────────┼───────────────────────────────┐
@@ -46,8 +46,8 @@ This page describes the high-level architecture of Purple Sector: how telemetry 
 
 ### Authentication
 
-- **Middleware** (`apps/web/middleware.ts`) — Checks the `ps_user` cookie on every non-public request. Redirects to `/login` if missing.
-- **AuthProvider** (`apps/web/src/components/AuthProvider.tsx`) — Client-side React context that fetches `/api/auth/me` on mount with timeout and retry logic. Gates the entire app shell behind a loading spinner until auth resolves.
+- **Django Middleware** (`apps/web/purplesector/middleware/auth.py`) — Checks the `ps_user` cookie on every non-public request. Redirects to `/login` if missing.
+- **AuthProvider** (`packages/web-core/src/components/AuthProvider.tsx`) — Client-side React context that fetches `/api/auth/me` on mount with timeout and retry logic. Gates the entire app shell behind a loading spinner until auth resolves.
 - **Stub auth** — In development, two hardcoded users (`admin`, `user`) are available. The cookie value is the username string.
 
 ### App Shell
@@ -68,10 +68,10 @@ For implementation details, see **App Shell Architecture**.
 Purple Sector uses a plugin architecture where features are delivered as `PluginModule` packages:
 
 - **Plugin API** (`@purplesector/plugin-api`) — TypeScript interfaces for all registration types.
-- **Plugin Registry** (`@purplesector/plugin-registry`) — Central loader that manages client and server registrations. Configuration in `plugins.config.ts`.
-- **Client loader** (`apps/web/src/plugins/index.ts`) — Imports plugin modules and calls `loadClientPlugins()`.
-- **Server loader** (`apps/web/src/lib/plugin-server.ts`) — Loads server-side registrations (API routes, agent tool handlers).
-- **API route dispatcher** (`/api/plugins/[...path]`) — Catch-all route that dispatches to plugin-registered API handlers.
+- **Plugin Agent** (`@purplesector/plugin-agent`) — Client-side plugin registry that manages registrations. Configuration in `plugins.config.ts`.
+- **Client loader** (`packages/plugin-agent/src/index.ts`) — Imports plugin modules and calls `loadClientPlugins()`.
+- **Django plugin views** (`apps/web/purplesector/views/plugins.py`) — Loads server-side registrations (API routes, agent tool handlers).
+- **API route dispatcher** (`/api/plugins/[...path]`) — Django URL pattern that dispatches to plugin-registered API handlers.
 
 For the full plugin API reference, see **Plugin Architecture**.
 

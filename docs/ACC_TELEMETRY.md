@@ -490,13 +490,13 @@ This gives you:
 
 - [ACC Broadcasting Protocol Documentation](https://www.assettocorsa.net/forum/index.php?threads/acc-broadcasting-protocol-documentation.59965/)
 - ACC SDK (included with game installation)
-- Purple Sector WebSocket Protocol: See `services/websocket-server.js`
+- Purple Sector WebSocket Protocol: See `services/redis-websocket-server.js`
 
 ## Related Files
 
 - `/services/acc-telemetry-collector-hybrid.js` - **Hybrid collector (recommended)** - Broadcasting + Shared Memory
 - `/services/acc-telemetry-collector.js` - Broadcasting-only collector (cross-platform)
-- `/services/websocket-server.js` - WebSocket relay server
+- `/services/redis-websocket-server.js` - Redis-backed WebSocket relay server (RisingWave → Redis → Frontend)
 - `/services/ac-telemetry-collector.js` - Original AC collector (for comparison)
 - `/docs/DATABASE_MANAGEMENT.md` - Database schema and lap storage
 - `package.json` - Dependencies including `acc-node-wrapper`

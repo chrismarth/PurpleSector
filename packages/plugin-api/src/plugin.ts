@@ -1,4 +1,3 @@
-import type { LapAnalysisView } from './lapAnalysis';
 import type { PluginManifest } from './types';
 import type {
   AnalysisPanelType,
@@ -12,11 +11,8 @@ import type {
   ToolbarItemRegistration,
 } from './globalUI';
 import type { AgentToolDefinition } from './agentTools';
-import type { PluginServerContext } from './serverPlugin';
 
 export interface PluginClientContext {
-  registerLapAnalysisView(view: LapAnalysisView): void;
-
   // Generic analysis panel system
   registerAnalysisPanelType(type: AnalysisPanelType): void;
   registerAnalysisPanelProvider(provider: AnalysisPanelProvider): void;
@@ -48,5 +44,4 @@ export type PluginContext = PluginClientContext;
 export interface PluginModule {
   manifest: PluginManifest;
   register?: (ctx: PluginClientContext) => void;
-  registerServer?: (ctx: PluginServerContext) => void;
 }

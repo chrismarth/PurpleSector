@@ -38,7 +38,7 @@ cd rust && cargo run -p ps-demo-replay -- --file ../public/demo-telemetry.json
 | Tool | Version | Purpose |
 |------|---------|---------|
 | Docker + Compose | Latest | Infrastructure containers |
-| Node.js | 18+ | PM2 services, Next.js |
+| Node.js | 18+ | PM2 services, Vite dev server |
 | Rust toolchain | Stable | ps-demo-replay, ps-tray-app |
 | PM2 | Latest | Process manager (`npm i -g pm2`) |
 | System packages | — | `protobuf-compiler cmake libcurl4-openssl-dev libssl-dev` |
@@ -88,7 +88,7 @@ npm run db:push
 
 | Service | Purpose |
 |---------|---------|
-| `nextjs-dev` | Next.js frontend (:3000) |
+| `vite-dev` | Vite dev server (:5173) |
 
 ---
 
@@ -112,7 +112,7 @@ RisingWave (:4566)
     │   Redis WS Server (:8080)
     │        │ WebSocket
     │        ▼
-    │   Next.js Frontend (:3000)
+    │   Django + Vite Frontend (:3000)
     │
     └──→ Iceberg raw_samples via LakeKeeper + MinIO (archive)
              │
@@ -120,7 +120,7 @@ RisingWave (:4566)
          Trino (:8083)
              │
              ▼
-       Next.js archived lap APIs
+       Django archived lap APIs
 ```
 
 ---
@@ -128,10 +128,10 @@ RisingWave (:4566)
 ## Managing Services
 
 ```bash
-# PM2 (Next.js only)
+# PM2 (Vite dev server)
 pm2 status                     # View service status
-pm2 logs nextjs-dev            # Next.js logs
-pm2 restart all                # Restart Next.js
+pm2 logs vite-dev              # Vite dev server logs
+pm2 restart all                # Restart Vite dev server
 
 # Docker services (including WS server)
 docker compose -f docker-compose.dev.yml logs -f ws-server  # WS server logs
@@ -215,5 +215,5 @@ Change ports in `.env`:
 | Component | CPU | Memory |
 |-----------|-----|--------|
 | Docker stack (incl. WS server) | 10-20% | ~2 GB |
-| Next.js (dev) | 10-20% | 200 MB |
+| Vite (dev) | 10-20% | 200 MB |
 | **Total** | **~30%** | **~2.2 GB** |

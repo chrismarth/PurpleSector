@@ -17,10 +17,10 @@ npm install
 ```
 
 This will install all required packages including:
-- Next.js, React, TypeScript
-- Prisma (database)
+- React, Vite, TypeScript
+- Django (web framework)
 - WebSocket libraries
-- Recharts (visualization)
+- uPlot (visualization)
 - OpenAI SDK
 - UI components (shadcn/ui)
 

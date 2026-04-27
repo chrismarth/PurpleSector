@@ -1,10 +1,8 @@
 export type PluginCapability =
-  | 'lapAnalysisView'
-  | 'analysisPanels'
-  | 'agentTools'
-  | 'apiRoutes'
-  | 'settingsTabs'
-  | 'globalUI'
+  | 'analysisPanelType'
+  | 'analysisPanelProvider'
+  | 'globalPanel'
+  | 'settingsTab'
   | 'navTab'
   | 'contentTab'
   | 'toolbarItem';
@@ -17,6 +15,5 @@ export interface PluginManifest {
   capabilities: PluginCapability[];
   entry: string;
   tier?: 'free' | 'premium';
-  prismaModels?: string;
   dependencies?: string[];
 }

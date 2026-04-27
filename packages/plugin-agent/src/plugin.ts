@@ -13,7 +13,6 @@ import type {
   PluginClientContext,
   PluginManifest,
 } from '@purplesector/plugin-api';
-import { allToolDefinitions } from './shared/tool-definitions';
 import { AgentPanel } from './client/AgentPanel';
 import { AgentSettingsTab } from './client/AgentSettingsTab';
 
@@ -42,21 +41,15 @@ export const manifest: PluginManifest = {
   name: 'AI Agent',
   version: '0.1.0',
   description: 'Embedded AI agent that can manipulate any aspect of the application',
-  capabilities: ['agentTools', 'apiRoutes', 'settingsTabs', 'globalUI'],
+  capabilities: ['settingsTab', 'globalPanel'],
   entry: './src/plugin',
   tier: 'premium',
-  prismaModels: './prisma/plugin.prisma',
 };
 
 const plugin: PluginModule = {
   manifest,
 
   register(ctx: PluginClientContext) {
-    // Register agent tool definitions (metadata only, for UI display)
-    for (const def of allToolDefinitions) {
-      ctx.registerAgentTool(def);
-    }
-
     // Global sidebar panel
     ctx.registerGlobalPanel({
       id: 'agent-panel',

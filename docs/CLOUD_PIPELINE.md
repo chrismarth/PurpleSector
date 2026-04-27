@@ -33,7 +33,7 @@ flowchart LR
 
     subgraph UI["Web Dashboard"]
         WS["Redis WS Server"]
-        NEXT["Next.js App"]
+        REACT["React + Vite SPA<br/>(Django + Inertia.js)"]
         AGENT["AI Agent<br/>(LangGraph)"]
     end
 
@@ -47,10 +47,10 @@ flowchart LR
     RW -->|raw archive sink| ICE
     RW <-->|eval_math_channel| UDF
     REDIS --> WS
-    WS -->|WebSocket| NEXT
+    WS -->|WebSocket| REACT
     ICE --> TRINO
     TRINO --> AGENT
-    AGENT --> NEXT
+    AGENT --> REACT
 ```
 
 ---
@@ -88,17 +88,17 @@ flowchart LR
     subgraph Tauri["Tauri Desktop App (offline)"]
         CAP2["ps-telemetry-core<br/>(capture only)"]
         EVT["Tauri Events"]
-        NEXTUI["Next.js UI<br/>(embedded)"]
+        REACTUI["React UI<br/>(embedded)"]
     end
 
     SIM2["🏎️ Sim Game"] -->|UDP| CAP2
     CAP2 -->|TelemetryEvent| EVT
-    EVT --> NEXTUI
+    EVT --> REACTUI
 ```
 
 - **No cloud connection** — completely offline, self-contained.
 - Uses only the `capture` feature of `ps-telemetry-core` (no WAL, no gRPC, no batch assembler).
-- Telemetry frames are emitted as Tauri events directly to the embedded Next.js UI.
+- Telemetry frames are emitted as Tauri events directly to the embedded React UI.
 - Math channels evaluated client-side (mathjs in browser).
 
 ### Cloud Pipeline Detail
@@ -236,8 +236,8 @@ cd rust && cargo run -p ps-tray-app
 # 5. Start the Redis WebSocket server
 node services/redis-websocket-server.js
 
-# 6. Start the Next.js dev server
-npx nx serve web
+# 6. Start the Django + Vite dev server
+npm run dev
 
 # 7. (Optional) Replay demo data through the pipeline
 cd rust && cargo run -p ps-demo-replay -- --file public/demo-telemetry.json

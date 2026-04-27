@@ -14,7 +14,7 @@ Sim Game (AC/ACC)
     ▼
 ps-telemetry-core (Rust capture)
     │
-    ├─→ Tauri Events ──→ Next.js UI (live display)
+    ├─→ Tauri Events ──→ React UI (live display)
     │
     └─→ SessionManager ──→ SQLite (telemetry.db)
                             ├── sessions
@@ -22,8 +22,6 @@ ps-telemetry-core (Rust capture)
                             └── telemetry_frames
                                   ↑
                             Tauri Commands
-                                  ↓
-                            Next.js API Abstraction
                                   ↓
                             React Components
 ```
@@ -123,7 +121,7 @@ CREATE INDEX idx_frames_lap ON telemetry_frames(lap_id);
 
 ### Tauri Commands
 
-Exposed to Next.js via Tauri's IPC:
+Exposed to React UI via Tauri's IPC:
 
 ```rust
 #[tauri::command]
@@ -142,7 +140,7 @@ fn get_laps(app_state: tauri::State<'_, AppState>, session_id: i64) -> Result<Ve
 fn get_lap_frames(app_state: tauri::State<'_, AppState>, lap_id: i64) -> Result<Vec<TelemetryFrameRecord>, String>
 ```
 
-## Next.js Integration
+## React UI Integration
 
 ### API Abstraction Layer
 
@@ -165,7 +163,7 @@ import { isTauriApp } from '@/lib/tauri-api';
 if (isTauriApp()) {
   // Desktop mode - use Tauri commands
 } else {
-  // Cloud mode - use Next.js API routes
+  // Cloud mode - use Django API routes
 }
 ```
 
@@ -193,7 +191,7 @@ Laps are automatically detected by monitoring `normalized_position`:
 | **Metadata DB** | Prisma (Postgres) | Prisma (SQLite) |
 | **Telemetry Persistence** | RisingWave → Redis | Rust → SQLite |
 | **Math Channels** | RisingWave MVs + Python UDF | Client-side (mathjs) |
-| **Session Management** | Next.js API routes | Tauri commands |
+| **Session Management** | Django API routes | Tauri commands |
 | **Lap Detection** | RisingWave SQL | Rust (SessionManager) |
 | **Query Interface** | Redis Streams → WebSocket | Tauri commands |
 

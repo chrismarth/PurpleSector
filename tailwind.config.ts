@@ -3,9 +3,10 @@ import type { Config } from "tailwindcss";
 const config: Config = {
   darkMode: ["class"],
   content: [
-    "./apps/web/src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./apps/web/src/components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./apps/web/src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./packages/web-core/src/**/*.{js,ts,jsx,tsx}",
+    "./packages/plugin-agent/src/**/*.{js,ts,jsx,tsx}",
+    "./packages/plugin-core-lap-telemetry/src/**/*.{js,ts,jsx,tsx}",
+    "./packages/plugin-vehicles/src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {

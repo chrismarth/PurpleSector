@@ -30,7 +30,7 @@ import {
   ChannelConfig,
   TelemetryChannel,
 } from '@/types/plotConfig';
-import { RAW_CHANNELS, RawTelemetryChannel, MathTelemetryChannel, TelemetryChannelDefinition } from '@purplesector/telemetry';
+import { RAW_CHANNELS, RawTelemetryChannel, MathTelemetryChannel, TelemetryChannelDefinition } from '@purplesector/web-telemetry';
 
 interface PlotConfigDialogProps {
   open: boolean;

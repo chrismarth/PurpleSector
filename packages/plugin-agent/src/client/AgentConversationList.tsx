@@ -27,7 +27,7 @@ export function AgentConversationList({ activeConversationId, onSelect, onNew }:
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/plugins/agent/conversations');
+        const res = await fetch('/api/agent/conversations');
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled) setConversations(data);

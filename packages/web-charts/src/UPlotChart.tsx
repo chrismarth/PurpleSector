@@ -36,6 +36,7 @@ export interface UPlotChartProps {
   syncedHoverIndex?: number | null;
   className?: string;
   onReady?: (chart: uPlot) => void;
+  resetZoomToken?: number;
 }
 
 export function UPlotChart({
@@ -48,13 +49,17 @@ export function UPlotChart({
   syncedHoverIndex,
   className = '',
   onReady,
+  resetZoomToken,
 }: UPlotChartProps) {
   // Guard against very small/negative values during layout transitions.
   const width = Math.max(rawWidth, 100);
   const height = Math.max(rawHeight, 50);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<uPlot | null>(null);
   const [darkMode, setDarkMode] = useState(false);
+  const isManuallyZoomed = useRef(false);
+  const zoomRangeRef = useRef<[number, number] | null>(null);
+  const prevDataRef = useRef<uPlot.AlignedData | null>(null);
 
   // Keep a ref so the cursor hook always calls the latest callback without
   // requiring chart recreation on every render.
@@ -171,7 +176,11 @@ export function UPlotChart({
           // Skip the callback when we moved the cursor programmatically to
           // avoid echoing the value back up to the parent.
           if (isProgrammaticCursorMove.current || isRestoringCursor.current) return;
-          
+
+          // Skip hover updates during drag-to-zoom operations to prevent interference
+          // This prevents hover state changes from interrupting the drag selection
+          if (u.select && u.select.width > 0) return;
+
           // uPlot resets cursor to {left:-10, top:-10} when the mouse stops moving
           // or leaves - ignore these reset events entirely to keep hover stable.
           const left = u.cursor.left ?? -10;
@@ -189,7 +198,10 @@ export function UPlotChart({
 
           const min = u.posToVal(select.left, 'x');
           const max = u.posToVal(select.left + select.width, 'x');
-          u.setScale('x', { min, max });
+          zoomRangeRef.current = [min, max];
+          isManuallyZoomed.current = true;
+          // Trigger scale recalculation - the range function will use zoomRangeRef
+          u.setData(u.data);
         },
       ],
     };
@@ -210,9 +222,18 @@ export function UPlotChart({
         top: 0,
         width: 0,
         height: 0,
+        over: true,
       },
       scales: {
-        x: { auto: true },
+        x: {
+          auto: true,
+          range: (_u: uPlot, dataMin: number, dataMax: number): uPlot.Range.MinMax => {
+            if (zoomRangeRef.current) {
+              return zoomRangeRef.current;
+            }
+            return [dataMin, dataMax];
+          },
+        },
         y: { auto: true },
         ...(series.some((s) => s.scale === 'y2') ? { y2: { auto: true } } : {}),
       },
@@ -240,34 +261,36 @@ export function UPlotChart({
   }, [width, height, darkMode, series, axes, onReady]);
 
   // Update data without recreating chart
-  // Preserve hover position from context across data updates
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
-    
+
+    // Check if data has actually changed by comparing with previous data
+    const dataChanged = !prevDataRef.current ||
+                        prevDataRef.current.length !== data.length ||
+                        prevDataRef.current[0] !== data[0];
+    prevDataRef.current = data;
+
     chart.setData(data);
-    
-    // After data update, if we have a synced hover index, restore the cursor position
-    // This prevents data updates from clearing the hover state
-    if (syncedHoverIndex != null && isFinite(syncedHoverIndex)) {
-      // Use setTimeout to ensure uPlot has processed the data update
-      setTimeout(() => {
-        if (!chartRef.current) return;
-        const xData = chartRef.current.data[0] as number[];
-        if (xData && syncedHoverIndex < xData.length) {
-          const xValue = xData[syncedHoverIndex];
-          const x = chartRef.current.valToPos(xValue, 'x');
-          if (x != null && isFinite(x)) {
-            isRestoringCursor.current = true;
-            isProgrammaticCursorMove.current = true;
-            chartRef.current.setCursor({ left: x, top: 0 });
-            isProgrammaticCursorMove.current = false;
-            isRestoringCursor.current = false;
-          }
-        }
-      }, 0);
+
+    // When data changes and not manually zoomed, clear any stale zoom range
+    if (dataChanged && !isManuallyZoomed.current) {
+      zoomRangeRef.current = null;
     }
-  }, [data, syncedHoverIndex]);
+  }, [data]);
+
+  // Reset zoom when token changes (triggered by external reset button)
+  useEffect(() => {
+    if (resetZoomToken === undefined || resetZoomToken === 0) return;
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    isManuallyZoomed.current = false;
+    zoomRangeRef.current = null;
+    chart.setSelect({ left: 0, top: 0, width: 0, height: 0 });
+    // Trigger scale recalculation - range function will return full data range
+    chart.setData(chart.data);
+  }, [resetZoomToken]);
 
   // Update size without recreating chart
   useEffect(() => {
@@ -308,11 +331,6 @@ export function UPlotChart({
       if (!xData || syncedHoverIndex >= xData.length) return;
       const xValue = xData[syncedHoverIndex];
       
-      // Ensure scales are computed before converting value to position
-      if (chart.scales.x.min == null || chart.scales.x.max == null) {
-        chart.redraw(true);
-      }
-      
       const x = chart.valToPos(xValue, 'x');
       if (x == null || !isFinite(x)) return;
       
@@ -326,6 +344,10 @@ export function UPlotChart({
   }, [syncedHoverIndex]);
 
   return (
-    <div ref={containerRef} className={`uplot-chart ${className}`} />
+    <div
+      ref={containerRef}
+      className={className}
+      style={{ width, height, touchAction: 'none' }}
+    />
   );
 }

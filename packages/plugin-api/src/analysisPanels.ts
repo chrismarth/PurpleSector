@@ -1,6 +1,6 @@
 import type * as React from 'react';
-import type { TelemetryFrame } from '@purplesector/core';
-import type { MathTelemetryChannel } from '@purplesector/telemetry';
+import type { TelemetryFrame } from '@purplesector/web-telemetry';
+import type { MathTelemetryChannel } from '@purplesector/web-telemetry';
 
 export type AnalysisPanelContext = 'live' | 'singleLap' | 'lapComparison';
 

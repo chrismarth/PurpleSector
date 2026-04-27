@@ -28,7 +28,7 @@ export function AgentSettingsTab() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/user/settings');
+        const res = await fetch('/api/auth/user/settings');
         if (!res.ok) return;
         const data = await res.json();
         const settingsData = data.data ? JSON.parse(data.data) : {};

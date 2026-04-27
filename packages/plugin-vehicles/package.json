@@ -10,6 +10,6 @@
   },
   "dependencies": {
     "@purplesector/plugin-api": "file:../plugin-api",
-    "react": "^18.0.0"
+    "react": "^19.0.0"
   }
 }
