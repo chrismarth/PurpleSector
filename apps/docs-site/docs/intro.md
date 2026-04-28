@@ -2,6 +2,8 @@
 
 Purple Sector is an AI-powered telemetry analysis platform for Assetto Corsa and Assetto Corsa Competizione. It helps sim-racing drivers improve lap times through real-time data visualization, configurable analysis panels, vehicle management, and intelligent AI coaching.
 
+> **🚀 Recent Update**: Now powered by React 19 and Inertia.js v3 with optimistic updates, enhanced error handling, and improved performance!
+
 > For a quick local dev spin-up, see **User Guide → Getting Started**.
 
 ## Features

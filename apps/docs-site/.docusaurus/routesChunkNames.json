@@ -6,17 +6,17 @@
     },
     "config": "5e9f5e1a"
   },
-  "/PurpleSector/-5fe": {
+  "/PurpleSector/-ddd": {
     "__comp": "5e95c892",
     "__context": {
       "plugin": "aba21aa0"
     }
   },
-  "/PurpleSector/-66d": {
+  "/PurpleSector/-322": {
     "__comp": "a7bd4aaa",
     "__props": "d1c9f980"
   },
-  "/PurpleSector/-1af": {
+  "/PurpleSector/-2b5": {
     "__comp": "a94703ab"
   },
   "/PurpleSector/dev/acc-hybrid-collector-37f": {
@@ -62,6 +62,10 @@
   "/PurpleSector/dev/plugins-260": {
     "__comp": "17896441",
     "content": "c872f9da"
+  },
+  "/PurpleSector/dev/react19-inertia3-upgrade-c1b": {
+    "__comp": "17896441",
+    "content": "1295c73b"
   },
   "/PurpleSector/intro-d68": {
     "__comp": "17896441",

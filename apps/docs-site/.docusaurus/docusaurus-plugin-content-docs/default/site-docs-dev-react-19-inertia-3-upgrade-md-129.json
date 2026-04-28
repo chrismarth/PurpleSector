@@ -1,0 +1,23 @@
+{
+  "id": "dev/react19-inertia3-upgrade",
+  "title": "React 19 & Inertia.js v3 Upgrade",
+  "description": "Purple Sector has been successfully upgraded to React 19 and Inertia.js v3, bringing modern features, improved performance, and enhanced error handling.",
+  "source": "@site/docs/dev/react19-inertia3-upgrade.md",
+  "sourceDirName": "dev",
+  "slug": "/dev/react19-inertia3-upgrade",
+  "permalink": "/PurpleSector/dev/react19-inertia3-upgrade",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "userGuide",
+  "previous": {
+    "title": "Plot Layout System",
+    "permalink": "/PurpleSector/dev/plot-layouts"
+  },
+  "next": {
+    "title": "Design Notes",
+    "permalink": "/PurpleSector/notes/overview"
+  }
+}

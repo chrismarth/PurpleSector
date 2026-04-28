@@ -45,6 +45,7 @@ const sidebars = {
         'dev/acc-hybrid-collector',
         'dev/langgraph-analyzer',
         'dev/plot-layouts',
+        'dev/react19-inertia3-upgrade',
       ],
     },
     {

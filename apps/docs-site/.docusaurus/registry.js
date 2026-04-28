@@ -2,6 +2,7 @@ export default {
   "00b7e089": [() => import(/* webpackChunkName: "00b7e089" */ "@site/docs/user/plugins.md"), "@site/docs/user/plugins.md", require.resolveWeak("@site/docs/user/plugins.md")],
   "0e384e19": [() => import(/* webpackChunkName: "0e384e19" */ "@site/docs/intro.md"), "@site/docs/intro.md", require.resolveWeak("@site/docs/intro.md")],
   "1098b74d": [() => import(/* webpackChunkName: "1098b74d" */ "@site/docs/user/vehicles.md"), "@site/docs/user/vehicles.md", require.resolveWeak("@site/docs/user/vehicles.md")],
+  "1295c73b": [() => import(/* webpackChunkName: "1295c73b" */ "@site/docs/dev/react19-inertia3-upgrade.md"), "@site/docs/dev/react19-inertia3-upgrade.md", require.resolveWeak("@site/docs/dev/react19-inertia3-upgrade.md")],
   "17896441": [() => import(/* webpackChunkName: "17896441" */ "@theme/DocItem"), "@theme/DocItem", require.resolveWeak("@theme/DocItem")],
   "1b43f51c": [() => import(/* webpackChunkName: "1b43f51c" */ "@site/docs/user/telemetry-collectors.md"), "@site/docs/user/telemetry-collectors.md", require.resolveWeak("@site/docs/user/telemetry-collectors.md")],
   "1d7a6b74": [() => import(/* webpackChunkName: "1d7a6b74" */ "@site/docs/dev/database-and-telemetry.md"), "@site/docs/dev/database-and-telemetry.md", require.resolveWeak("@site/docs/dev/database-and-telemetry.md")],

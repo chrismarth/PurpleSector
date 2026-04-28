@@ -58,7 +58,10 @@ const PLUGIN_CHUNK_MAP: Record<string, () => Promise<unknown>> = import.meta.glo
 function resolvePluginImport(entry: string): (() => Promise<unknown>) | null {
   // Map "plugins/agent/index.js" → "plugin-agent"
   const match = entry.match(/^plugins\/([^/]+)\/index/);
-  if (!match) return null;
+  if (!match) {
+    console.warn(`[PluginLoader] Invalid entry format: ${entry}`);
+    return null;
+  }
   const slug = match[1]; // e.g. "agent", "vehicles", "core-lap-telemetry"
   const key = `../../../plugin-${slug}/src/index.ts`;
   return PLUGIN_CHUNK_MAP[key] ?? null;
@@ -66,14 +69,15 @@ function resolvePluginImport(entry: string): (() => Promise<unknown>) | null {
 
 /**
  * Read the plugin manifest list that Django injected via Inertia shared props.
- * The initial page data lives in the data-page attribute of the #app div,
- * which is rendered by Django's Inertia template.
+ * Inertia v3 stores the initial page data in a <script data-page="app" type="application/json">
+ * tag rendered by Django's Inertia template.
  * Falls back to an empty list so the app still boots if props are missing.
  */
 function getServerManifests(): ServerPluginManifest[] {
   try {
-    const el = document.getElementById('app');
-    const raw = el?.getAttribute('data-page');
+    // Inertia v3 format: <script data-page="app" type="application/json">
+    const scriptEl = document.querySelector('script[data-page="app"][type="application/json"]');
+    const raw = scriptEl?.textContent;
     if (!raw) return [];
     const page = JSON.parse(raw);
     return (page?.props?.plugins as ServerPluginManifest[]) ?? [];

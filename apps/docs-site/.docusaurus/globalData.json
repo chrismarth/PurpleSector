@@ -66,6 +66,11 @@
               "sidebar": "userGuide"
             },
             {
+              "id": "dev/react19-inertia3-upgrade",
+              "path": "/PurpleSector/dev/react19-inertia3-upgrade",
+              "sidebar": "userGuide"
+            },
+            {
               "id": "intro",
               "path": "/PurpleSector/intro",
               "sidebar": "userGuide"

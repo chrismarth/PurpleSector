@@ -9,15 +9,15 @@ export default [
   },
   {
     path: '/PurpleSector/',
-    component: ComponentCreator('/PurpleSector/', '5fe'),
+    component: ComponentCreator('/PurpleSector/', 'ddd'),
     routes: [
       {
         path: '/PurpleSector/',
-        component: ComponentCreator('/PurpleSector/', '66d'),
+        component: ComponentCreator('/PurpleSector/', '322'),
         routes: [
           {
             path: '/PurpleSector/',
-            component: ComponentCreator('/PurpleSector/', '1af'),
+            component: ComponentCreator('/PurpleSector/', '2b5'),
             routes: [
               {
                 path: '/PurpleSector/dev/acc-hybrid-collector',
@@ -82,6 +82,12 @@ export default [
               {
                 path: '/PurpleSector/dev/plugins',
                 component: ComponentCreator('/PurpleSector/dev/plugins', '260'),
+                exact: true,
+                sidebar: "userGuide"
+              },
+              {
+                path: '/PurpleSector/dev/react19-inertia3-upgrade',
+                component: ComponentCreator('/PurpleSector/dev/react19-inertia3-upgrade', 'c1b'),
                 exact: true,
                 sidebar: "userGuide"
               },
